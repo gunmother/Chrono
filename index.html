@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Betterly — Tilt Glass UI</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#e9eef5" />
+<style>
+  :root{
+    /* One material + pane tint (not transparent) */
+    --bg:#e9eef5;          /* page */
+    --pane:#f7f9fd;        /* glass-like surface */
+
+    /* dynamic shadow offsets (updated by JS) */
+    --sx: 0px;             /* shadow X */
+    --sy: 12px;            /* shadow Y */
+    --blur: 36px;
+
+    /* highlight hotspot for bevel (updated by JS) */
+    --hx: 50%;
+    --hy: 22%;
+
+    --app-w: clamp(320px, 92vw, 420px);
+    --gap: clamp(12px, 2vh, 18px);
+    --barH: clamp(42px, 6vh, 56px);
+    --coin: clamp(62px, 9vh, 78px);
+    --r-lg: 24px;
+    --r-pill: 999px;
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden}
+  body{
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+    padding: max(16px, env(safe-area-inset-top))
+             max(16px, env(safe-area-inset-right))
+             max(20px, env(safe-area-inset-bottom))
+             max(16px, env(safe-area-inset-left));
+  }
+
+  .app{
+    width:var(--app-w);
+    height:calc(100dvh - max(16px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+    margin:0 auto; display:grid; grid-template-rows: var(--barH) 1fr auto; gap:var(--gap);
+    position:relative;
+  }
+
+  /* ===== Raised “glass” primitives (no borders, beveled via light) ===== */
+  .glass{
+    background: var(--pane);
+    border-radius: var(--r-lg);
+    position:relative;
+    box-shadow: var(--sx) var(--sy) var(--blur) rgba(0,0,0,.20), 0 6px 16px rgba(0,0,0,.10);
+    will-change: transform, box-shadow;
+  }
+  /* subtle beveled sheen — not a rim */
+  .glass::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
+  }
+
+  /* Top handle (floating, pill) */
+  .topbar{
+    height:var(--barH); border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%; background:#cfd8e6; box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.06)}
+
+  /* Center screen pane (raised sheet of “glass”) */
+  .stage{ position:relative; }
+  .stage .glass{ width:100%; height:100%; }
+
+  /* Four floating coins (no dock) */
+  .coins{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; align-items:end;
+    padding-bottom: 2px;
+  }
+  .coin{
+    width:var(--coin); height:var(--coin); margin:0 auto; border-radius:var(--r-pill);
+    background: var(--pane); border:0; outline:0; position:relative;
+    box-shadow: var(--sx) var(--sy) var(--blur) rgba(0,0,0,.22), 0 6px 16px rgba(0,0,0,.10);
+    will-change: transform, box-shadow;
+  }
+  .coin::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 110% at var(--hx) var(--hy),
+                 rgba(255,255,255,.60), rgba(255,255,255,0) 60%);
+    opacity:.95; mix-blend-mode:screen;
+  }
+  /* pressed coin = inverse (soft inner bevel) */
+  .coin.pressed{
+    transform: translateY(1px);
+    box-shadow:
+      inset calc(var(--sx) * -0.25) calc(var(--sy) * -0.25) 28px rgba(0,0,0,.22),
+      inset 0 -16px 30px rgba(255,255,255,.92);
+  }
+
+  /* motion permission button (iOS) */
+  #enable{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    padding:10px 14px; border-radius:999px; border:0; background:#ffffff;
+    box-shadow:0 8px 22px rgba(0,0,0,.12); z-index:20;
+  }
+
+  @media (max-height: 600px){
+    :root{ --gap:10px; --coin:64px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .glass,.coin{ transition:none }
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar glass" aria-label="Menu handle">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <section class="stage">
+      <div class="glass" aria-label="Center screen"></div>
+    </section>
+
+    <div class="coins">
+      <button class="coin" aria-label="Button 1"></button>
+      <button class="coin" aria-label="Button 2"></button>
+      <button class="coin" aria-label="Button 3"></button>
+      <button class="coin" aria-label="Button 4"></button>
+    </div>
+
+    <button id="enable" hidden>Enable motion</button>
+  </main>
+
+<script>
+  /* Mutually-exclusive coin press */
+  const coins=[...document.querySelectorAll('.coin')];
+  document.querySelector('.coins').addEventListener('click',e=>{
+    const c=e.target.closest('.coin'); if(!c) return;
+    coins.forEach(x=>x.classList.toggle('pressed', x===c));
+  });
+
+  /* Tilt engine: updates CSS vars for shadow + highlight + subtle parallax */
+  const root=document.documentElement;
+  const movers=document.querySelectorAll('.topbar.glass, .stage .glass, .coin');
+
+  let beta=18, gamma=0; // default gentle tilt
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+
+  function animate(){
+    const max=18;                           // px max offset
+    const x=clamp((gamma||0)/45, -1, 1)*max;
+    const y=clamp((beta ||0)/45, -1, 1)*max;
+
+    root.style.setProperty('--sx',  x.toFixed(1)+'px');
+    root.style.setProperty('--sy',  (y+10).toFixed(1)+'px');
+    root.style.setProperty('--hx',  (50 - x*1.2)+'%');   // highlight opposes shadow
+    root.style.setProperty('--hy',  (22 - y*0.8)+'%');
+
+    // subtle parallax so movement is obvious but not goofy
+    const px=(-x*0.18).toFixed(1), py=(-y*0.18).toFixed(1);
+    movers.forEach(el=>{ el.style.transform = `translate3d(${px}px, ${py}px, 0)`; });
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  function startMotion(){
+    window.addEventListener('deviceorientation', e=>{
+      if(e.beta==null||e.gamma==null) return;
+      beta=e.beta; gamma=e.gamma;
+    }, true);
+  }
+
+  // iOS permission gate
+  (async()=>{
+    const btn=document.getElementById('enable');
+    try{
+      if (typeof DeviceOrientationEvent!=='undefined' &&
+          typeof DeviceOrientationEvent.requestPermission==='function'){
+        btn.hidden=false;
+        btn.onclick=async ()=>{
+          try{
+            const res=await DeviceOrientationEvent.requestPermission();
+            if(res==='granted'){ btn.hidden=true; startMotion(); }
+          }catch{}
+        };
+      }else{
+        startMotion();
+      }
+    }catch{ startMotion(); }
+  })();
+
+  // Desktop / blocked-sensor fallback: mouse move simulates tilt
+  window.addEventListener('mousemove', e=>{
+    const w=innerWidth, h=innerHeight;
+    gamma=(e.clientX/w - 0.5)*90;
+    beta =(0.5 - e.clientY/h)*90;
+  });
+
+  // Keep your existing service worker
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
+  }
+</script>
+</body>
+</html>
