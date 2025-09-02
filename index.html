@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Betterly</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#e9eef5" />
+<style>
+  :root{
+    --app-w: clamp(320px, 92vw, 420px);
+    --bg:#e9eef5;            /* page bg (cool light) */
+    --card:#ffffff;          /* surfaces */
+    --text:#0f172a;          /* dark slate text */
+    --shadow: 0 10px 28px rgba(16,24,40,.16), 0 2px 6px rgba(16,24,40,.10);
+    --inner: inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(0,0,0,.04);
+    --radius-lg:24px; --radius-md:20px; --radius-sm:16px;
+    --gap:clamp(12px, 2.2vh, 20px);
+    --tap:clamp(48px, 6vh, 56px);
+    --accent:#6ea8ff;        /* subtle LED accent for focus */
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+  .safe{padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));}
+  .app{width:var(--app-w); margin:0 auto; position:relative; min-height:100dvh; display:flex; flex-direction:column; gap:var(--gap);}
+  /* Top three-dot bar */
+  .topbar{
+    height:var(--tap); border-radius:999px; background:var(--card);
+    box-shadow:var(--shadow), var(--inner);
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#c9d4e5;box-shadow:0 1px 2px rgba(0,0,0,.06), inset 0 1px 0 #fff}
+  /* Center wallpaper stage (fills available space) */
+  .stage{
+    flex:1; border-radius:var(--radius-lg); background:var(--card);
+    box-shadow:var(--shadow), var(--inner); position:relative; overflow:hidden;
+    display:grid; place-items:center;
+  }
+  .logo{
+    width:min(56%, 220px); aspect-ratio:1/1; border-radius:50%;
+    background: radial-gradient(150% 120% at 30% 20%, #ffffff 0%, #f3f6fb 45%, #e6edf7 100%);
+    box-shadow:
+      0 12px 30px rgba(0,0,0,.12),
+      inset 0 2px 3px rgba(255,255,255,.9),
+      inset 0 -3px 8px rgba(0,0,0,.06);
+  }
+  /* Bottom controls dock */
+  .dock{
+    border-radius:var(--radius-md); background:var(--card);
+    box-shadow:var(--shadow), var(--inner);
+    padding: clamp(10px, 1.8vh, 14px);
+    display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px;
+  }
+  .btn{
+    height:var(--tap); border-radius:999px; background:var(--card);
+    box-shadow:var(--shadow), var(--inner); border:none; outline:0;
+    display:grid; place-items:center; font-weight:600; letter-spacing:.2px;
+  }
+  .btn:active{transform:translateY(1px); box-shadow:0 6px 18px rgba(16,24,40,.18), inset 0 -1px 0 rgba(0,0,0,.06)}
+  .btn:focus-visible{box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow), var(--inner)}
+  /* Modal card for button content */
+  .modal{
+    position:absolute; inset:auto 16px 16px 16px; top:16px;
+    border-radius:var(--radius-lg); background:var(--card);
+    box-shadow:var(--shadow), var(--inner);
+    max-height:min(72vh, 100% - 32px); overflow:auto; padding:18px; display:none;
+  }
+  .modal.open{display:block; animation:pop .14s ease-out}
+  @keyframes pop{from{transform:scale(.985); opacity:.0} to{transform:scale(1); opacity:1}}
+  .modal h3{margin:0 0 8px 0; font-size:18px}
+  .close{position:sticky; top:0; margin-left:auto; border:0; background:transparent; font-size:22px; line-height:1; padding:6px 8px; cursor:pointer; color:#5b6b85}
+</style>
+</head>
+<body class="safe">
+  <main class="app">
+    <div class="topbar" aria-label="Menu">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <section class="stage" id="stage">
+      <div class="logo" aria-label="Logo"></div>
+      <article id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button class="close" title="Close" aria-label="Close">✕</button>
+        <h3 id="modal-title">Title</h3>
+        <div id="modal-body">Content</div>
+      </article>
+    </section>
+
+    <nav class="dock" aria-label="Controls">
+      <button class="btn" data-view="Schedule">Schedule</button>
+      <button class="btn" data-view="Tasks">Tasks</button>
+      <button class="btn" data-view="Stats">Stats</button>
+      <button class="btn" data-view="Settings">Settings</button>
+    </nav>
+  </main>
+
+<script>
+  // Simple modal behavior
+  const modal = document.getElementById('modal');
+  const title = document.getElementById('modal-title');
+  const body  = document.getElementById('modal-body');
+  document.querySelector('.dock').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.btn'); if(!btn) return;
+    title.textContent = btn.dataset.view;
+    body.textContent  = `${btn.dataset.view} panel placeholder`;
+    modal.classList.add('open');
+  });
+  modal.querySelector('.close').addEventListener('click', ()=> modal.classList.remove('open'));
+</script>
+
+<script>
+  // PWA wiring
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js');
+  }
+</script>
+</body>
+</html>
