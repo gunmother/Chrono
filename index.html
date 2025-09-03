@@ -241,7 +241,70 @@
   @keyframes ws-out{from{opacity:1; transform:translate(-50%,-50%) scale(1)} to{opacity:0; transform:translate(-50%,-48%) scale(.98)}}
 </style>
 </head>
+<style>
+  /* Safety: weekly needs a real box to compute geometry */
+  .stage .glass{ position:relative; }
+  #weekly{ min-height: 320px; }
+</style>
 
+<script>
+(()=>{
+  // Avoid reapplying if included twice
+  if (window.__betterlyWeeklyPatchApplied) return;
+  window.__betterlyWeeklyPatchApplied = true;
+
+  // 1) Allow interactions inside weekly/coins/overlays; block only true background
+  const ALLOW_SELECTOR = '#weekly, .coins, #taskOverlay, #settingsOverlay, .topbar';
+  ['pointerdown','click','touchstart'].forEach(ev=>{
+    document.body.addEventListener(ev, (e)=>{
+      if (!e.target.closest(ALLOW_SELECTOR)) {
+        e.preventDefault();
+      }
+    }, {passive:false, capture:true});
+  });
+
+  // 2) Singleton overlays (if previous markup injected them)
+  ['taskOverlay','settingsOverlay'].forEach(id=>{
+    const nodes = document.querySelectorAll('#'+id);
+    if (nodes.length > 1) {
+      for (let i=1;i<nodes.length;i++) nodes[i].remove();
+    }
+  });
+
+  // 3) Zero-size guard: rebuild when the grid actually has measurable size
+  const grid = document.getElementById('weekGrid');
+  if (window.ResizeObserver && grid) {
+    const ro = new ResizeObserver(entries=>{
+      for (const ent of entries) {
+        const {width, height} = ent.contentRect || {};
+        // Kick a rebuild only after we have a real box
+        if (width > 10 && height > 10) {
+          // The weekly code rebuilds on resize; dispatch one
+          window.dispatchEvent(new Event('resize'));
+        }
+      }
+    });
+    ro.observe(grid);
+  }
+
+  // 4) Force a first layout after fonts/images load
+  window.addEventListener('load', ()=>{
+    // trigger the weekly layout() via its resize listener
+    window.dispatchEvent(new Event('resize'));
+    // Week coin should appear active (visual only)
+    const weekBtn=document.querySelector('.coin[data-name="week"]');
+    if (weekBtn) {
+      weekBtn.classList.add('active');
+      weekBtn.setAttribute('aria-pressed','true');
+    }
+  });
+
+  // 5) Service worker scope (no offline logic here—just safe registration)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(()=>{});
+  }
+})();
+</script>
 <body>
   <!-- global filters -->
   <svg width="0" height="0" style="position:absolute">
