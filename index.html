@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Betterly — Tilt Glass UI</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#ffffff" />
+<style>
+  :root{
+    --bg:#ffffff;
+    --pane:#ffffff;
+    --sx: 0px;
+    --sy: 12px;
+    --sblur: 14px;
+    --hx: 50%;
+    --hy: 22%;
+    --app-w: clamp(320px, 92vw, 420px);
+    --gap: clamp(18px, 2.6vh, 24px);
+    --barH: clamp(34px, 5.2vh, 46px);
+    --coin: clamp(52px, 7.6vh, 62px);
+    --r-lg: 24px;
+    --r-pill: 999px;
+    --led:#eaffff;
+    --blue-1:#38bdff;
+    --blue-2:#0e56ba;
+    --ring-track:#9aaac3;
+    --ring-led: var(--led);
+    --ring-thickness: 4.5;
+    --ring-thickness-px: 4.5px;
+    --ring-gap: 10px;
+    --ink:#92a0b3;
+    --ink-active:var(--led);
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;overscroll-behavior:none}
+  body{
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+    padding: max(16px, env(safe-area-inset-top))
+             max(16px, env(safe-area-inset-right))
+             max(20px, env(safe-area-inset-bottom))
+             max(16px, env(safe-area-inset-left));
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
+
+  .app{
+    width:var(--app-w);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+    margin:0 auto; display:grid; grid-template-rows: var(--barH) 1fr auto; gap:var(--gap);
+    position:relative;
+  }
+
+  /* glass panels */
+  .glass{
+    background: var(--pane);
+    border-radius: var(--r-lg);
+    position:relative;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.22),
+      calc(var(--sx)*.5) calc(var(--sy)*.5) calc(var(--sblur)*.6) rgba(0,0,0,.12);
+  }
+  .glass::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
+  }
+
+  /* top bar with separate shadow (under everything) */
+  .topwrap{ position:relative; z-index:3; }
+  .topbar{
+    height:var(--barH); border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center; gap:10px;
+    background:#f7f9fd; position:relative; box-shadow:none;
+  }
+  .topwrap .shadow{
+    position:absolute; inset:0; border-radius:var(--r-pill); z-index:0; pointer-events:none;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.22),
+      calc(var(--sx)*.5) calc(var(--sy)*.5) calc(var(--sblur)*.6) rgba(0,0,0,.12);
+  }
+  .topbar::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
+  }
+  .dot{width:8px;height:8px;border-radius:50%; background:#cfd8e6; box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.06)}
+
+  /* center screen sits above top shadow */
+  .stage{ position:relative; z-index:4; }
+  .stage .glass{ background:#fff; width:100%; height:100%; }
+
+  /* coins row */
+  .coins{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:22px; align-items:end;
+    padding-bottom: 2px;
+    position:relative; z-index:5;
+    margin-top: 10px;
+  }
+
+  /* coin with static shadow, no placeholder under flip */
+  .coin{
+    width:var(--coin); height:var(--coin); margin:0 auto; border-radius:50%;
+    border:0; outline:0; position:relative; cursor:pointer; background:transparent;
+    isolation:isolate; overflow:visible;
+  }
+  .coin::after{
+    content:""; position:absolute; inset:0; border-radius:50%;
+    z-index:0; pointer-events:none; background:transparent;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.30),
+      calc(var(--sx)*.6) calc(var(--sy)*.6) calc(var(--sblur)*.5) rgba(0,0,0,.16);
+  }
+
+  /* progress ring */
+  .ring{
+    position:absolute;
+    inset: calc(-1 * (var(--ring-gap) + var(--ring-thickness-px)));
+    z-index:2; pointer-events:none; overflow:visible;
+  }
+  .ring svg{ width:100%; height:100%; display:block; overflow:visible }
+  .ring .track{
+    fill:none; stroke: var(--ring-track); stroke-width: var(--ring-thickness); stroke-linecap:round;
+    filter: url(#grooveFilter);
+  }
+  .ring .arc{
+    fill:none; stroke: var(--ring-led); stroke-width: var(--ring-thickness); stroke-linecap:round;
+    transform: rotate(-90deg); transform-origin:50% 50%;
+    filter: url(#ledGlow);
+  }
+
+  /* flip */
+  .flip{
+    position:absolute; inset:0; border-radius:50%;
+    transform-style: preserve-3d;
+    transition: transform 340ms cubic-bezier(.2,.7,.2,1);
+    z-index:1; background:transparent;
+  }
+  .face{
+    position:absolute; inset:0; border-radius:50%;
+    display:grid; place-items:center;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background:transparent;
+  }
+
+  /* inactive face look: slight gray spherical gradient */
+  .front{
+    background:
+      radial-gradient(160% 160% at 22% 18%, #ffffff 0%, #f3f7fd 22%, #e8eff9 48%, #e4edf8 68%, #e0eaf7 100%);
+  }
+  .back{
+    transform: rotate3d(1,1,0,180deg);
+    background: radial-gradient(120% 120% at 30% 30%, var(--blue-1), var(--blue-2) 70%);
+  }
+
+  /* icons */
+  .icon{ width:68%; height:68%; overflow:visible }
+  .icon *{ vector-effect: non-scaling-stroke; }
+  .front .icon{ fill:none; stroke: var(--ink); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .back  .icon{ fill:none; stroke: var(--ink-active); stroke-width:2.0; stroke-linecap:round; stroke-linejoin:round; filter:url(#ledGlow); }
+
+  .coin.active .flip{ transform: rotate3d(1,1,0,180deg); }
+  .coin:focus-visible{ outline:2px solid #8ecbff; outline-offset:2px; border-radius:50%; }
+
+  @media (max-height: 600px){
+    :root{ --gap:14px; --coin:48px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .flip{ transition:none }
+  }
+</style>
+</head>
+<body>
+  <!-- global filters -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <filter id="ledGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="g"/>
+        <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="grooveFilter" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="0.7" dy="0.7" stdDeviation="0.7" flood-color="#b8c3d6" flood-opacity=".65"/>
+        <feDropShadow dx="-0.7" dy="-0.7" stdDeviation="0.7" flood-color="#ffffff" flood-opacity=".9"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <main class="app">
+    <!-- TOP BAR -->
+    <div class="topwrap">
+      <div class="shadow" aria-hidden="true"></div>
+      <div class="topbar" aria-label="Menu handle">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
+
+    <!-- CENTER SCREEN -->
+    <section class="stage">
+      <div class="glass" aria-label="Center screen"></div>
+    </section>
+
+    <!-- BUTTONS -->
+    <div class="coins" role="group" aria-label="Primary views">
+      <!-- Day -->
+      <button class="coin" aria-label="Day view" aria-pressed="false" data-name="day" data-progress="0.42">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <!-- symmetric sun, 8 rays -->
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="4.6"/>
+              <g>
+                <line x1="12" y1="2.2"  x2="12" y2="4.2"/>
+                <line x1="19.8" y1="12"  x2="21.8" y2="12"/>
+                <line x1="12" y1="19.8" x2="12" y2="21.8"/>
+                <line x1="2.2" y1="12"  x2="4.2" y2="12"/>
+                <line x1="17.3" y1="6.7" x2="18.7" y2="5.3"/>
+                <line x1="17.3" y1="17.3" x2="18.7" y2="18.7"/>
+                <line x1="6.7"  y1="17.3" x2="5.3"  y2="18.7"/>
+                <line x1="6.7"  y1="6.7"  x2="5.3"  y2="5.3"/>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="4.6"/>
+              <g>
+                <line x1="12" y1="2.2"  x2="12" y2="4.2"/>
+                <line x1="19.8" y1="12"  x2="21.8" y2="12"/>
+                <line x1="12" y1="19.8" x2="12" y2="21.8"/>
+                <line x1="2.2" y1="12"  x2="4.2" y2="12"/>
+                <line x1="17.3" y1="6.7" x2="18.7" y2="5.3"/>
+                <line x1="17.3" y1="17.3" x2="18.7" y2="18.7"/>
+                <line x1="6.7"  y1="17.3" x2="5.3"  y2="18.7"/>
+                <line x1="6.7"  y1="6.7"  x2="5.3"  y2="5.3"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- Week -->
+      <button class="coin" aria-label="Week view" aria-pressed="false" data-name="week" data-progress="0.18">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g>
+                <line x1="6" y1="10" x2="6" y2="19.5"/><line x1="8" y1="10" x2="8" y2="19.5"/>
+                <line x1="10" y1="10" x2="10" y2="19.5"/><line x1="12" y1="10" x2="12" y2="19.5"/>
+                <line x1="14" y1="10" x2="14" y2="19.5"/><line x1="16" y1="10" x2="16" y2="19.5"/>
+                <line x1="18" y1="10" x2="18" y2="19.5"/>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g>
+                <line x1="6" y1="10" x2="6" y2="19.5"/><line x1="8" y1="10" x2="8" y2="19.5"/>
+                <line x1="10" y1="10" x2="10" y2="19.5"/><line x1="12" y1="10" x2="12" y2="19.5"/>
+                <line x1="14" y1="10" x2="14" y2="19.5"/><line x1="16" y1="10" x2="16" y2="19.5"/>
+                <line x1="18" y1="10" x2="18" y2="19.5"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- Month -->
+      <button class="coin" aria-label="Month view" aria-pressed="false" data-name="month" data-progress="0.63">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g>
+                <circle cx="6.2" cy="11" r=".8"/><circle cx="8.9" cy="11" r=".8"/><circle cx="11.6" cy="11" r=".8"/><circle cx="14.3" cy="11" r=".8"/><circle cx="17.0" cy="11" r=".8"/>
+                <circle cx="6.2" cy="12.9" r=".8"/><circle cx="8.9" cy="12.9" r=".8"/><circle cx="11.6" cy="12.9" r=".8"/><circle cx="14.3" cy="12.9" r=".8"/><circle cx="17.0" cy="12.9" r=".8"/>
+                <circle cx="6.2" cy="14.8" r=".8"/><circle cx="8.9" cy="14.8" r=".8"/><circle cx="11.6" cy="14.8" r=".8"/><circle cx="14.3" cy="14.8" r=".8"/><circle cx="17.0" cy="14.8" r=".8"/>
+                <circle cx="6.2" cy="16.7" r=".8"/><circle cx="8.9" cy="16.7" r=".8"/><circle cx="11.6" cy="16.7" r=".8"/><circle cx="14.3" cy="16.7" r=".8"/><circle cx="17.0" cy="16.7" r=".8"/>
+                <circle cx="6.2" cy="18.6" r=".8"/><circle cx="8.9" cy="18.6" r=".8"/><circle cx="11.6" cy="18.6" r=".8"/><circle cx="14.3" cy="18.6" r=".8"/><circle cx="17.0" cy="18.6" r=".8"/>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g>
+                <circle cx="6.2" cy="11" r=".8"/><circle cx="8.9" cy="11" r=".8"/><circle cx="11.6" cy="11" r=".8"/><circle cx="14.3" cy="11" r=".8"/><circle cx="17.0" cy="11" r=".8"/>
+                <circle cx="6.2" cy="12.9" r=".8"/><circle cx="8.9" cy="12.9" r=".8"/><circle cx="11.6" cy="12.9" r=".8"/><circle cx="14.3" cy="12.9" r=".8"/><circle cx="17.0" cy="12.9" r=".8"/>
+                <circle cx="6.2" cy="14.8" r=".8"/><circle cx="8.9" cy="14.8" r=".8"/><circle cx="11.6" cy="14.8" r=".8"/><circle cx="14.3" cy="14.8" r=".8"/><circle cx="17.0" cy="14.8" r=".8"/>
+                <circle cx="6.2" cy="16.7" r=".8"/><circle cx="8.9" cy="16.7" r=".8"/><circle cx="11.6" cy="16.7" r=".8"/><circle cx="14.3" cy="16.7" r=".8"/><circle cx="17.0" cy="16.7" r=".8"/>
+                <circle cx="6.2" cy="18.6" r=".8"/><circle cx="8.9" cy="18.6" r=".8"/><circle cx="11.6" cy="18.6" r=".8"/><circle cx="14.3" cy="18.6" r=".8"/><circle cx="17.0" cy="18.6" r=".8"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- To-Do -->
+      <button class="coin" aria-label="To-Do list" aria-pressed="false" data-name="todo" data-progress="0.05">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <polyline points="6.5,14 10,17.5 17.5,10"/>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <polyline points="6.5,14 10,17.5 17.5,10"/>
+            </svg>
+          </div>
+        </div>
+      </button>
+    </div>
+
+    <button id="enable" hidden>Enable motion</button>
+  </main>
+
+<script>
+  /* prevent page-jerk on taps outside the coins */
+  ['pointerdown','click','touchstart'].forEach(ev=>{
+    document.body.addEventListener(ev, e=>{
+      if(!e.target.closest('.coin')) e.preventDefault();
+    }, {passive:false});
+  });
+
+  /* progress rings */
+  const coins=[...document.querySelectorAll('.coin')];
+  function updateRing(el){
+    const p = Math.max(0, Math.min(1, parseFloat(el.dataset.progress ?? '0')));
+    const arc = el.querySelector('.arc');
+    arc.setAttribute('stroke-dasharray','100');
+    arc.setAttribute('stroke-dashoffset', (100 - p*100).toFixed(2));
+  }
+  coins.forEach(updateRing);
+
+  /* expose a no-op showWeek; real one overwrites below (module) */
+  window.showWeek = (on)=>{};
+
+  /* flip toggle + mutual exclusivity (second tap deactivates) */
+  function setActive(target){
+    const already = target.classList.contains('active');
+    coins.forEach(btn=>{
+      const on = !already && btn===target;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
+    });
+
+    const name = target?.dataset?.name;
+    if(!already && name==='week'){ window.showWeek(true); }
+    else if(already && name==='week'){ window.showWeek(false); }
+    else { window.showWeek(false); }
+  }
+  document.querySelector('.coins').addEventListener('click', e=>{
+    const c=e.target.closest('.coin'); if(!c) return;
+    setActive(c);
+  });
+
+  /* preserved shadow physics + smoothing (fix jump near vertical) */
+  const root=document.documentElement;
+  let beta=18, gamma=0, sx=0, sy=12;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+
+  function animate(){
+    const max=34;
+    const tx=clamp((gamma||0)/45, -1, 1)*max;
+    const ty=clamp((beta ||0)/45, -1, 1)*max;
+
+    sx = lerp(sx, tx, 0.12);
+    sy = lerp(sy, ty+8, 0.12);
+
+    const mag=Math.hypot(sx,sy);
+    root.style.setProperty('--sx',  sx.toFixed(1)+'px');
+    root.style.setProperty('--sy',  sy.toFixed(1)+'px');
+    root.style.setProperty('--sblur', (12 + mag*0.45).toFixed(1)+'px');
+    root.style.setProperty('--hx',  (50 - sx*1.1/max*45)+'%');
+    root.style.setProperty('--hy',  (22 - sy*0.7/max*45)+'%');
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  function startMotion(){
+    window.addEventListener('deviceorientation', e=>{
+      if(e.beta==null||e.gamma==null) return;
+      const dz=2.0;
+      beta = Math.abs(e.beta)  < dz ? 0 : e.beta;
+      gamma= Math.abs(e.gamma) < dz ? 0 : e.gamma;
+    }, true);
+  }
+  (async()=>{
+    const btn=document.getElementById('enable');
+    try{
+      if (typeof DeviceOrientationEvent!=='undefined' &&
+          typeof DeviceOrientationEvent.requestPermission==='function'){
+        btn.hidden=false;
+        btn.onclick=async ()=>{
+          try{
+            const res=await DeviceOrientationEvent.requestPermission();
+            if(res==='granted'){ btn.hidden=true; startMotion(); }
+          }catch{}
+        };
+      }else{ startMotion(); }
+    }catch{ startMotion(); }
+  })();
+
+  if(!('ontouchstart' in window)){
+    window.addEventListener('mousemove', e=>{
+      const w=innerWidth, h=innerHeight;
+      gamma=(e.clientX/w - 0.5)*90;
+      beta =(0.5 - e.clientY/h)*90;
+    });
+  }
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
+  }
+</script>
+
+<!-- Week engine & wiring -->
+<script type="module">
+  import { WeekCore } from './week-core.js';
+
+  const stage = document.querySelector('.stage .glass');
+
+  // Inject compact styles for week mount
+  const style = document.createElement('style');
+  style.textContent = `
+    #weekMount{position:absolute; inset:12px; display:grid; grid-template-rows:auto 16px 1fr; gap:8px}
+    #weekTitle{font-weight:800; font-size:16px; text-align:center; color:#0F172A}
+    #weekHead{display:grid; grid-template-columns:56px 1fr; align-items:center}
+    #weekHours{position:relative; height:16px}
+    #weekHours .tick{position:absolute; transform:translateX(-50%); font-size:10px; color:#64748B}
+    #weekGridWrap{position:relative; display:grid; grid-template-columns:56px 1fr; gap:0}
+    #weekLabels{position:relative; height:16px}
+    #weekLabels .dow{position:absolute; transform:translateX(-50%); font-size:11px; font-weight:700; color:#364152}
+    #weekGrid{position:relative; height:calc(100% - 16px); background:#E3E7EE; overflow:hidden}
+    #blocksLayer{position:absolute; inset:0}
+    #nowHint{position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(255,255,255,0.18); display:none}
+  `;
+  document.head.appendChild(style);
+
+  // Structure
+  const mount = document.createElement('div');
+  mount.id = 'weekMount';
+  mount.hidden = true;
+  mount.innerHTML = `
+    <div id="weekTitle">—</div>
+    <div id="weekHead">
+      <div id="weekHours"></div>
+      <div id="weekLabels"></div>
+    </div>
+    <div id="weekGridWrap">
+      <div></div>
+      <div id="weekGrid" aria-label="Weekly grid">
+        <div id="blocksLayer"></div>
+        <div id="nowHint"></div>
+      </div>
+    </div>
+  `;
+  stage.appendChild(mount);
+
+  // helpers to place labels evenly
+  function placeEven(container, labels){
+    container.innerHTML='';
+    const r = container.getBoundingClientRect();
+    labels.forEach((txt,i)=>{
+      const el = document.createElement('div');
+      el.textContent = txt;
+      el.className = container.id==='weekLabels' ? 'dow' : 'tick';
+      const x = (i/(labels.length-1||1))*r.width;
+      el.style.left = `${x}px`;
+      container.appendChild(el);
+    });
+  }
+
+  const grid = mount.querySelector('#weekGrid');
+  const blocksLayer = mount.querySelector('#blocksLayer');
+  const nowHint = mount.querySelector('#nowHint');
+  const weekTitle = mount.querySelector('#weekTitle');
+  const weekLabels = mount.querySelector('#weekLabels');
+  const weekHours = mount.querySelector('#weekHours');
+
+  const core = new WeekCore({
+    measureGrid: ()=> {
+      const r = grid.getBoundingClientRect();
+      return { width: Math.round(r.width), height: Math.round(r.height) };
+    },
+    onRenderTitle: (txt)=>{ weekTitle.textContent = txt; },
+    onRenderLabels: (names)=>{ requestAnimationFrame(()=>placeEven(weekLabels, names)); },
+    onRenderHours: (stamps)=>{ const picks=[0,6,12,18,24].map(h=>String(h).padStart(2,'0')+':00'); requestAnimationFrame(()=>placeEven(weekHours, picks)); },
+    onRenderBlocks: (slots, geom, colors)=>{
+      blocksLayer.innerHTML='';
+      const { colX, colW, slotY } = geom;
+      for(let d=0; d<7; d++){
+        let s=0;
+        while(s<slots[d].length){
+          const cat = slots[d][s];
+          if(cat===null){ s++; continue; }
+          let e=s+1; while(e<slots[d].length && slots[d][e]===cat) e++;
+          const left = colX[d], right = colX[d+1];
+          const top = slotY[s], bottom = slotY[e];
+          const div = document.createElement('div');
+          div.style.position='absolute';
+          div.style.left = left+'px';
+          div.style.top = top+'px';
+          div.style.width = Math.max(0, (d===6? right-left-1 : right-left))+'px';
+          div.style.height = (bottom-top)+'px';
+          div.style.background = colors[cat] || '#CBD5E1';
+          blocksLayer.appendChild(div);
+          s = e;
+        }
+      }
+    },
+    onRenderMask: (_)=>{},
+    onRenderNowHint: (rect)=>{
+      if(!rect){ nowHint.style.display='none'; return; }
+      nowHint.style.left = rect.left+'px';
+      nowHint.style.top = rect.top+'px';
+      nowHint.style.width = rect.width+'px';
+      nowHint.style.height = rect.height+'px';
+      nowHint.style.display = 'block';
+    }
+  });
+
+  // real showWeek replaces stub set earlier
+  function showWeek(on){
+    mount.hidden = !on;
+    if(on){ requestAnimationFrame(()=>core.rebuild()); }
+  }
+  window.showWeek = showWeek;
+
+  addEventListener('resize', ()=>{ if(!mount.hidden) core.rebuild(); }, {passive:true});
+
+  // If week coin pre-marked active, show it
+  const pre = document.querySelector('.coin[data-name="week"].active');
+  if(pre){ showWeek(true); }
+</script>
+</body>
+</html>
