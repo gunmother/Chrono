@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Betterly — Tilt Glass UI</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#f6f9fe" />
+<style>
+  :root{
+    --bg:#f6f9fe;          /* page (slightly lighter) */
+    --pane:#ffffff;        /* center pane stays white */
+
+    /* dynamic shadow/parallax (from JS) */
+    --sx: 0px;
+    --sy: 16px;
+    --blur: 36px;
+
+    --hx: 50%;
+    --hy: 22%;
+
+    --app-w: clamp(320px, 92vw, 420px);
+    --gap: clamp(12px, 2vh, 18px);
+    --barH: clamp(42px, 6vh, 56px);
+    --coin: clamp(68px, 9vh, 84px);
+    --r-lg: 24px;
+    --r-pill: 999px;
+
+    /* LED color (even lighter/brighter) */
+    --led:#ccfdff;               /* very light turquoise */
+    --led-glow: rgba(204,253,255,.98);
+
+    /* active back face */
+    --blue-1:#30b2ff;
+    --blue-2:#1260c7;
+
+    /* progress ring */
+    --ring-track:#d7e1ee;        /* static groove */
+    --ring-led: var(--led);
+    --ring-thickness: 6;         /* SVG stroke width (viewBox units) */
+    --ring-thickness-px: 6px;    /* for layout gap */
+    --ring-gap: 6px;             /* air gap between coin edge and ring */
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;overscroll-behavior:none}
+  body{
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+    padding: max(16px, env(safe-area-inset-top))
+             max(16px, env(safe-area-inset-right))
+             max(20px, env(safe-area-inset-bottom))
+             max(16px, env(safe-area-inset-left));
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
+
+  .app{
+    width:var(--app-w);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+    margin:0 auto; display:grid; grid-template-rows: var(--barH) 1fr auto; gap:var(--gap);
+    position:relative;
+  }
+
+  /* ===== panels ===== */
+  .glass{
+    background: var(--pane);
+    border-radius: var(--r-lg);
+    position:relative;
+    box-shadow: var(--sx) var(--sy) var(--blur) rgba(0,0,0,.20), 0 6px 16px rgba(0,0,0,.10);
+    will-change: transform, box-shadow;
+  }
+  .glass::before{ /* subtle sheen */
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
+  }
+  .stage .glass{ background:#fff; }
+
+  .topbar{
+    height:var(--barH); border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  /* three dots back to GRAY (no LED) */
+  .dot{width:8px;height:8px;border-radius:50%; background:#cfd8e6; box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.06)}
+
+  .stage{ position:relative; }
+  .stage .glass{ width:100%; height:100%; }
+
+  /* ===== coins row ===== */
+  .coins{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; align-items:end;
+    padding-bottom: 2px;
+  }
+
+  /* coin container — STATIC shadow here only (faces flip above EMPTY bg) */
+  .coin{
+    width:var(--coin); height:var(--coin); margin:0 auto; border-radius:50%;
+    border:0; outline:0; position:relative; cursor:pointer; background: transparent;
+    perspective: 1000px;
+    /* use drop-shadow so there is NO filled circle/placeholder under flip */
+    filter:
+      drop-shadow(var(--sx) var(--sy) calc(var(--blur) * .9) rgba(0,0,0,.32))
+      drop-shadow(0 10px 24px rgba(0,0,0,.16));
+  }
+
+  /* progress ring — around the coin with visible air gap */
+  .ring{
+    position:absolute;
+    inset: calc(-1 * (var(--ring-gap) + var(--ring-thickness-px)));
+    pointer-events:none;
+  }
+  .ring svg{ width:100%; height:100%; display:block; }
+  .ring .track{
+    fill:none; stroke: var(--ring-track); stroke-width: var(--ring-thickness);
+    stroke-linecap: round;
+  }
+  .ring .arc{
+    fill:none; stroke: var(--ring-led); stroke-width: var(--ring-thickness);
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 12px var(--led-glow));
+    transform: rotate(-90deg); transform-origin: 50% 50%;
+  }
+
+  /* flipping assembly — NO background; nothing static underneath */
+  .flip{
+    position:absolute; inset:0; border-radius:50%;
+    transform-style: preserve-3d;
+    transition: transform 340ms cubic-bezier(.2,.7,.2,1);
+    will-change: transform;
+  }
+
+  .face{
+    position:absolute; inset:0; border-radius:50%;
+    display:grid; place-items:center;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  }
+
+  /* FRONT (inactive): gray gradient (only TL corner white) */
+  .front{
+    background: linear-gradient(145deg, #ffffff 7%, var(--bg) 22%, var(--bg) 100%);
+  }
+
+  /* BACK (active): dark blue gradient */
+  .back{
+    transform: rotate3d(1,1,0,180deg);
+    background: radial-gradient(120% 120% at 30% 30%, var(--blue-1), var(--blue-2) 70%);
+  }
+
+  /* ICONS — consistent strokes, aligned, simple */
+  .icon{ width:60%; height:60%; }
+  .front .icon{
+    fill:none; stroke:#9aa6b6; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+  }
+  .front .icon .fill{ fill:#9aa6b6; stroke:none; }
+
+  .back .icon{
+    fill:none; stroke: var(--led); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(0 0 14px var(--led-glow));
+  }
+  .back .icon .fill{ fill: var(--led); stroke:none; filter: drop-shadow(0 0 14px var(--led-glow)); }
+
+  /* flip state */
+  .coin.active .flip{ transform: rotate3d(1,1,0,180deg); }
+
+  .coin:focus-visible{ outline: 2px solid #8ecbff; outline-offset: 2px; border-radius:50%; }
+
+  @media (max-height: 600px){
+    :root{ --gap:10px; --coin:64px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .glass,.coin,.flip{ transition:none }
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar glass" aria-label="Menu handle">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <section class="stage">
+      <div class="glass" aria-label="Center screen"></div>
+    </section>
+
+    <div class="coins" role="group" aria-label="Primary views">
+      <!-- Day — clean sun, 12 identical rays -->
+      <button class="coin" aria-label="Day view" aria-pressed="false" data-name="day" data-progress="0.42">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="46"></circle>
+            <circle class="arc"   cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
+          </svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5"></circle>
+              <g>
+                <line x1="12" y1="1.6" x2="12" y2="4.2"></line>
+                <line x1="12" y1="19.8" x2="12" y2="22.4"></line>
+                <line x1="1.6" y1="12" x2="4.2" y2="12"></line>
+                <line x1="19.8" y1="12" x2="22.4" y2="12"></line>
+                <line x1="4.3" y1="4.3" x2="6.2" y2="6.2"></line>
+                <line x1="17.8" y1="17.8" x2="19.7" y2="19.7"></line>
+                <line x1="4.3" y1="19.7" x2="6.2" y2="17.8"></line>
+                <line x1="17.8" y1="6.2" x2="19.7" y2="4.3"></line>
+                <line x1="8.1" y1="2.8" x2="9.2" y2="5"></line>
+                <line x1="15.9" y1="2.8" x2="14.8" y2="5"></line>
+                <line x1="2.8" y1="8.1" x2="5" y2="9.2"></line>
+                <line x1="21.2" y1="8.1" x2="19" y2="9.2"></line>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5"></circle>
+              <g>
+                <line x1="12" y1="1.6" x2="12" y2="4.2"></line>
+                <line x1="12" y1="19.8" x2="12" y2="22.4"></line>
+                <line x1="1.6" y1="12" x2="4.2" y2="12"></line>
+                <line x1="19.8" y1="12" x2="22.4" y2="12"></line>
+                <line x1="4.3" y1="4.3" x2="6.2" y2="6.2"></line>
+                <line x1="17.8" y1="17.8" x2="19.7" y2="19.7"></line>
+                <line x1="4.3" y1="19.7" x2="6.2" y2="17.8"></line>
+                <line x1="17.8" y1="6.2" x2="19.7" y2="4.3"></line>
+                <line x1="8.1" y1="2.8" x2="9.2" y2="5"></line>
+                <line x1="15.9" y1="2.8" x2="14.8" y2="5"></line>
+                <line x1="2.8" y1="8.1" x2="5" y2="9.2"></line>
+                <line x1="21.2" y1="8.1" x2="19" y2="9.2"></line>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- Week — flip calendar with seven clean rows -->
+      <button class="coin" aria-label="Week view" aria-pressed="false" data-name="week" data-progress="0.18">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="46"></circle>
+            <circle class="arc"   cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
+          </svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g>
+                <line x1="6" y1="9.2" x2="18" y2="9.2"></line>
+                <line x1="6" y1="11" x2="18" y2="11"></line>
+                <line x1="6" y1="12.8" x2="18" y2="12.8"></line>
+                <line x1="6" y1="14.6" x2="18" y2="14.6"></line>
+                <line x1="6" y1="16.4" x2="18" y2="16.4"></line>
+                <line x1="6" y1="18.2" x2="18" y2="18.2"></line>
+                <line x1="6" y1="20" x2="18" y2="20"></line>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g>
+                <line x1="6" y1="9.2" x2="18" y2="9.2"></line>
+                <line x1="6" y1="11" x2="18" y2="11"></line>
+                <line x1="6" y1="12.8" x2="18" y2="12.8"></line>
+                <line x1="6" y1="14.6" x2="18" y2="14.6"></line>
+                <line x1="6" y1="16.4" x2="18" y2="16.4"></line>
+                <line x1="6" y1="18.2" x2="18" y2="18.2"></line>
+                <line x1="6" y1="20" x2="18" y2="20"></line>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- Month — dots grid -->
+      <button class="coin" aria-label="Month view" aria-pressed="false" data-name="month" data-progress="0.63">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="46"></circle>
+            <circle class="arc"   cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
+          </svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g class="fill">
+                <!-- tidy 4x4 -->
+                <circle cx="7" cy="11" r="0.9"></circle><circle cx="11" cy="11" r="0.9"></circle><circle cx="15" cy="11" r="0.9"></circle><circle cx="19" cy="11" r="0.9"></circle>
+                <circle cx="7" cy="14" r="0.9"></circle><circle cx="11" cy="14" r="0.9"></circle><circle cx="15" cy="14" r="0.9"></circle><circle cx="19" cy="14" r="0.9"></circle>
+                <circle cx="7" cy="17" r="0.9"></circle><circle cx="11" cy="17" r="0.9"></circle><circle cx="15" cy="17" r="0.9"></circle><circle cx="19" cy="17" r="0.9"></circle>
+                <circle cx="7" cy="20" r="0.9"></circle><circle cx="11" cy="20" r="0.9"></circle><circle cx="15" cy="20" r="0.9"></circle><circle cx="19" cy="20" r="0.9"></circle>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g class="fill">
+                <circle cx="7" cy="11" r="0.9"></circle><circle cx="11" cy="11" r="0.9"></circle><circle cx="15" cy="11" r="0.9"></circle><circle cx="19" cy="11" r="0.9"></circle>
+                <circle cx="7" cy="14" r="0.9"></circle><circle cx="11" cy="14" r="0.9"></circle><circle cx="15" cy="14" r="0.9"></circle><circle cx="19" cy="14" r="0.9"></circle>
+                <circle cx="7" cy="17" r="0.9"></circle><circle cx="11" cy="17" r="0.9"></circle><circle cx="15" cy="17" r="0.9"></circle><circle cx="19" cy="17" r="0.9"></circle>
+                <circle cx="7" cy="20" r="0.9"></circle><circle cx="11" cy="20" r="0.9"></circle><circle cx="15" cy="20" r="0.9"></circle><circle cx="19" cy="20" r="0.9"></circle>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+
+      <!-- To-Do — three rows with checks -->
+      <button class="coin" aria-label="To-Do list" aria-pressed="false" data-name="todo" data-progress="0.05">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="46"></circle>
+            <circle class="arc"   cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"></circle>
+          </svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g>
+                <polyline points="6,10.8 7.4,12.2 10.2,9.6"></polyline><line x1="11" y1="10.8" x2="19" y2="10.8"></line>
+                <polyline points="6,14.8 7.4,16.2 10.2,13.6"></polyline><line x1="11" y1="14.8" x2="19" y2="14.8"></line>
+                <polyline points="6,18.8 7.4,20.2 10.2,17.6"></polyline><line x1="11" y1="18.8" x2="19" y2="18.8"></line>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="4" width="17" height="16" rx="2" ry="2"></rect>
+              <line x1="3.5" y1="7" x2="20.5" y2="7"></line>
+              <g>
+                <polyline points="6,10.8 7.4,12.2 10.2,9.6"></polyline><line x1="11" y1="10.8" x2="19" y2="10.8"></line>
+                <polyline points="6,14.8 7.4,16.2 10.2,13.6"></polyline><line x1="11" y1="14.8" x2="19" y2="14.8"></line>
+                <polyline points="6,18.8 7.4,20.2 10.2,17.6"></polyline><line x1="11" y1="18.8" x2="19" y2="18.8"></line>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </button>
+    </div>
+
+    <button id="enable" hidden>Enable motion</button>
+  </main>
+
+<script>
+  /* ===== stop accidental page jerk ===== */
+  const isTouch = matchMedia('(hover: none), (pointer: coarse)').matches || 'ontouchstart' in window;
+  ['pointerdown','click','touchstart'].forEach(ev=>{
+    document.body.addEventListener(ev, e=>{
+      if(!e.target.closest('.coin')) e.preventDefault();
+    }, {passive:false});
+  });
+  [document.querySelector('.topbar'), document.querySelector('.stage')].forEach(el=>{
+    if(!el) return;
+    ['pointerdown','pointerup','click','touchstart','touchend'].forEach(ev=>{
+      el.addEventListener(ev, e=>{ e.stopPropagation(); }, {passive:true});
+    });
+  });
+
+  /* ===== progress rings ===== */
+  const coins=[...document.querySelectorAll('.coin')];
+  function updateRing(el){
+    const p = Math.max(0, Math.min(1, parseFloat(el.dataset.progress ?? '0')));
+    const arc = el.querySelector('.arc');
+    arc.setAttribute('stroke-dasharray','100');
+    arc.setAttribute('stroke-dashoffset', (100 - p*100).toFixed(2));
+  }
+  coins.forEach(updateRing);
+
+  /* ===== flip toggle + mutual exclusivity ===== */
+  function setActive(target){
+    const already = target.classList.contains('active');
+    coins.forEach(btn=>{
+      const on = !already && btn===target;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
+    });
+  }
+  document.querySelector('.coins').addEventListener('click', e=>{
+    const c=e.target.closest('.coin'); if(!c) return;
+    setActive(c);
+  });
+
+  /* ===== tilt shadows/parallax (more travel) ===== */
+  const root=document.documentElement;
+  const movers=document.querySelectorAll('.topbar.glass, .stage .glass, .coin');
+
+  let beta=18, gamma=0;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+
+  function animate(){
+    const max=30; /* farther travel for 3D feel */
+    const x=clamp((gamma||0)/45, -1, 1)*max;
+    const y=clamp((beta ||0)/45, -1, 1)*max;
+
+    const mag=Math.hypot(x,y);
+    root.style.setProperty('--sx',  x.toFixed(1)+'px');
+    root.style.setProperty('--sy',  (y+12).toFixed(1)+'px');
+    root.style.setProperty('--hx',  (50 - x*1.2)+'%');
+    root.style.setProperty('--hy',  (22 - y*0.8)+'%');
+    root.style.setProperty('--blur', (28 + mag*1.0).toFixed(1)+'px');
+
+    const px=(-x*0.22).toFixed(1), py=(-y*0.22).toFixed(1);
+    movers.forEach(el=>{ el.style.transform = `translate3d(${px}px, ${py}px, 0)`; });
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  function startMotion(){
+    window.addEventListener('deviceorientation', e=>{
+      if(e.beta==null||e.gamma==null) return;
+      beta=e.beta; gamma=e.gamma;
+    }, true);
+  }
+
+  (async()=>{
+    const btn=document.getElementById('enable');
+    try{
+      if (typeof DeviceOrientationEvent!=='undefined' &&
+          typeof DeviceOrientationEvent.requestPermission==='function'){
+        btn.hidden=false;
+        btn.onclick=async ()=>{
+          try{
+            const res=await DeviceOrientationEvent.requestPermission();
+            if(res==='granted'){ btn.hidden=true; startMotion(); }
+          }catch{}
+        };
+      }else{
+        startMotion();
+      }
+    }catch{ startMotion(); }
+  })();
+
+  if(!isTouch){
+    window.addEventListener('mousemove', e=>{
+      const w=innerWidth, h=innerHeight;
+      gamma=(e.clientX/w - 0.5)*90;
+      beta =(0.5 - e.clientY/h)*90;
+    });
+  }
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
+  }
+</script>
+</body>
+</html>
