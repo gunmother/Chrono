@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Betterly — Minimal Test UI</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --ink:#333333;
+    --border:#B8B8B8;
+    --pressed:#E0E0E0;
+    --app-w: 360px;
+    --btn: 60px;
+    --r-lg: 12px;
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
+  body{
+    font: 500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .app{
+    width:min(var(--app-w), 94vw);
+    min-height:100svh;
+    margin:0 auto;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    gap:16px;
+    padding:16px;
+    box-sizing:border-box;
+  }
+
+  header.top{
+    text-align:center;
+    font-weight:600;
+    letter-spacing:.3px;
+  }
+
+  #screen{
+    border:1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding:16px;
+    display:grid;
+    place-items:center;
+    text-align:center;
+    min-height: 320px;
+  }
+
+  .controls{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:16px;
+    align-items:center;
+    justify-items:center;
+  }
+
+  .btn{
+    width:var(--btn);
+    height:var(--btn);
+    border-radius:50%;
+    border:1px solid var(--border);
+    background:#fff;
+    color:var(--ink);
+    display:grid;
+    place-items:center;
+    padding:0;
+    cursor:pointer;
+    outline:none;
+    transition:none; /* no animations */
+  }
+  .btn[aria-pressed="true"]{
+    background:var(--pressed);
+  }
+  .btn:focus-visible{
+    outline:2px solid var(--ink);
+    outline-offset:2px;
+  }
+
+  /* icons */
+  .icon{ width:60%; height:60%; display:block }
+  .icon *{
+    fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;
+    vector-effect: non-scaling-stroke;
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <header class="top" aria-label="App title">Betterly</header>
+
+    <section id="screen" aria-live="polite" aria-label="Content area">
+      DAY VIEW (placeholder)
+    </section>
+
+    <nav class="controls" role="group" aria-label="Primary views">
+      <!-- Day -->
+      <button class="btn" aria-label="Day view" aria-pressed="true" data-name="day" title="Day">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
+
+      <!-- Week -->
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-name="week" title="Week">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18"/>
+          <line x1="8" y1="10" x2="8" y2="18"/>
+          <line x1="10" y1="10" x2="10" y2="18"/>
+          <line x1="12" y1="10" x2="12" y2="18"/>
+          <line x1="14" y1="10" x2="14" y2="18"/>
+          <line x1="16" y1="10" x2="16" y2="18"/>
+          <line x1="18" y1="10" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Month -->
+      <button class="btn" aria-label="Month view" aria-pressed="false" data-name="month" title="Month">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <!-- simple 4x4 dot grid -->
+          <circle cx="7"  cy="11" r="0.7"/>
+          <circle cx="11" cy="11" r="0.7"/>
+          <circle cx="15" cy="11" r="0.7"/>
+          <circle cx="19" cy="11" r="0.7"/>
+          <circle cx="7"  cy="14" r="0.7"/>
+          <circle cx="11" cy="14" r="0.7"/>
+          <circle cx="15" cy="14" r="0.7"/>
+          <circle cx="19" cy="14" r="0.7"/>
+          <circle cx="7"  cy="17" r="0.7"/>
+          <circle cx="11" cy="17" r="0.7"/>
+          <circle cx="15" cy="17" r="0.7"/>
+          <circle cx="19" cy="17" r="0.7"/>
+        </svg>
+      </button>
+
+      <!-- To-Do -->
+      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-name="todo" title="To-Do">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+<script>
+  const screen = document.getElementById('screen');
+  const buttons = Array.from(document.querySelectorAll('.btn'));
+
+  function setActive(target){
+    buttons.forEach(btn=>{
+      const isActive = btn === target;
+      btn.setAttribute('aria-pressed', String(isActive));
+    });
+    const name = target.dataset.name || 'view';
+    screen.textContent = (name.toUpperCase() + ' VIEW (placeholder)');
+  }
+
+  document.querySelector('.controls').addEventListener('click', (e)=>{
+    const b = e.target.closest('.btn');
+    if(!b) return;
+    setActive(b);
+  });
+
+  // Keyboard (Enter/Space handled by button default)
+  // Initialize default screen text (matches Day active)
+  screen.textContent = 'DAY VIEW (placeholder)';
+</script>
+</body>
+</html>
