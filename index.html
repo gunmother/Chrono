@@ -26,16 +26,10 @@
     min-height:100svh;
     margin:0 auto;
     display:grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: 1fr auto;
     gap:16px;
     padding:16px;
     box-sizing:border-box;
-  }
-
-  header.top{
-    text-align:center;
-    font-weight:600;
-    letter-spacing:.3px;
   }
 
   #screen{
@@ -45,7 +39,6 @@
     display:grid;
     place-items:center;
     text-align:center;
-    min-height: 320px;
   }
 
   .controls{
@@ -88,11 +81,7 @@
 </head>
 <body>
   <main class="app">
-    <header class="top" aria-label="App title">Betterly</header>
-
-    <section id="screen" aria-live="polite" aria-label="Content area">
-      DAY VIEW (placeholder)
-    </section>
+    <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -158,27 +147,18 @@
   </main>
 
 <script>
-  const screen = document.getElementById('screen');
   const buttons = Array.from(document.querySelectorAll('.btn'));
-
   function setActive(target){
     buttons.forEach(btn=>{
       const isActive = btn === target;
       btn.setAttribute('aria-pressed', String(isActive));
     });
-    const name = target.dataset.name || 'view';
-    screen.textContent = (name.toUpperCase() + ' VIEW (placeholder)');
   }
-
   document.querySelector('.controls').addEventListener('click', (e)=>{
     const b = e.target.closest('.btn');
     if(!b) return;
     setActive(b);
   });
-
-  // Keyboard (Enter/Space handled by button default)
-  // Initialize default screen text (matches Day active)
-  screen.textContent = 'DAY VIEW (placeholder)';
 </script>
 </body>
 </html>
