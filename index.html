@@ -3,50 +3,50 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Betterly — Minimal Test UI</title>
+<title>Minimal Test UI</title>
 <style>
   :root{
     --bg:#ffffff;
     --ink:#333333;
     --border:#B8B8B8;
     --pressed:#E0E0E0;
-    --app-w: 360px;
-    --btn: 60px;
-    --r-lg: 12px;
+
+    /* Top margin from your screenshot — used for LEFT and RIGHT too */
+    --gap: 12px;
+
+    --btn: 60px;        /* button diameter */
+    --r-lg: 12px;       /* screen corner radius */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
-  body{
-    font: 500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
-    -webkit-tap-highlight-color: transparent;
-  }
+  body{font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;-webkit-tap-highlight-color:transparent}
 
+  /* App padding is the SAME on top/left/right; bottom unchanged (kept as-is) */
   .app{
-    width:min(var(--app-w), 94vw);
-    min-height:100svh;
-    margin:0 auto;
+    height:100%;
+    width:100%;
     display:grid;
     grid-template-rows: 1fr auto;
-    gap:16px;
-    padding:16px;
-    box-sizing:border-box;
+    row-gap: var(--gap);           /* space between screen and buttons (leave as-is) */
+    padding: var(--gap) var(--gap) var(--gap); /* same small margin top/left/right */
+    box-sizing: border-box;
   }
 
+  /* Center screen fills the area; its outer edges align with app padding */
   #screen{
+    width:100%;
+    height:100%;
     border:1px solid var(--border);
     border-radius: var(--r-lg);
-    padding:16px;
-    display:grid;
-    place-items:center;
-    text-align:center;
+    box-sizing: border-box;
   }
 
+  /* Buttons row has the SAME width as the screen (no extra side padding) */
   .controls{
-    display:grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap:16px;
+    display:flex;
+    justify-content: space-between;  /* first and last button edges coincide with screen edges */
     align-items:center;
-    justify-items:center;
+    width:100%;
   }
 
   .btn{
@@ -58,24 +58,21 @@
     color:var(--ink);
     display:grid;
     place-items:center;
-    padding:0;
     cursor:pointer;
     outline:none;
-    transition:none; /* no animations */
+    transition:none;
+    padding:0;
+    margin:0;                        /* ensure edge alignment */
+    flex:0 0 var(--btn);             /* fixed circles; distributed by space-between */
   }
-  .btn[aria-pressed="true"]{
-    background:var(--pressed);
-  }
-  .btn:focus-visible{
-    outline:2px solid var(--ink);
-    outline-offset:2px;
-  }
+  .btn[aria-pressed="true"]{ background:var(--pressed); }
+  .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
 
   /* icons */
   .icon{ width:60%; height:60%; display:block }
   .icon *{
-    fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round;
-    vector-effect: non-scaling-stroke;
+    fill:none; stroke:currentColor; stroke-width:1.5;
+    stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke;
   }
 </style>
 </head>
@@ -119,7 +116,6 @@
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
-          <!-- simple 4x4 dot grid -->
           <circle cx="7"  cy="11" r="0.7"/>
           <circle cx="11" cy="11" r="0.7"/>
           <circle cx="15" cy="11" r="0.7"/>
@@ -150,13 +146,11 @@
   const buttons = Array.from(document.querySelectorAll('.btn'));
   function setActive(target){
     buttons.forEach(btn=>{
-      const isActive = btn === target;
-      btn.setAttribute('aria-pressed', String(isActive));
+      btn.setAttribute('aria-pressed', String(btn === target));
     });
   }
-  document.querySelector('.controls').addEventListener('click', (e)=>{
-    const b = e.target.closest('.btn');
-    if(!b) return;
+  document.querySelector('.controls').addEventListener('click', e=>{
+    const b = e.target.closest('.btn'); if(!b) return;
     setActive(b);
   });
 </script>
