@@ -3,131 +3,165 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Minimal Scheduler</title>
+<title>Minimal Scheduler — Week/Day/Month</title>
 <style>
   :root{
+    /* App geometry */
+    --uiw:360px; --toph:28px; --centerh:496px; --dockh:92px;
+    --gapTop:12px; --gapBottom:12px;
+
+    /* Palette (monotone, subtle) */
     --bg:#ffffff;
-    --ink:#333;
-    --border:#B8B8B8;
-    --pressed:#E0E0E0;
+    --surface:#ffffff;
+    --ink:#222;
+    --muted:#6a6a6a;
+    --border:#bdbdbd;
 
-    --gap:12px;
-    --btn:60px;
+    /* Charts */
+    --chart-bg:#f3f3f3;     /* SLIGHT gray so mask is visible */
+    --grid-line:#e1e1e1;
+
+    /* Typography */
+    --font: system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Helvetica Neue",sans-serif;
+
+    /* Chart layout */
+    --grid-margin:12px;
+    --hour-col:56px;
+    --label-size:12px;
+    --date-size:16px;
+    --dow-h:28px;
+
+    /* Buttons */
     --r-lg:12px;
-
-    --gridLine:#E1E1E1;
-    --chartBg:#f3f3f3;
+    --r-pill:999px;
+    --btn:60px;
+    --btn-press:#e6e6e6;
   }
 
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
-  body{font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.4 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+  *{box-sizing:border-box}
 
   .app{
-    height:100%;
-    width:100%;
-    display:grid;
-    grid-template-rows: 1fr auto;
-    row-gap: var(--gap);
-    padding: var(--gap);
-    box-sizing:border-box;
+    width:clamp(320px, 96vw, 460px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: max(16px, env(safe-area-inset-top)) auto;
+    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
   }
 
+  /* Screen */
   #screen{
-    width:100%;
-    height:100%;
     border:1px solid var(--border);
     border-radius:var(--r-lg);
-    box-sizing:border-box;
-    overflow:auto;
-    position:relative;
     background:#fff;
+    position:relative; overflow:hidden; min-height:420px;
   }
 
-  .controls{
-    display:flex; justify-content:space-between; align-items:center; width:100%;
-  }
+  /* Controls row (four round buttons) */
+  .controls{ display:flex; justify-content:space-between; align-items:center; }
   .btn{
-    width:var(--btn); height:var(--btn); flex:0 0 var(--btn);
-    border-radius:50%; border:1px solid var(--border); background:#fff; color:var(--ink);
-    display:grid; place-items:center; cursor:pointer; outline:none; padding:0; margin:0;
+    width:var(--btn); height:var(--btn); border-radius:50%;
+    border:1px solid var(--border); background:#fff; color:var(--ink);
+    display:grid; place-items:center; cursor:pointer; outline:none; padding:0;
   }
-  .btn[aria-pressed="true"]{ background:var(--pressed); }
-  .btn:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
-  .icon{ width:60%; height:60%; display:block }
-  .icon *{ fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
+  .btn[aria-pressed="true"]{ background:var(--btn-press); }
+  .icon{ width:60%; height:60% }
+  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
 
-  /* ===== WEEK / DAY common ===== */
-  .grid-wrap{ position:relative; min-height:420px }
-  .hours{ position:absolute; top:22px; bottom:0; left:0; width:62px; pointer-events:none }
-  .hour{ position:absolute; left:8px; transform:translateY(-50%); font-size:12px; color:#555; opacity:.95; white-space:nowrap }
+  /* Common grid scaffolding */
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .title{ text-align:center; font-weight:800; font-size:16px }
 
-  .dow{ position:absolute; top:0; left:62px; right:0; height:22px; display:grid; grid-template-columns:repeat(7,1fr); align-items:center; font-size:12px; pointer-events:none }
-  .dow div{ text-align:center; font-weight:600 }
+  .grid-area{ position:relative; overflow:hidden }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none }
+  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
+
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); }
+  .top-row.day{ grid-template-columns:1fr; }
+  .day-pill{
+    justify-self:stretch; margin:0 4px;
+    border:1px solid var(--border); border-radius:var(--r-pill); padding:4px 8px;
+    text-align:center; font-size:12px; background:#fff; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
 
   .grid{
-    position:absolute; top:22px; left:62px; right:0; bottom:0;
-    overflow:hidden; background:var(--chartBg);
-    border-left:1px solid var(--gridLine); border-right:1px solid var(--gridLine);
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
   }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
   .blocks{ position:absolute; inset:0 }
   .blk{ position:absolute; border:1px solid var(--border) }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none }
 
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,0.03); display:none; pointer-events:none }
+  /* Week chevrons: ◀ ▶ solid triangles in minimal buttons */
+  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900 }
+  .chev:disabled{ opacity:.5; cursor:not-allowed }
 
-  /* Week header */
-  .week{ display:grid; grid-template-rows:auto 1fr; height:100% }
-  .week-head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--gridLine) }
-  .w-title{ text-align:center; font-weight:700 }
-  .w-btn{ border:1px solid var(--border); background:#fff; padding:6px 10px; border-radius:8px; cursor:pointer }
+  /* Month view */
+  .month-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:10px }
+  .mcell{ border:1px solid var(--grid-line); border-radius:8px; min-height:72px; padding:6px; font-size:12px; background:#fff; }
+  .mcell.today{ outline:2px solid #bdbdbd; outline-offset:1px }
 
-  /* Day header */
-  .day{ display:grid; grid-template-rows:auto 1fr; height:100% }
-  .day-head{ padding:8px 10px; border-bottom:1px solid var(--gridLine); font-weight:700 }
-
-  /* Month */
-  .month{ display:grid; grid-template-rows:auto 1fr; height:100% }
-  .month-head{ padding:8px 10px; border-bottom:1px solid var(--gridLine); font-weight:700 }
-  .month-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:10px; box-sizing:border-box }
-  .m-tile{ border:1px solid var(--gridLine); border-radius:8px; min-height:72px; padding:6px; font-size:12px; cursor:pointer; background:#fff }
-  .m-tile.today{ outline:2px solid #bbb; outline-offset:1px }
-
-  /* ===== Overlay: task menu ===== */
-  #taskOverlay{ position:fixed; inset:0; display:none; z-index:100 }
+  /* Overlay list (task picker) */
+  #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
   #taskOverlay .panel{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(92vw,520px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px;
-    display:grid; gap:10px;
+    width:min(92vw,520px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px;
+    display:grid; gap:8px; max-height:min(80vh,640px); overflow:auto;
   }
-  .taskRow{ display:flex; align-items:center; gap:10px; padding:8px; border:1px solid var(--gridLine); border-radius:10px; cursor:pointer }
-  .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #999 }
+  .taskRow{ display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:8px; border:1px solid var(--grid-line); border-radius:10px; cursor:pointer; }
+  .tmeta{ display:flex; align-items:center; gap:10px; min-width:0 }
+  .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #888 }
+  .tname{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .tdur{ font-variant-numeric:tabular-nums; color:#000 }
 
-  /* ===== Settings editor ===== */
-  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:140 }
+  /* Settings editor */
+  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
   #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
-  #settingsOverlay .card{
+  .card{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(92vw,680px); background:#fff; border:1px solid var(--border); border-radius:12px; display:grid; grid-template-rows:auto 1fr auto; max-height:min(86vh,720px)
+    width:min(96vw,720px); max-height:min(90vh, 780px);
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    display:grid; grid-template-rows:auto 1fr auto;
   }
-  .ed-head{ display:flex; gap:10px; align-items:center; padding:10px; border-bottom:1px solid var(--gridLine) }
-  .ed-body{ padding:10px; overflow:auto; display:grid; gap:14px }
-  .ed-foot{ padding:10px; border-top:1px solid var(--gridLine); display:flex; gap:10px; justify-content:flex-end }
-  .ed-row{ display:grid; gap:8px }
+  .ed-head{ display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px solid var(--grid-line) }
+  .ed-title{ font-weight:900 }
   .in{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; font:inherit }
-  .chk{ display:flex; align-items:center; gap:8px; font-size:14px }
-  .dayRow{ border:1px solid var(--gridLine); border-radius:10px; padding:10px; display:grid; gap:10px }
+  .ed-body{ padding:10px; overflow:auto; display:grid; gap:10px }
+  .dayRow{ border:1px solid var(--grid-line); border-radius:10px; padding:10px; display:grid; gap:8px }
+  .dayHead{
+    display:flex; justify-content:space-between; align-items:center; cursor:pointer;
+    background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800;
+  }
   .slots{ display:grid; gap:8px }
-  .slot{ display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:center }
-  .del,.add{ border:1px solid var(--border); background:#fff; border-radius:8px; width:36px; height:36px; cursor:pointer }
+  .slot{
+    display:grid; grid-template-columns: 1fr 1fr auto auto auto auto; /* start, end, scope, remind, mic, trash */
+    align-items:center; gap:8px;
+  }
+  .select{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit }
+  .iconBtn{ width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer }
+  .addRow{ display:flex; gap:8px; align-items:center; }
+  .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer }
+  .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
+  .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer }
+
+  /* Accessibility focus */
+  .btn:focus-visible, .chev:focus-visible, .day-pill:focus-visible, .iconBtn:focus-visible, .btnText:focus-visible, .select:focus-visible, input[type="time"]:focus-visible{
+    outline:2px solid #222; outline-offset:2px;
+  }
 </style>
 </head>
 <body>
   <main class="app">
+    <!-- Screen (blank by default; user toggles views) -->
     <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
+    <!-- Four round buttons -->
     <nav class="controls" role="group" aria-label="Primary views">
-      <button class="btn" aria-label="Day view" aria-pressed="false" data-name="day" title="Day">
+      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="4"/>
           <line x1="12" y1="2"  x2="12" y2="5"/>
@@ -141,7 +175,7 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Week view" aria-pressed="false" data-name="week" title="Week">
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -155,7 +189,7 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Month view" aria-pressed="false" data-name="month" title="Month">
+      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -174,7 +208,7 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-name="todo" title="To-Do">
+      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -184,95 +218,114 @@
     </nav>
   </main>
 
-  <!-- Task Menu -->
+  <!-- Task menu -->
   <div id="taskOverlay" aria-hidden="true">
     <div class="backdrop"></div>
-    <div class="panel" role="dialog" aria-label="Pick category" id="taskList"></div>
+    <div class="panel" role="dialog" aria-label="Pick item" id="taskList"></div>
   </div>
 
-  <!-- Settings Editor -->
+  <!-- Settings (editing window) -->
   <div id="settingsOverlay" aria-hidden="true">
     <div class="backdrop"></div>
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
       <div class="ed-head">
-        <strong id="edTitle">Edit</strong>
+        <div class="ed-title" id="edTitle">Edit</div>
         <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14" style="flex:1"/>
         <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
-        <label class="chk"><input type="checkbox" id="edHard"/> Hard time</label>
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="edHard" /> Hard time</label>
       </div>
       <div class="ed-body" id="edBody"></div>
       <div class="ed-foot">
-        <button id="edCancel" class="w-btn">Cancel</button>
-        <button id="edSave" class="w-btn">Save</button>
+        <button id="edCancel" class="btnText">Cancel</button>
+        <button id="edSave" class="btnText">Save</button>
       </div>
     </div>
   </div>
 
 <script>
-/* ===== helpers/state ===== */
+/* =========================
+   STATE & HELPERS
+========================= */
 const screenEl = document.getElementById('screen');
-const buttons = Array.from(document.querySelectorAll('.btn'));
+const buttons = [...document.querySelectorAll('.btn')];
 
-/* default: NO active view */
-let activeView = null;
-let activeDayISO = toISO(new Date());            // day screen mirrors this date
-let visibleWeekFirst = weekStart(new Date());    // week anchor
+let activeView = null;               // default: blank until user toggles
+let activeDayISO = toISO(new Date());
+let visibleWeekFirst = weekStart(new Date());
+
+const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function round15(min){ return Math.round(min/15)*15; }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-const SLOTS_PER_DAY=96; // 15-min
-let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null)); // paint buffer
-
-// Categories (empty schedule; user edits)
+/* Categories (16 items, colors are placeholders; user may edit) */
 let TASKS = [
-  {key:'work', label:'Work', color:'#e06a6a', hard:false},
-  {key:'commute', label:'Commute', color:'#f1a652', hard:false},
-  {key:'chores', label:'Chores', color:'#7aa2ff', hard:false},
-  {key:'exercise', label:'Exercise', color:'#6bd68b', hard:false},
-  {key:'sleep', label:'Sleep', color:'#9db8ff', hard:false},
-  {key:'family', label:'Family', color:'#e971a3', hard:false},
-  {key:'free', label:'Free', color:'#d0d0d0', hard:false},
-  {key:'study', label:'Study', color:'#6fc7d9', hard:false},
+  {key:'work',      label:'Work',        color:'#d33c36', hard:false},
+  {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
+  {key:'chores',    label:'Chores',      color:'#3b41c5', hard:false},
+  {key:'errands',   label:'Errands',     color:'#1d8f2e', hard:false},
+  {key:'meals',     label:'Meal Time',   color:'#e0b21b', hard:false},
+  {key:'hygiene',   label:'Hygiene',     color:'#0ea5e9', hard:false},
+  {key:'selfcare',  label:'Self Care',   color:'#888888', hard:false},
+  {key:'exercise',  label:'Exercise',    color:'#1db954', hard:false},
+  {key:'family',    label:'Family Time', color:'#e3326b', hard:false},
+  {key:'hobbies',   label:'Hobbies',     color:'#f39c12', hard:false},
+  {key:'projects',  label:'Projects',    color:'#6a5acd', hard:false},
+  {key:'school',    label:'School',      color:'#3269e6', hard:true},
+  {key:'relax',     label:'Relaxation',  color:'#24c3d6', hard:false},
+  {key:'free',      label:'Free Time',   color:'#a4a4a4', hard:false},
+  {key:'childcare', label:'Child Care',  color:'#7a5c2e', hard:false},
+  {key:'sleep',     label:'Sleep',       color:'#6aa6ff', hard:false}
 ];
+const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
+const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 
-// Weekly template
-const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
-const ORDER = { recurring:{} }; let SAVE_SEQ=1; // first-writer-wins
+/* Data stores */
+const SLOTS_PER_DAY=96; // 15-min
+let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])])); // per task -> 7 days -> ranges
+const EXCEPTIONS = { byDate:{}, byWeek:{}, byMonth:{} }; // (kept for expansion)
+const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 
-/* ===== toggle buttons ===== */
+/* =========================
+   TOP CONTROLS
+========================= */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
-  const name=b.dataset.name;
-  if(activeView === name){
-    // deactivate -> blank screen
-    activeView = null;
+  const v=b.dataset.view;
+  if(activeView===v){
+    // toggle off -> blank
+    activeView=null;
     buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
     screenEl.innerHTML='';
-    return;
+  }else{
+    activeView=v;
+    buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+    render();
   }
-  activeView = name;
-  buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
-  render();
 });
 
-/* ===== WEEK ===== */
+/* =========================
+   WEEK VIEW
+========================= */
 function buildWeekView(){
   screenEl.innerHTML = `
-    <div class="week">
-      <div class="week-head">
-        <button class="w-btn" id="prevWeekBtn">Prev</button>
-        <div class="w-title" id="weekTitle"></div>
-        <button class="w-btn" id="nextWeekBtn">Next</button>
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
       </div>
-      <div class="grid-wrap">
-        <div class="dow" id="dowLabels"></div>
+
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid">
           <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
@@ -282,18 +335,16 @@ function buildWeekView(){
       </div>
     </div>
   `;
-
-  document.getElementById('prevWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); };
-  document.getElementById('nextWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); };
-
-  // Tap to open task menu
+  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); };
+  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); };
   document.getElementById('weekGrid').addEventListener('click', showTaskMenu);
 
-  requestAnimationFrame(()=>repaintWeek());
-  new ResizeObserver(()=>repaintWeek()).observe(document.getElementById('weekGrid'));
+  repaintWeek();
+  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
 }
 
 function repaintWeek(){
+  // Title range
   const first=visibleWeekFirst, last=addDays(first,6);
   const m=new Intl.DateTimeFormat(undefined,{month:'short'});
   const title = (first.getFullYear()===last.getFullYear())
@@ -303,16 +354,24 @@ function repaintWeek(){
     : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
   document.getElementById('weekTitle').textContent = title;
 
-  const dl=document.getElementById('dowLabels'); dl.innerHTML='';
-  SHORT_DOW.forEach(d=>{ const div=document.createElement('div'); div.textContent=d; dl.appendChild(div); });
+  // DOW pills with date numbers (e.g., Sun, 31)
+  const pills=document.getElementById('dowPills'); pills.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=addDays(first,i);
+    const pill=document.createElement('div');
+    pill.className='day-pill';
+    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
+    pills.appendChild(pill);
+  }
 
+  // Hours
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const geom=computeGeometry(document.getElementById('weekGrid'), 7);
   for(let i=0;i<24;i++){
-    const d=document.createElement('div'); d.className='hour';
-    d.textContent = `${String(i).padStart(2,'0')}:00`;
-    d.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
-    gh.appendChild(d);
+    const el=document.createElement('div'); el.className='hour-stamp';
+    el.textContent = `${String(i).padStart(2,'0')}:00`;
+    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
+    gh.appendChild(el);
   }
 
   rebuildSlots();
@@ -354,10 +413,11 @@ function buildMask(geom, cols){
   sym.setAttribute('viewBox','0 0 900 300');
   sym.setAttribute('preserveAspectRatio','none');
 
-  const surface='rgba(255,255,255,0.55)';
+  const surface='rgba(255,255,255,0.55)'; // subtle light to reveal mask
   const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
   const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
 
+  // same tile as your shipped code style (corner/sides + hour separators)
   sym.appendChild(r(0,0,900,24));   // top
   sym.appendChild(r(0,276,900,24)); // bottom
   sym.appendChild(r(0,0,24,300));   // left
@@ -385,8 +445,8 @@ function buildMask(geom, cols){
   }
 }
 
-/* build allSlots from EXACT (first-writer-wins) */
 function rebuildSlots(){
+  const colors=COLORS(); // ensure up to date
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
   const seqFor = key => ORDER.recurring[key] ?? 1e9;
   const keys = Object.keys(EXACT).sort((a,b)=>seqFor(a)-seqFor(b));
@@ -408,6 +468,7 @@ function rebuildSlots(){
 
 function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
+  const colors=COLORS();
   const {colX, slotY} = geom;
   for(let d=0; d<7; d++){
     let s=0;
@@ -422,8 +483,8 @@ function paintBlocksWeek(geom){
       div.style.top=top+'px';
       div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
       div.style.height=(bottom-top)+'px';
-      div.style.background = colorOf(key);
-      div.title = labelOf(key);
+      div.style.background = colors[key] || '#ddd';
+      div.title = LABELS()[key];
       layer.appendChild(div);
       s=e;
     }
@@ -450,13 +511,22 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ===== DAY ===== */
+/* =========================
+   DAY VIEW (single column)
+========================= */
 function buildDayView(){
   const d = fromISO(activeDayISO);
   screenEl.innerHTML = `
-    <div class="day">
-      <div class="day-head" id="dayHead"></div>
-      <div class="grid-wrap">
+    <div class="wrap">
+      <div class="head">
+        <div></div>
+        <div class="title" id="dayTitle"></div>
+        <div></div>
+      </div>
+      <div class="grid-area">
+        <div class="top-row day">
+          <div class="day-pill" id="dayPill"></div>
+        </div>
         <div class="grid" id="dayGrid">
           <div class="blocks" id="dayBlocks"></div>
           <svg class="mask" id="dayMask" aria-hidden="true"></svg>
@@ -465,184 +535,373 @@ function buildDayView(){
       </div>
     </div>
   `;
-  document.getElementById('dayHead').textContent =
+  document.getElementById('dayTitle').textContent =
     d.toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric', year:'numeric'});
+  document.getElementById('dayPill').textContent =
+    d.toLocaleDateString(undefined,{weekday:'short'}) + ', ' + d.getDate();
 
   document.getElementById('dayGrid').addEventListener('click', showTaskMenu);
-
-  requestAnimationFrame(()=>repaintDay());
-  new ResizeObserver(()=>repaintDay()).observe(document.getElementById('dayGrid'));
+  repaintDay();
+  new ResizeObserver(repaintDay).observe(document.getElementById('dayGrid'));
 }
 
 function repaintDay(){
-  // Always mirror the current weekly template (no need to visit week first)
-  rebuildSlots();
-
-  const gh=document.getElementById('dayHours'); gh.innerHTML='';
+  rebuildSlots(); // mirror week template
+  const gh=document.getElementById('dayHours'); if(!gh) return;
+  gh.innerHTML='';
   const grid=document.getElementById('dayGrid');
   const geom=computeGeometry(grid, 1);
 
   for(let i=0;i<24;i++){
-    const el=document.createElement('div'); el.className='hour';
+    const el=document.createElement('div'); el.className='hour-stamp';
     el.textContent = `${String(i).padStart(2,'0')}:00`;
     el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
     gh.appendChild(el);
   }
-
   buildMask(geom, 1);
 
-  // Copy the single day's row from week → stretch left→right
   const layer=document.getElementById('dayBlocks'); layer.innerHTML='';
+  const colors=COLORS();
   const dow=fromISO(activeDayISO).getDay();
   let s=0; while(s<SLOTS_PER_DAY){
     const key=allSlots[dow][s];
     if(!key){ s++; continue; }
     let e=s+1; while(e<SLOTS_PER_DAY && allSlots[dow][e]===key) e++;
-    const left=0, right=geom.colX[1];
+    const left=0, right=geom.colX ? geom.colX[1] : grid.getBoundingClientRect().width;
     const top=geom.slotY[s], bottom=geom.slotY[e];
     const div=document.createElement('div'); div.className='blk';
     div.style.left=left+'px';
     div.style.top=top+'px';
     div.style.width=(right-left-1)+'px';
     div.style.height=(bottom-top)+'px';
-    div.style.background = colorOf(key);
-    div.title = labelOf(key);
+    div.style.background = colors[key] || '#ddd';
+    div.title = LABELS()[key];
     layer.appendChild(div);
     s=e;
   }
 }
 
-/* ===== MONTH ===== */
+/* =========================
+   MONTH VIEW (standard grid)
+========================= */
 function buildMonthView(){
-  const d = fromISO(activeDayISO);
-  const first = new Date(d.getFullYear(), d.getMonth(), 1);
-  const last  = new Date(d.getFullYear(), d.getMonth()+1, 0);
+  const base = fromISO(activeDayISO);
+  const first = new Date(base.getFullYear(), base.getMonth(), 1);
+  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
   const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
 
-  const firstWeekday = first.getDay();
   screenEl.innerHTML = `
-    <div class="month">
-      <div class="month-head">${label}</div>
-      <div class="month-grid" id="monthGrid"></div>
+    <div class="wrap">
+      <div class="head">
+        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
+        <div class="title">${label}</div>
+        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
+      </div>
+      <div class="grid-area">
+        <div class="month-grid" id="monthGrid"></div>
+      </div>
     </div>
   `;
-  const grid=document.getElementById('monthGrid');
+  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); };
+  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); };
+
+  const grid=document.getElementById('monthGrid'); grid.innerHTML='';
+  const firstWeekday = first.getDay();
   for(let i=0;i<firstWeekday;i++) grid.appendChild(document.createElement('div'));
   for(let day=1; day<=last.getDate(); day++){
-    const tile=document.createElement('div'); tile.className='m-tile'; tile.textContent=day;
-    const iso = toISO(new Date(d.getFullYear(), d.getMonth(), day));
+    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
+    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
     if(iso===toISO(new Date())) tile.classList.add('today');
     tile.addEventListener('click', ()=>{ activeDayISO = iso; });
     grid.appendChild(tile);
   }
 }
 
-/* ===== Task menu overlay ===== */
+/* =========================
+   TASK MENU (tap the chart)
+========================= */
 const overlay=document.getElementById('taskOverlay');
-const listEl=document.getElementById('taskList');
+const tasksPanel=document.getElementById('taskList');
 let currentTaskKey=null;
 
 function showTaskMenu(){
-  listEl.innerHTML='';
-  TASKS.forEach(t=>{
+  tasksPanel.innerHTML='';
+  const colors=COLORS(), labels=LABELS();
+  const totals = computeTotalsForVisibleWeek(); // map key->minutes
+  for(const t of TASKS){
     const row=document.createElement('div'); row.className='taskRow'; row.dataset.key=t.key;
-    row.innerHTML = `<span class="dot" style="background:${t.color}"></span> <strong>${t.label}</strong>`;
+    row.innerHTML = `
+      <div class="tmeta">
+        <span class="dot" style="background:${colors[t.key]}"></span>
+        <span class="tname">${labels[t.key]}</span>
+      </div>
+      <div class="tdur">${formatDecimalHours(totals[t.key]||0)}</div>
+    `;
     row.addEventListener('click', ()=>{ currentTaskKey=t.key; openEditor(t); });
-    listEl.appendChild(row);
-  });
+    tasksPanel.appendChild(row);
+  }
   overlay.style.display='block';
 }
 overlay.querySelector('.backdrop').addEventListener('click', ()=>overlay.style.display='none');
 
-/* ===== Settings editor (up to 6 ranges/day; hard/soft saved) ===== */
+function computeTotalsForVisibleWeek(){
+  // recompute slots, then sum minutes per key for current week
+  rebuildSlots();
+  const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
+  for(let d=0; d<7; d++){
+    let countByKey={};
+    for(let s=0; s<SLOTS_PER_DAY; s++){
+      const k=allSlots[d][s]; if(!k) continue;
+      countByKey[k]=(countByKey[k]||0)+1;
+    }
+    for(const [k,c] of Object.entries(countByKey)) out[k]+=c*15;
+  }
+  return out;
+}
+function formatDecimalHours(min){
+  if(min<=0) return '';
+  if(min<60) return `${min} m`;
+  // decimal with quarters .25 .5 .75 when relevant
+  const h = min/60;
+  const q = Math.round(h*4)/4;
+  const asStr = (Math.round(q*100) % 100 === 0) ? `${Math.round(q)}` : `${q}`;
+  return `${asStr}H`;
+}
+
+/* =========================
+   SETTINGS EDITOR (per item)
+========================= */
 const edOverlay=document.getElementById('settingsOverlay');
 const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
 const edName=document.getElementById('edName');
 const edColor=document.getElementById('edColor');
 const edHard=document.getElementById('edHard');
+const MAX_RANGES_PER_DAY=6;
+let sessionDraft=null; // local working copy to support Cancel->discard behavior
 
 function openEditor(task){
   overlay.style.display='none';
+  // Create a deep copy draft of this task's weekly ranges
+  sessionDraft = {
+    key: task.key,
+    label: task.label,
+    color: task.color,
+    hard: !!task.hard,
+    // copy exact ranges (recurring template baseline)
+    week: EXACT[task.key].map(dayArr => dayArr.map(r => ({startMin:r.startMin, endMin:r.endMin}))),
+    reminders: EXACT[task.key].reminders ? JSON.parse(JSON.stringify(EXACT[task.key].reminders)) : {} // optional per-range reminder store
+  };
+
   edTitle.textContent = `Edit: ${task.label}`;
   edName.value = task.label;
   edColor.value = toHex(task.color);
   edHard.checked = !!task.hard;
 
-  edBody.innerHTML='';
-  for(let d=0; d<7; d++){
-    const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
-    wrap.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <strong>${DAY_NAMES[d]}</strong>
-        <button class="add" title="Add range">+</button>
-      </div>
-      <div class="slots"></div>
-    `;
-    const slots=wrap.querySelector('.slots');
-    const addBtn=wrap.querySelector('.add');
-    addBtn.addEventListener('click', ()=>addSlot(slots));
-
-    (EXACT[task.key]?.[d]||[]).forEach(r=>addSlot(slots, r.startMin, r.endMin));
-    edBody.appendChild(wrap);
-  }
+  buildEditorDays();
   edOverlay.style.display='block';
 }
 
-function addSlot(slotsEl, startMin=7*60, endMin=22*60){
-  if(slotsEl.children.length>=6) return;
+function buildEditorDays(){
+  edBody.innerHTML='';
+  const first=visibleWeekFirst;
+  for(let d=0; d<7; d++){
+    const theDate = addDays(first, d);
+    const dayLabel = `${DAY_NAMES[d]}, ${theDate.toLocaleDateString(undefined,{month:'long'})} ${ORD(theDate.getDate())}`;
+    const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
+
+    const head=document.createElement('button'); head.className='dayHead';
+    head.type='button'; head.innerHTML = `<span>${dayLabel}</span><span aria-hidden="true">▼</span>`;
+    wrap.appendChild(head);
+
+    const slots=document.createElement('div'); slots.className='slots'; slots.style.display='none';
+    wrap.appendChild(slots);
+
+    head.addEventListener('click', ()=>{
+      const open = slots.style.display!=='none';
+      slots.style.display = open ? 'none' : 'grid';
+      head.lastElementChild.textContent = open ? '▼' : '▲';
+    });
+
+    // existing ranges
+    (sessionDraft.week[d]||[]).forEach((r,idx)=>addSlotRow(slots, d, r.startMin, r.endMin));
+
+    // add another
+    const add = document.createElement('div'); add.className='addRow';
+    const addBtn=document.createElement('button'); addBtn.className='addBtn'; addBtn.type='button'; addBtn.textContent='+ Create another';
+    addBtn.addEventListener('click', ()=>addSlotRow(slots,d));
+    add.appendChild(addBtn);
+    wrap.appendChild(add);
+
+    edBody.appendChild(wrap);
+  }
+}
+
+function addSlotRow(slotsEl, dayIndex, startMin=9*60, endMin=17*60){
+  if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return;
   const row=document.createElement('div'); row.className='slot';
   row.innerHTML = `
-    <input type="time" class="in" step="900" value="${toHHMM(startMin)}">
-    <input type="time" class="in" step="900" value="${toHHMM(endMin)}">
-    <button class="del" title="Delete">🗑️</button>
+    <input type="time" class="in start" step="900" value="${toHHMM(startMin)}">
+    <input type="time" class="in end" step="900" value="${toHHMM(endMin)}">
+    <select class="select scope">
+      <option value="recurring" selected>Recurring</option>
+      <option value="today">Today</option>
+      <option value="week">This week</option>
+      <option value="month">This month</option>
+    </select>
+    <select class="select remind">
+      <option value="off" selected>Off</option>
+      <option value="5m">5 m</option>
+      <option value="10m">10 m</option>
+      <option value="15m">15 m</option>
+      <option value="30m">30 m</option>
+      <option value="1h">1 h</option>
+      <option value="24h">24 h</option>
+    </select>
+    <button class="iconBtn mic" title="Speak time"><span aria-hidden="true">🎤</span></button>
+    <button class="iconBtn trash" title="Delete"><span aria-hidden="true">🗑️</span></button>
   `;
-  row.querySelector('.del').addEventListener('click', ()=>row.remove());
+  const startI=row.querySelector('.start');
+  const endI=row.querySelector('.end');
+  const scopeSel=row.querySelector('.scope');
+  const remindSel=row.querySelector('.remind');
+
+  // mic capture (Web Speech API if available). Graceful fallback with prompt.
+  row.querySelector('.mic').addEventListener('click', async ()=>{
+    const sample = 'Say: "9:00 AM to 5:00 PM"';
+    if('webkitSpeechRecognition' in window){
+      try{
+        const rec = new webkitSpeechRecognition(); rec.lang='en-US'; rec.interimResults=false; rec.continuous=false;
+        alert(sample);
+        const result = await new Promise((resolve,reject)=>{
+          rec.onresult = e=>resolve(e.results[0][0].transcript);
+          rec.onerror = e=>reject(e.error);
+          rec.onend = ()=>{};
+          rec.start();
+          setTimeout(()=>{ try{rec.stop();}catch{} }, 4500); // a couple of seconds to speak
+        });
+        const parsed=parseSpokenRange(result);
+        if(parsed){ startI.value=toHHMM(parsed.s); endI.value=toHHMM(parsed.e); }
+      }catch{
+        const text = prompt(sample) || '';
+        const parsed=parseSpokenRange(text);
+        if(parsed){ startI.value=toHHMM(parsed.s); endI.value=toHHMM(parsed.e); }
+      }
+    }else{
+      const text = prompt(sample) || '';
+      const parsed=parseSpokenRange(text);
+      if(parsed){ startI.value=toHHMM(parsed.s); endI.value=toHHMM(parsed.e); }
+    }
+  });
+
+  row.querySelector('.trash').addEventListener('click', ()=>{
+    row.remove();
+  });
+
   slotsEl.appendChild(row);
 }
 
-document.getElementById('edCancel').addEventListener('click', ()=>{ edOverlay.style.display='none'; });
-document.getElementById('edSave').addEventListener('click', ()=>{
-  const key=currentTaskKey;
-  const t = TASKS.find(x=>x.key===key);
-  t.label = (edName.value||'').slice(0,14) || t.label;
-  t.color = edColor.value;
-  t.hard = !!edHard.checked;
+function parseSpokenRange(s){
+  if(!s) return null;
+  // very simple 12h parser: "9:00 am to 5 pm"
+  const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if(!m) return null;
+  const sH=Number(m[1]), sM=Number(m[2]||0), sA=(m[3]||'').toLowerCase();
+  const eH=Number(m[4]), eM=Number(m[5]||0), eA=(m[6]||'').toLowerCase();
+  const to24=(h,m,ap)=>{
+    let H=h%12; if(ap==='pm') H+=12;
+    if(ap==='' && h===12) H=12; // crude
+    return H*60+m;
+  };
+  const sMin = to24(sH,sM,sA);
+  const eMin = to24(eH,eM,eA);
+  return {s:sMin, e:eMin};
+}
 
-  const week = Array.from({length:7},()=>[]);
-  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
-    const rows=[...wrap.querySelectorAll('.slot')];
-    rows.slice(0,6).forEach(row=>{
-      const [a,b]=row.querySelectorAll('input');
-      const s=toMin(a.value), e=toMin(b.value);
-      if(s===e) return;
-      if(e>s){ week[d].push({startMin:round15(s), endMin:round15(e)}); }
-      else { week[d].push({startMin:round15(s), endMin:round15(24*60)}); const dn=(d+1)%7; week[dn].push({startMin:0, endMin:round15(e)}); }
-    });
-    week[d].sort((A,B)=>A.startMin-B.startMin);
-    const merged=[]; for(const r of week[d]){ if(!merged.length){ merged.push(r); } else { const L=merged[merged.length-1]; if(r.startMin<=L.endMin){ L.endMin=Math.max(L.endMin,r.endMin);} else merged.push(r);} }
-    week[d]=merged.slice(0,6);
-  });
-
-  EXACT[key] = week;
-  ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
-
-  if(activeView==='week') repaintWeek();
-  if(activeView==='day') repaintDay();
-
+document.getElementById('edCancel').addEventListener('click', ()=>{
+  const sure = confirm('Are you sure you want to delete these edits?');
+  if(!sure) return;
+  sessionDraft=null; // discard
   edOverlay.style.display='none';
 });
 
-/* utils */
+document.getElementById('edSave').addEventListener('click', ()=>{
+  if(!sessionDraft) return;
+  // apply name/color/hard
+  const t = TASKS.find(x=>x.key===sessionDraft.key);
+  t.label = (edName.value||'').slice(0,14) || t.label;
+  t.color = edColor.value || t.color;
+  t.hard = !!edHard.checked;
+
+  // collect UI -> week ranges honoring scopes (Recurring default)
+  const week = Array.from({length:7},()=>[]);
+  const scopeCollect = { today:[], week:[], month:[] }; // for future exception routing
+
+  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
+    const rows=[...wrap.querySelectorAll('.slot')];
+    rows.slice(0,MAX_RANGES_PER_DAY).forEach(row=>{
+      const sMin = toMin(row.querySelector('.start').value);
+      const eMin = toMin(row.querySelector('.end').value);
+      const scope = row.querySelector('.scope').value || 'recurring';
+      const rem = row.querySelector('.remind').value || 'off';
+
+      const pushRange = (arr, a,b)=>{
+        if(a===b) return;
+        if(b>a){ arr.push({startMin:round15(a), endMin:round15(b), remind:rem}); }
+        else { // overnight split
+          arr.push({startMin:round15(a), endMin:round15(24*60), remind:rem});
+          const dn=(d+1)%7;
+          (scope==='recurring' ? week : scopeCollect[scope])[dn] = (scope==='recurring' ? week : scopeCollect[scope])[dn] || [];
+          (scope==='recurring' ? week : scopeCollect[scope])[dn].push({startMin:0, endMin:round15(b), remind:rem});
+          return; // already pushed split
+        }
+      };
+
+      if(scope==='recurring'){
+        pushRange(week[d], sMin, eMin);
+      }else{
+        scopeCollect[scope][d] = scopeCollect[scope][d] || [];
+        pushRange(scopeCollect[scope][d], sMin, eMin);
+      }
+    });
+
+    // sort/merge recurring per day
+    week[d].sort((A,B)=>A.startMin-B.startMin);
+    const merged=[]; for(const r of week[d]){
+      if(!merged.length) merged.push({...r});
+      else{
+        const L=merged[merged.length-1];
+        if(r.startMin<=L.endMin){ L.endMin=Math.max(L.endMin,r.endMin); }
+        else merged.push({...r});
+      }
+    }
+    week[d]=merged.slice(0,MAX_RANGES_PER_DAY);
+  });
+
+  // Persist recurring template (always allowed)
+  EXACT[sessionDraft.key] = week;
+  ORDER.recurring[sessionDraft.key] = ORDER.recurring[sessionDraft.key] || (SAVE_SEQ++);
+
+  // NOTE: Scopes today/week/month — wiring for exceptions store if/when enabled.
+  // For now, we respect your direction to preserve functionality but keep scope UI;
+  // you can connect EXCEPTIONS.byDate / byWeek / byMonth similarly to your earlier code.
+
+  // Close + repaint active views
+  edOverlay.style.display='none';
+  sessionDraft=null;
+  if(activeView==='week') repaintWeek();
+  if(activeView==='day') repaintDay();
+});
+
+/* Helpers used by editor */
+function toHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
-function toHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
-function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
-function round15(min){ return Math.round(min/15)*15; }
-function colorOf(key){ const t=TASKS.find(x=>x.key===key); return t ? t.color : '#ddd'; }
-function labelOf(key){ const t=TASKS.find(x=>x.key===key); return t ? t.label : key; }
 
-/* ===== root render ===== */
+/* =========================
+   ROOT RENDER
+========================= */
 function render(){
   if(activeView==='week') buildWeekView();
   else if(activeView==='day') buildDayView();
@@ -651,12 +910,12 @@ function render(){
 }
 render();
 
-/* Optional: clicking weekday labels (when Week is open) selects that day for Day view */
+/* Optional: quick select a day by clicking a week label */
 screenEl.addEventListener('click', (e)=>{
   if(activeView!=='week') return;
-  const labels = screenEl.querySelector('#dowLabels');
-  if(!labels) return;
-  const idx = [...labels.children].indexOf(e.target);
+  const pills = screenEl.querySelector('#dowPills');
+  if(!pills) return;
+  const idx = [...pills.children].indexOf(e.target.closest('.day-pill'));
   if(idx>=0){ activeDayISO = toISO(addDays(visibleWeekFirst, idx)); }
 });
 </script>
