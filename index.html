@@ -66,8 +66,7 @@
 
   .grid{
     position:absolute; top:22px; left:62px; right:0; bottom:0;
-    overflow:hidden;
-    background:var(--chartBg);
+    overflow:hidden; background:var(--chartBg);
     border-left:1px solid var(--gridLine); border-right:1px solid var(--gridLine);
   }
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
@@ -85,7 +84,6 @@
   /* Day header */
   .day{ display:grid; grid-template-rows:auto 1fr; height:100% }
   .day-head{ padding:8px 10px; border-bottom:1px solid var(--gridLine); font-weight:700 }
-  .day .grid{ left:62px; right:0 } /* single column */
 
   /* Month */
   .month{ display:grid; grid-template-rows:auto 1fr; height:100% }
@@ -102,7 +100,7 @@
     width:min(92vw,520px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px;
     display:grid; gap:10px;
   }
-  .taskRow{ display:flex; align-items:center; gap:10px; padding:8px; border:1px solid var(--gridLine); border-radius:10px; cursor:pointer; }
+  .taskRow{ display:flex; align-items:center; gap:10px; padding:8px; border:1px solid var(--gridLine); border-radius:10px; cursor:pointer }
   .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #999 }
 
   /* ===== Settings editor ===== */
@@ -121,8 +119,7 @@
   .dayRow{ border:1px solid var(--gridLine); border-radius:10px; padding:10px; display:grid; gap:10px }
   .slots{ display:grid; gap:8px }
   .slot{ display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:center }
-  .del{ border:1px solid var(--border); background:#fff; border-radius:8px; width:36px; height:36px; cursor:pointer }
-  .add{ border:1px solid var(--border); background:#fff; border-radius:8px; width:36px; height:36px; cursor:pointer }
+  .del,.add{ border:1px solid var(--border); background:#fff; border-radius:8px; width:36px; height:36px; cursor:pointer }
 </style>
 </head>
 <body>
@@ -144,7 +141,7 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Week view" aria-pressed="true" data-name="week" title="Week">
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-name="week" title="Week">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -215,9 +212,11 @@
 /* ===== helpers/state ===== */
 const screenEl = document.getElementById('screen');
 const buttons = Array.from(document.querySelectorAll('.btn'));
-let activeView = 'week';
-let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());
+
+/* default: NO active view */
+let activeView = null;
+let activeDayISO = toISO(new Date());            // day screen mirrors this date
+let visibleWeekFirst = weekStart(new Date());    // week anchor
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
@@ -229,9 +228,9 @@ const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sa
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 const SLOTS_PER_DAY=96; // 15-min
-let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null)); // computed paint buffer
+let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null)); // paint buffer
 
-// Categories (no placeholders; user will create/edit)
+// Categories (empty schedule; user edits)
 let TASKS = [
   {key:'work', label:'Work', color:'#e06a6a', hard:false},
   {key:'commute', label:'Commute', color:'#f1a652', hard:false},
@@ -243,14 +242,22 @@ let TASKS = [
   {key:'study', label:'Study', color:'#6fc7d9', hard:false},
 ];
 
-// User schedule (recurring weekly template only here)
+// Weekly template
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ=1; // first-writer-wins
 
-/* ===== view switching ===== */
+/* ===== toggle buttons ===== */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
-  activeView = b.dataset.name;
+  const name=b.dataset.name;
+  if(activeView === name){
+    // deactivate -> blank screen
+    activeView = null;
+    buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+    screenEl.innerHTML='';
+    return;
+  }
+  activeView = name;
   buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
   render();
 });
@@ -309,7 +316,7 @@ function repaintWeek(){
   }
 
   rebuildSlots();
-  paintBlocks(geom, 7);
+  paintBlocksWeek(geom);
   buildMask(geom, 7);
   paintNowMagnifier(geom);
 }
@@ -332,7 +339,7 @@ function computeGeometry(gridEl, cols){
 }
 
 function buildMask(geom, cols){
-  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
+  const svg=document.getElementById(activeView==='day'?'dayMask':'maskSVG'); svg.innerHTML='';
   const { totalW, totalH, colX, rowY } = geom;
   if(totalW<=0 || totalH<=0) return;
   svg.setAttribute('width', totalW);
@@ -378,10 +385,9 @@ function buildMask(geom, cols){
   }
 }
 
+/* build allSlots from EXACT (first-writer-wins) */
 function rebuildSlots(){
-  // clear
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-  // first-writer-wins by ORDER.recurring
   const seqFor = key => ORDER.recurring[key] ?? 1e9;
   const keys = Object.keys(EXACT).sort((a,b)=>seqFor(a)-seqFor(b));
   for(const key of keys){
@@ -400,7 +406,7 @@ function rebuildSlots(){
   }
 }
 
-function paintBlocks(geom, cols){
+function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const {colX, slotY} = geom;
   for(let d=0; d<7; d++){
@@ -469,9 +475,8 @@ function buildDayView(){
 }
 
 function repaintDay(){
-  // Ensure slots correspond to day’s week
-  const d=fromISO(activeDayISO); const ws=weekStart(d);
-  if(toISO(ws)!==toISO(visibleWeekFirst)){ visibleWeekFirst=ws; rebuildSlots(); }
+  // Always mirror the current weekly template (no need to visit week first)
+  rebuildSlots();
 
   const gh=document.getElementById('dayHours'); gh.innerHTML='';
   const grid=document.getElementById('dayGrid');
@@ -484,10 +489,9 @@ function repaintDay(){
     gh.appendChild(el);
   }
 
-  // same mask, but single column
   buildMask(geom, 1);
 
-  // paint single-column blocks for selected day
+  // Copy the single day's row from week → stretch left→right
   const layer=document.getElementById('dayBlocks'); layer.innerHTML='';
   const dow=fromISO(activeDayISO).getDay();
   let s=0; while(s<SLOTS_PER_DAY){
@@ -550,7 +554,7 @@ function showTaskMenu(){
 }
 overlay.querySelector('.backdrop').addEventListener('click', ()=>overlay.style.display='none');
 
-/* ===== Settings editor (recurring week; 6 ranges max/day; hard/soft) ===== */
+/* ===== Settings editor (up to 6 ranges/day; hard/soft saved) ===== */
 const edOverlay=document.getElementById('settingsOverlay');
 const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
@@ -565,7 +569,6 @@ function openEditor(task){
   edColor.value = toHex(task.color);
   edHard.checked = !!task.hard;
 
-  // build day rows
   edBody.innerHTML='';
   for(let d=0; d<7; d++){
     const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
@@ -580,7 +583,6 @@ function openEditor(task){
     const addBtn=wrap.querySelector('.add');
     addBtn.addEventListener('click', ()=>addSlot(slots));
 
-    // load existing ranges
     (EXACT[task.key]?.[d]||[]).forEach(r=>addSlot(slots, r.startMin, r.endMin));
     edBody.appendChild(wrap);
   }
@@ -602,13 +604,11 @@ function addSlot(slotsEl, startMin=7*60, endMin=22*60){
 document.getElementById('edCancel').addEventListener('click', ()=>{ edOverlay.style.display='none'; });
 document.getElementById('edSave').addEventListener('click', ()=>{
   const key=currentTaskKey;
-  // update task meta
   const t = TASKS.find(x=>x.key===key);
   t.label = (edName.value||'').slice(0,14) || t.label;
   t.color = edColor.value;
   t.hard = !!edHard.checked;
 
-  // collect ranges
   const week = Array.from({length:7},()=>[]);
   edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
     const rows=[...wrap.querySelectorAll('.slot')];
@@ -617,38 +617,25 @@ document.getElementById('edSave').addEventListener('click', ()=>{
       const s=toMin(a.value), e=toMin(b.value);
       if(s===e) return;
       if(e>s){ week[d].push({startMin:round15(s), endMin:round15(e)}); }
-      else { // overnight
-        week[d].push({startMin:round15(s), endMin:round15(24*60)});
-        const dn=(d+1)%7; week[dn].push({startMin:0, endMin:round15(e)});
-      }
+      else { week[d].push({startMin:round15(s), endMin:round15(24*60)}); const dn=(d+1)%7; week[dn].push({startMin:0, endMin:round15(e)}); }
     });
-    // merge & cap 6
     week[d].sort((A,B)=>A.startMin-B.startMin);
     const merged=[]; for(const r of week[d]){ if(!merged.length){ merged.push(r); } else { const L=merged[merged.length-1]; if(r.startMin<=L.endMin){ L.endMin=Math.max(L.endMin,r.endMin);} else merged.push(r);} }
     week[d]=merged.slice(0,6);
   });
 
-  // persist
   EXACT[key] = week;
   ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
 
-  // repaint current view
   if(activeView==='week') repaintWeek();
   if(activeView==='day') repaintDay();
 
   edOverlay.style.display='none';
 });
 
-/* ===== utilities for editor ===== */
-function toHex(c){ // accepts hex or rgb()
-  const s=String(c).trim();
-  if(/^#([0-9a-f]{6})$/i.test(s)) return s;
-  const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){
-    const r=+m[1],g=+m[2],b=+m[3];
-    return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
-  }
-  return '#999999';
-}
+/* utils */
+function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
+  const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 function toHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
 function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
 function round15(min){ return Math.round(min/15)*15; }
@@ -660,11 +647,11 @@ function render(){
   if(activeView==='week') buildWeekView();
   else if(activeView==='day') buildDayView();
   else if(activeView==='month') buildMonthView();
-  else screenEl.innerHTML='';
+  else screenEl.innerHTML=''; // blank by default
 }
 render();
 
-/* quick weekday selection from header → set activeDayISO (useful before switching to Day) */
+/* Optional: clicking weekday labels (when Week is open) selects that day for Day view */
 screenEl.addEventListener('click', (e)=>{
   if(activeView!=='week') return;
   const labels = screenEl.querySelector('#dowLabels');
