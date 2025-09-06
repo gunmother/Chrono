@@ -15,7 +15,7 @@
     --label-size:12px;
     --btn:60px;
 
-    --panelW:520px;   /* will be synced to center screen width */
+    --panelW:520px;   /* synced to center screen width */
     --slot-gap:8px;
     --icon-btn:36px;
   }
@@ -61,13 +61,12 @@
   .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
-  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:6px; padding:0 0; }
-  .top-row.day{ grid-template-columns:1fr; padding:0 4px; }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 }
+  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
 
-  /* Unboxed weekday labels centered above their columns */
+  /* Weekday labels: centered, unboxed */
   .day-pill{
     justify-self:center;
-    /* removed border/background to drop the "box" */
     border:none; border-radius:0; padding:0 2px;
     text-align:center; font-size:clamp(10px, 1.9vw, 12px);
     background:transparent; color:#000; white-space:nowrap;
@@ -88,22 +87,24 @@
   .chev:disabled{ opacity:.5; cursor:not-allowed }
 
   /* Month view */
-  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr }
+  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
+  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
+  .month-dow span{ text-align:center }
   .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
   .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
   .mcell.today{ outline:2px solid #bdbdbd; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Task overlay – single vertical stack (no white card) */
+  /* Task overlay – single vertical stack (opaque items) */
   #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay .stack{
-    position:absolute; left:50%; top:calc(8px + 40px); transform:translateX(-50%);  /* sit under title bar */
+    position:absolute; left:50%; top:calc(8px + 40px); transform:translateX(-50%);
     width:min(96vw, var(--panelW)); max-height:min(86vh, 680px);
     display:grid; grid-auto-rows:minmax(34px, 1fr); grid-template-columns:1fr; gap:8px; padding:8px;
     pointer-events:auto; overflow:auto;
   }
   .taskRow{
-    border:1px solid var(--border); border-radius:12px; background:#ffffff;  /* fully opaque */
+    border:1px solid var(--border); border-radius:12px; background:#ffffff;
     display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; cursor:pointer;
     min-height:34px;
   }
@@ -116,7 +117,7 @@
     content:""; position:absolute; inset:0; background:rgba(0,0,0,.25);
   }
 
-  /* Settings editor (aligned, constrained to screen width) */
+  /* Settings editor */
   #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
   #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
   .card{
@@ -133,12 +134,14 @@
   .dayHead{ display:flex; justify-content:space-between; align-items:center; background:#fff;
     border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
   .slots{ display:grid; gap:12px; min-width:0 }
+
+  /* Three compact dropdowns on one line */
   .slot{
     display:grid; gap: var(--slot-gap);
     grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
     grid-template-areas:
       "start end mic del"
-      "scope scope remind remind";
+      "scope remind flex flex";
     align-items:center; width:100%;
   }
   .slot .start{ grid-area:start }
@@ -147,7 +150,9 @@
   .slot .trash{ grid-area:del }
   .slot .scope{ grid-area:scope }
   .slot .remind{ grid-area:remind }
-  .select{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit; width:100% }
+  .slot .flex{ grid-area:flex }
+
+  .select{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit; width:100%; min-width:0 }
   .iconBtn{ width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1 }
   .addRow{ display:flex; }
   .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer; font-weight:700 }
@@ -180,7 +185,7 @@
       <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y1="8"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
           <line x1="6" y1="10" x2="6" y2="18"/>
           <line x1="8" y1="10" x2="8" y2="18"/>
           <line x1="10" y1="10" x2="10" y2="18"/>
@@ -222,7 +227,6 @@
         <div class="ed-title" id="edTitle">Edit</div>
         <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14"/>
         <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
-        <!-- Removed "Hard time" control per latest design; keeping layout intact -->
       </div>
       <div class="ed-body" id="edBody"></div>
       <div class="ed-foot">
@@ -252,6 +256,18 @@ function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function round15(min){ return Math.round(min/15)*15; }
 
+/* ISO week key (YYYY-Www) and month key (YYYY-MM) */
+function isoWeekKey(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7)); // Thursday in current week
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+function monthKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+}
+
 /* Categories (16 items) */
 let TASKS = [
   {key:'work',      label:'Work',        color:'#d33c36', hard:false},
@@ -277,8 +293,13 @@ const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 /* Data stores */
 const SLOTS_PER_DAY=96; // 15-min
 let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+/*
+  EXACT[taskKey][dayIndex] = array of ranges:
+  { startMin, endMin, scope: 'recurring'|'week'|'month', weekKey?, monthKey?, reminderOffsetMin?, flexibility? }
+*/
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
+const MAX_RANGES_PER_DAY=6;
 
 /* Sync editor width to screen */
 function syncPanelWidthVar(){
@@ -290,14 +311,14 @@ syncPanelWidthVar();
 
 /* ---------- PERSISTENCE (IndexedDB) ---------- */
 const DB_NAME = 'chronoDB';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // bump for new fields/layout
 let dbPromise = null;
 
 function idbOpen(){
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e)=>{
+    req.onupgradeneeded = ()=>{
       const db = req.result;
       if (!db.objectStoreNames.contains('kv')){
         db.createObjectStore('kv', { keyPath: 'k' });
@@ -329,19 +350,16 @@ async function idbGet(key){
   });
 }
 
-/* Serialize current state to plain JSON-friendly object */
+/* Serialize current state */
 function snapshotState(){
   return {
-    TASKS,
-    EXACT,
-    ORDER,
-    SAVE_SEQ,
+    TASKS, EXACT, ORDER, SAVE_SEQ,
     activeDayISO,
     visibleWeekFirstISO: toISO(visibleWeekFirst)
   };
 }
 
-/* Apply loaded state safely */
+/* Hydrate (migrate older shapes forward) */
 function hydrateState(snap){
   try{
     if(!snap || typeof snap!=='object') return;
@@ -353,7 +371,12 @@ function hydrateState(snap){
         if (snap.EXACT[k] && Array.isArray(snap.EXACT[k]) && snap.EXACT[k].length===7){
           EXACT[k] = snap.EXACT[k].map(dayArr => Array.isArray(dayArr) ? dayArr.map(r => ({
             startMin: Number(r.startMin)||0,
-            endMin: Number(r.endMin)||0
+            endMin: Number(r.endMin)||0,
+            scope: r.scope || 'recurring',
+            weekKey: r.weekKey || undefined,
+            monthKey: r.monthKey || undefined,
+            reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
+            flexibility: r.flexibility || 'flexible'
           })) : []);
         }
       }
@@ -367,21 +390,10 @@ function hydrateState(snap){
   }
 }
 
-/* Save immediately (used after edits) */
-async function saveAll(){
-  try{
-    await idbSet('state', snapshotState());
-  }catch(e){
-    console.warn('Save failed:', e);
-  }
-}
-
-/* Debounced safeguard save (e.g., on view/nav) */
+/* Save helpers */
+async function saveAll(){ try{ await idbSet('state', snapshotState()); }catch(e){ console.warn('Save failed:', e); } }
 let saveTimer=null;
-function saveSoon(ms=800){
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveAll, ms);
-}
+function saveSoon(ms=800){ clearTimeout(saveTimer); saveTimer=setTimeout(saveAll, ms); }
 
 /* ---------- Button toggles ---------- */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -514,19 +526,49 @@ function buildMask(geom, cols){
   }
 }
 
+/* Build merged/visible slots honoring scope + flexibility */
 function rebuildSlots(){
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
+  const wkKey = isoWeekKey(visibleWeekFirst);
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+
   for(const key of keys){
     const week=EXACT[key];
     for(let d=0; d<7; d++){
-      for(const r of week[d]){
-        let a=Math.round(r.startMin/15), b=Math.round(r.endMin/15);
+      const dayDate = addDays(visibleWeekFirst, d);
+      const monKey = monthKey(dayDate);
+      const ranges = (week[d]||[]).filter(r=>{
+        const sc = r.scope || 'recurring';
+        if (sc === 'recurring') return true;
+        if (sc === 'week')     return r.weekKey === wkKey;
+        if (sc === 'month')    return r.monthKey === monKey;
+        return true;
+      });
+
+      for(const r of ranges){
+        let a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
+        const isFirm = (r.flexibility||'flexible') === 'firm';
+
+        const fillSlot = (dayIdx, slotIdx)=>{
+          const existing = allSlots[dayIdx][slotIdx];
+          if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
+          // Overlap policy: Firm beats Flexible; Flexible never displaces Firm.
+          const existingRanges = EXACT[existing][dayIdx]||[];
+          const exr = existingRanges.find(rr=>{
+            const exA=Math.round(rr.startMin/15), exB=Math.round(rr.endMin/15);
+            return slotIdx>=exA && slotIdx<exB && (rr.scope||'recurring') && true;
+          });
+          const existingFirm = (exr?.flexibility||'flexible')==='firm';
+          if(isFirm && !existingFirm){ allSlots[dayIdx][slotIdx]=key; } // firm overrides flexible
+          // else leave as is (either both flexible or existing firm)
+        };
+
         if(b>a){
-          for(let s=a; s<b; s++) if(allSlots[d][s]==null) allSlots[d][s]=key;
+          for(let s=a; s<b; s++) fillSlot(d, s);
         } else if(b<a){
-          for(let s=a; s<96; s++) if(allSlots[d][s]==null) allSlots[d][s]=key;
-          const dn=(d+1)%7; for(let s=0; s<b; s++) if(allSlots[dn][s]==null) allSlots[dn][s]=key;
+          // overnight split
+          for(let s=a; s<96; s++) fillSlot(d, s);
+          const dn=(d+1)%7; for(let s=0; s<b; s++) fillSlot(dn, s);
         }
       }
     }
@@ -656,6 +698,11 @@ function buildMonthView(){
         <div class="title">${label}</div>
         <button id="nextMon" class="chev" aria-label="Next month">▶</button>
       </div>
+      <div class="month-dow" aria-hidden="false">
+        <span aria-label="Sunday">S</span><span aria-label="Monday">M</span><span aria-label="Tuesday">T</span>
+        <span aria-label="Wednesday">W</span><span aria-label="Thursday">T</span><span aria-label="Friday">F</span>
+        <span aria-label="Saturday">S</span>
+      </div>
       <div class="month-grid" id="monthGrid"></div>
     </div>
   `;
@@ -679,7 +726,6 @@ function buildMonthView(){
 
 /* ---------- Task picker (single stack) ---------- */
 const overlay=document.getElementById('taskOverlay');
-let currentTaskKey=null;
 
 function openTaskStack(){
   overlay.innerHTML='';
@@ -690,7 +736,7 @@ function openTaskStack(){
     row.innerHTML = `<span class="dot" style="background:${t.color}"></span>
                      <span class="name">${t.label}</span>
                      <span class="dur">${formatDecimalHours(totals[t.key]||0)}</span>`;
-    row.addEventListener('click', ()=>{ currentTaskKey=t.key; openEditor(t); });
+    row.addEventListener('click', ()=>openEditor(t));
     stack.appendChild(row);
   }
   overlay.appendChild(stack);
@@ -699,7 +745,7 @@ function openTaskStack(){
 overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
 
 function weeklyTotals(){
-  rebuildSlots();
+  rebuildSlots(); // uses current visible week & scope filter
   const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
   for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
   return out;
@@ -712,24 +758,47 @@ const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
 const edName=document.getElementById('edName');
 const edColor=document.getElementById('edColor');
-const MAX_RANGES_PER_DAY=6;
-let sessionDraft=null;
 
 function openEditor(task){
   overlay.style.display='none';
-  sessionDraft = {
-    key: task.key, label: task.label, color: toHex(task.color),
-    week: EXACT[task.key].map(dayArr => dayArr.map(r => ({startMin:r.startMin, endMin:r.endMin})))
+  const t = TASKS.find(x=>x.key===task.key);
+  const sessionDraft = {
+    key: t.key, label: t.label, color: toHex(t.color),
+    week: EXACT[t.key].map(dayArr => dayArr.map(r => ({
+      startMin:r.startMin, endMin:r.endMin,
+      scope: r.scope || 'recurring',
+      weekKey: r.weekKey, monthKey: r.monthKey,
+      reminderOffsetMin: r.reminderOffsetMin ?? undefined,
+      flexibility: r.flexibility || 'flexible'
+    })))
   };
-  edTitle.textContent = `Edit: ${task.label}`;
-  edName.value = task.label; edColor.value = toHex(task.color);
-  buildEditorDays();
+  edTitle.textContent = `Edit: ${t.label}`;
+  edName.value = t.label; edColor.value = toHex(t.color);
+  buildEditorDays(sessionDraft);
   edOverlay.style.display='block';
-}
 
-function buildEditorDays(){
+  // Attach save handler bound to this draft
+  const onSave = async ()=>{
+    await persistEditor(sessionDraft);
+    edOverlay.style.display='none';
+    if(activeView==='week') repaintWeek();
+    if(activeView==='day') repaintDay();
+    await saveAll();
+    edSave.removeEventListener('click', onSave);
+  };
+  const edSave=document.getElementById('edSave');
+  edSave.addEventListener('click', onSave, { once:false });
+}
+document.getElementById('edCancel').addEventListener('click', ()=>{
+  const sure = confirm('Discard edits?');
+  if(!sure) return;
+  edOverlay.style.display='none';
+});
+
+function buildEditorDays(sessionDraft){
   edBody.innerHTML='';
   const first=visibleWeekFirst;
+
   for(let d=0; d<7; d++){
     const theDate = addDays(first, d);
     const dayLabel = `${DAY_NAMES[d]}, ${theDate.toLocaleDateString(undefined,{month:'long'})} ${ORD(theDate.getDate())}`;
@@ -744,21 +813,48 @@ function buildEditorDays(){
 
     const addRow=document.createElement('div'); addRow.className='addRow';
     const addBtn=document.createElement('button'); addBtn.className='addBtn'; addBtn.type='button'; addBtn.textContent='Create new';
-    addBtn.addEventListener('click', ()=>{ const row = addSlotRow(slots, d); if(row){ row.querySelector('.start').focus(); } });
+    addBtn.addEventListener('click', ()=>{
+      if(slots.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return;
+      const row = addSlotRow(slots, d, null, null, false, null);
+      if(row){ row.querySelector('.start').focus(); }
+      updateAddButtonState(slots, addBtn);
+    });
     addRow.appendChild(addBtn); wrap.appendChild(addRow);
 
-    // render existing ranges, if any
-    (sessionDraft.week[d]||[]).forEach(r=>addSlotRow(slots, d, r.startMin, r.endMin, true));
+    // render existing ranges
+    (sessionDraft.week[d]||[]).forEach(r=>{
+      addSlotRow(slots, d, r.startMin, r.endMin, true, r);
+    });
 
+    updateAddButtonState(slots, addBtn);
     edBody.appendChild(wrap);
   }
 }
 
-function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false){
+/* Update "Create new" visibility based on cap */
+function updateAddButtonState(slotsEl, btnEl){
+  const count = slotsEl.querySelectorAll('.slot').length;
+  if(count >= MAX_RANGES_PER_DAY){ btnEl.style.display='none'; }
+  else { btnEl.style.display='inline-block'; }
+}
+
+/* Add a slot row with three compact dropdowns inline.
+   Defaults: Start=12:00 (noon), End=00:00 (midnight) for new rows. */
+function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null){
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
+
+  // Defaults
+  const defaultStart = 12*60; // 12:00
+  const defaultEnd   = 0;     // 00:00
+
   const row=document.createElement('div'); row.className='slot';
-  const startVal = startMin==null ? '' : toHHMM(startMin);
-  const endVal   = endMin==null ? '' : toHHMM(endMin);
+  const startVal = startMin==null ? toHHMM(defaultStart) : toHHMM(startMin);
+  const endVal   = endMin==null   ? toHHMM(defaultEnd)   : toHHMM(endMin);
+
+  const scopeVal = existingMeta?.scope || 'recurring';
+  const remindVal = (existingMeta?.reminderOffsetMin!=null)
+      ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
+  const flexVal = existingMeta?.flexibility || 'flexible';
 
   row.innerHTML = `
     <input type="time" class="in start" step="900" value="${startVal}">
@@ -766,17 +862,25 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     <button class="iconBtn mic"   title="Speak time" aria-label="Microphone">🎤</button>
     <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
 
-    <select class="select scope">
-      <option value="recurring" selected>Recurring</option>
-      <!-- Day/today removed per your spec; keeping only recurring for now -->
-      <option value="week">This week</option>
-      <option value="month">This month</option>
+    <select class="select scope" title="Apply to">
+      <option value="recurring"${scopeVal==='recurring'?' selected':''}>Recurring</option>
+      <option value="week"${scopeVal==='week'?' selected':''}>This week</option>
+      <option value="month"${scopeVal==='month'?' selected':''}>This month</option>
     </select>
 
-    <select class="select remind">
-      <option value="off" selected>Set reminder</option>
-      <option value="5m">5 m</option><option value="10m">10 m</option><option value="15m">15 m</option>
-      <option value="30m">30 m</option><option value="1h">1 h</option><option value="24h">24 h</option>
+    <select class="select remind" title="Reminder">
+      <option value="off"${remindVal==='off'?' selected':''}>Set reminder</option>
+      <option value="5m"${remindVal==='5m'?' selected':''}>5 m</option>
+      <option value="10m"${remindVal==='10m'?' selected':''}>10 m</option>
+      <option value="15m"${remindVal==='15m'?' selected':''}>15 m</option>
+      <option value="30m"${remindVal==='30m'?' selected':''}>30 m</option>
+      <option value="1h"${remindVal==='1h'?' selected':''}>1 h</option>
+      <option value="24h"${remindVal==='24h'?' selected':''}>24 h</option>
+    </select>
+
+    <select class="select flex" title="Flexibility">
+      <option value="flexible"${flexVal==='flexible'?' selected':''}>Flexible</option>
+      <option value="firm"${flexVal==='firm'?' selected':''}>Firm</option>
     </select>
   `;
 
@@ -799,11 +903,89 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     if(parsed){ row.querySelector('.start').value=toHHMM(parsed.s); row.querySelector('.end').value=toHHMM(parsed.e); }
   });
 
-  row.querySelector('.trash').addEventListener('click', ()=>{ row.remove(); });
+  row.querySelector('.trash').addEventListener('click', ()=>{
+    row.remove();
+    const btn = row.closest('.dayRow').querySelector('.addBtn');
+    updateAddButtonState(slotsEl, btn);
+  });
 
   slotsEl.appendChild(row);
   if(!preexisting) row.scrollIntoView({block:'nearest'});
+
   return row;
+}
+
+/* Save editor contents into EXACT[TASK] with scope keys, reminders, flexibility, cap=6, overnight splits */
+async function persistEditor(sessionDraft){
+  const t = TASKS.find(x=>x.key===sessionDraft.key);
+  t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
+  t.color = document.getElementById('edColor').value || t.color;
+
+  const week = Array.from({length:7},()=>[]);
+  const wkKeyNow = isoWeekKey(visibleWeekFirst);
+
+  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
+    const dayDate = addDays(visibleWeekFirst, d);
+    const monKeyNow = monthKey(dayDate);
+    const rows=[...wrap.querySelectorAll('.slot')];
+
+    const pushed = [];
+
+    for(const row of rows){
+      const sVal=row.querySelector('.start').value;
+      const eVal=row.querySelector('.end').value;
+      if(!sVal || !eVal) continue;
+
+      let sMin = round15(toMin(sVal));
+      let eMin = round15(toMin(eVal));
+      if(sMin===eMin) continue; // zero length, ignore
+
+      const scope = row.querySelector('.scope').value;                 // 'recurring' | 'week' | 'month'
+      const remindVal = row.querySelector('.remind').value;            // 'off'|'5m'|...
+      const reminderOffsetMin = optToOffset(remindVal);                // number | undefined
+      const flexibility = row.querySelector('.flex').value || 'flexible';
+
+      const meta = { scope, flexibility };
+      if(scope==='week')  meta.weekKey  = wkKeyNow;
+      if(scope==='month') meta.monthKey = monKeyNow;
+      if(reminderOffsetMin!=null) meta.reminderOffsetMin = reminderOffsetMin;
+
+      // Cross-midnight handling: if end <= start, split across days
+      if(eMin > sMin){
+        pushed.push({startMin:sMin, endMin:eMin, ...meta});
+      }else{
+        pushed.push({startMin:sMin, endMin:24*60, ...meta});
+        const dn=(d+1)%7;
+        // store morning segment for next day, but only if scope permits appearance on D+1
+        const nextMeta = {...meta};
+        if(scope==='month'){
+          const nextDate = addDays(visibleWeekFirst, dn);
+          nextMeta.monthKey = monthKey(nextDate);
+        }
+        week[dn].push({startMin:0, endMin:eMin, ...nextMeta});
+      }
+    }
+
+    // Merge contiguous ranges (same metadata) and cap at 6
+    pushed.sort((A,B)=>A.startMin-B.startMin);
+    const merged=[];
+    for(const r of pushed){
+      if(!merged.length){ merged.push({...r}); continue; }
+      const L=merged[merged.length-1];
+      if(r.startMin<=L.endMin && sameMeta(L,r)){ L.endMin=Math.max(L.endMin,r.endMin); }
+      else merged.push({...r});
+    }
+    week[d]=(merged.slice(0,MAX_RANGES_PER_DAY));
+  });
+
+  EXACT[t.key] = week;
+  ORDER.recurring[t.key] = ORDER.recurring[t.key] || (SAVE_SEQ++);
+}
+
+function sameMeta(a,b){
+  return a.scope===b.scope && a.weekKey===b.weekKey && a.monthKey===b.monthKey &&
+         (a.reminderOffsetMin??null)===(b.reminderOffsetMin??null) &&
+         (a.flexibility||'flexible')===(b.flexibility||'flexible');
 }
 
 function parseSpokenRange(s){
@@ -818,58 +1000,20 @@ function parseSpokenRange(s){
   return {s:sMin, e:eMin};
 }
 
-document.getElementById('edCancel').addEventListener('click', ()=>{
-  const sure = confirm('Discard edits?');
-  if(!sure) return;
-  edOverlay.style.display='none';
-});
-
-document.getElementById('edSave').addEventListener('click', async ()=>{
-  if(!sessionDraft) return;
-  const t = TASKS.find(x=>x.key===sessionDraft.key);
-  t.label = (edName.value||'').slice(0,14) || t.label;
-  t.color = edColor.value || t.color;
-
-  const week = Array.from({length:7},()=>[]);
-  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
-    const rows=[...wrap.querySelectorAll('.slot')].slice(0,6);
-    for(const row of rows){
-      const sVal=row.querySelector('.start').value;
-      const eVal=row.querySelector('.end').value;
-      if(!sVal || !eVal) continue;
-      const sMin = toMin(sVal);
-      const eMin = toMin(eVal);
-      if(sMin===eMin) continue;
-      if(eMin>sMin){
-        week[d].push({startMin:round15(sMin), endMin:round15(eMin)});
-      }else{
-        week[d].push({startMin:round15(sMin), endMin:round15(24*60)});
-        const dn=(d+1)%7; week[dn].push({startMin:0, endMin:round15(eMin)});
-      }
-    }
-    week[d].sort((A,B)=>A.startMin-B.startMin);
-    const merged=[];
-    for(const r of week[d]){
-      if(!merged.length) merged.push({...r});
-      else{
-        const L=merged[merged.length-1];
-        if(r.startMin<=L.endMin){ L.endMin=Math.max(L.endMin,r.endMin); }
-        else merged.push({...r});
-      }
-    }
-    week[d]=merged.slice(0,6);
-  });
-
-  EXACT[t.key] = week;
-  ORDER.recurring[t.key] = ORDER.recurring[t.key] || (SAVE_SEQ++);
-
-  edOverlay.style.display='none';
-  if(activeView==='week') repaintWeek();
-  if(activeView==='day') repaintDay();
-
-  /* Persist immediately so refresh/restart keeps everything */
-  await saveAll();
-});
+/* Map reminder offset minutes to/from select option value */
+function offsetToOpt(min){
+  const map = {5:'5m',10:'10m',15:'15m',30:'30m',60:'1h',1440:'24h'};
+  return map[min] || 'off';
+}
+function optToOffset(val){
+  if(val==='5m') return 5;
+  if(val==='10m') return 10;
+  if(val==='15m') return 15;
+  if(val==='30m') return 30;
+  if(val==='1h') return 60;
+  if(val==='24h') return 1440;
+  return undefined;
+}
 
 /* Small utils */
 function toHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
@@ -887,9 +1031,8 @@ async function init(){
   }finally{
     render();
   }
-  /* extra safety: save periodically while app is open */
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
-  window.addEventListener('beforeunload', ()=>{ /* best-effort */ saveAll(); });
+  window.addEventListener('beforeunload', ()=>{ saveAll(); });
 }
 
 function render(){
@@ -905,4 +1048,3 @@ init();
 </script>
 </body>
 </html>
-
