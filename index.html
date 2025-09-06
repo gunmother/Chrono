@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Minimal Scheduler</title>
+<style>
+  :root{
+    --r-lg:12px; --r-pill:999px;
+    --border:#bdbdbd; --grid-line:#e1e1e1;
+    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
+
+    --hour-col:56px;
+    --dow-h:32px;
+    --label-size:12px;
+    --btn:60px;
+
+    --panelW:520px;
+    --slot-gap:8px;
+    --icon-btn:36px;
+
+    --stack-gap:12px;          /* equal top/bottom gap around items stack */
+    --row-min-h:36px;          /* tightened item rows */
+    --row-pad-v:6px;           /* vertical padding inside task row */
+
+    --select-font:13px;        /* compact select font size */
+    --select-pad-v:6px;        /* compact select vertical padding */
+    --select-pad-h:8px;        /* compact select horizontal padding */
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
+  *{box-sizing:border-box}
+
+  .app{
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: max(16px, env(safe-area-inset-top)) auto;
+    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
+  }
+
+  /* Center screen */
+  #screen{
+    border:1px solid var(--border);
+    border-radius:var(--r-lg);
+    background:#fff;
+    position:relative; overflow:hidden; min-height:420px;
+  }
+
+  /* Four buttons */
+  .controls{ display:flex; justify-content:space-between; align-items:center; }
+  .btn{
+    width:var(--btn); height:var(--btn); border-radius:50%;
+    border:1px solid var(--border); background:#fff; color:#000;
+    display:grid; place-items:center; cursor:pointer; padding:0;
+  }
+  .btn[aria-pressed="true"]{ background:#e6e6e6; }
+
+  .icon{ width:60%; height:60% }
+  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
+
+  /* Shared scaffold */
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+  .grid-area{ position:relative; overflow:hidden }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none }
+  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
+
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 }
+  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
+
+  /* Weekday labels: centered, unboxed */
+  .day-pill{
+    justify-self:center;
+    border:none; border-radius:0; padding:0 2px;
+    text-align:center; font-size:clamp(10px, 1.9vw, 12px);
+    background:transparent; color:#000; white-space:nowrap;
+  }
+
+  .grid{
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+  }
+  .blocks{ position:absolute; inset:0 }
+  .blk{ position:absolute; border:1px solid var(--border) }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none }
+
+  /* Week chevrons */
+  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
+  .chev:disabled{ opacity:.5; cursor:not-allowed }
+
+  /* Month view */
+  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
+  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
+  .month-dow span{ text-align:center }
+  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
+  .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
+  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px } /* blue outline for current day */
+  .mcell.muted{ color:#9c9c9c }
+
+  /* Task overlay – opaque items, stack centered within grid area */
+  #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
+  #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
+
+  #taskOverlay .stack{
+    position:absolute; left:50%; transform:translateX(-50%);
+    width:min(96vw, var(--panelW));
+    max-height:60vh;                 /* updated dynamically on open */
+    display:grid; grid-auto-rows:minmax(var(--row-min-h), 1fr);
+    grid-template-columns:1fr; gap:8px; padding:var(--stack-gap) 8px;
+    pointer-events:auto; overflow:auto; background:transparent;
+  }
+  .taskRow{
+    border:1px solid var(--border); border-radius:12px; background:#ffffff;
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:var(--row-pad-v) 10px; cursor:pointer;
+    min-height:var(--row-min-h);
+  }
+  .taskRow .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
+  .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
+  .taskRow .dur{ font-variant-numeric:tabular-nums; }
+
+  /* Settings editor */
+  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
+  #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
+  .card{
+    position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
+    width:min(96vw, var(--panelW)); max-height:min(92vh, 760px);
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
+  }
+  .ed-head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line) }
+  .ed-title{ font-weight:900; white-space:nowrap }
+  .in{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; font:inherit; width:100% }
+  .ed-body{ padding:10px; overflow:auto; display:grid; gap:10px; min-width:0 }
+  .dayRow{ border:1px solid var(--grid-line); border-radius:10px; padding:10px; display:grid; gap:10px; min-width:0 }
+  .dayHead{ display:flex; justify-content:space-between; align-items:center; background:#fff;
+    border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
+  .slots{ display:grid; gap:10px; min-width:0 } /* tighter */
+
+  /* Rows: times+icons, then 3 compact selects on one line */
+  .slot{
+    display:grid; gap: var(--slot-gap);
+    grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
+    grid-template-areas:
+      "start end mic del"
+      "scope remind flex";
+    align-items:center; width:100%;
+  }
+  .slot .start{ grid-area:start }
+  .slot .end{ grid-area:end }
+  .slot .mic{ grid-area:mic }
+  .slot .trash{ grid-area:del }
+  .slot .scope{ grid-area:scope }
+  .slot .remind{ grid-area:remind }
+  .slot .flex{ grid-area:flex }
+
+  .select{
+    padding:var(--select-pad-v) var(--select-pad-h);
+    border:1px solid var(--border);
+    border-radius:10px; background:#fff; font:inherit; width:100%; min-width:0;
+    font-size:var(--select-font); line-height:1.2;
+  }
+  /* Prevent scope from hogging space */
+  .slot .scope, .slot .remind, .slot .flex{ min-width:0; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+  .iconBtn{ width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1 }
+  .addRow{ display:flex; }
+  .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer; font-weight:700 }
+
+  .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
+  .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
+</style>
+</head>
+<body>
+  <main class="app">
+    <section id="screen" aria-live="polite" aria-label="Content area"></section>
+
+    <nav class="controls" role="group" aria-label="Primary views">
+      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
+
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18"/>
+          <line x1="8" y1="10" x2="8" y2="18"/>
+          <line x1="10" y1="10" x2="10" y2="18"/>
+          <line x1="12" y1="10" x2="12" y2="18"/>
+          <line x1="14" y1="10" x2="14" y2="18"/>
+          <line x1="16" y1="10" x2="16" y2="18"/>
+          <line x1="18" y1="10" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
+          <circle cx="7"  cy="14" r="0.7"/><circle cx="11" cy="14" r="0.7"/><circle cx="15" cy="14" r="0.7"/><circle cx="19" cy="14" r="0.7"/>
+          <circle cx="7"  cy="17" r="0.7"/><circle cx="11" cy="17" r="0.7"/><circle cx="15" cy="17" r="0.7"/><circle cx="19" cy="17" r="0.7"/>
+        </svg>
+      </button>
+
+      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+  <!-- Task picker -->
+  <div id="taskOverlay" aria-hidden="true"></div>
+
+  <!-- Settings editor -->
+  <div id="settingsOverlay" aria-hidden="true">
+    <div class="backdrop"></div>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+      <div class="ed-head">
+        <div class="ed-title" id="edTitle">Edit</div>
+        <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14"/>
+        <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
+      </div>
+      <div class="ed-body" id="edBody"></div>
+      <div class="ed-foot">
+        <button id="edCancel" class="btnText">Cancel</button>
+        <button id="edSave" class="btnText">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Helpers / State ---------- */
+const screenEl = document.getElementById('screen');
+const buttons = [...document.querySelectorAll('.btn')];
+
+let activeView = null;               // starts blank
+let activeDayISO = toISO(new Date());
+let visibleWeekFirst = weekStart(new Date());
+
+const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+
+function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function round15(min){ return Math.round(min/15)*15; }
+
+/* ISO week key (YYYY-Www) and month key (YYYY-MM) */
+function isoWeekKey(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7)); // Thursday in current week
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
+
+/* Categories (16 items) */
+let TASKS = [
+  {key:'work',      label:'Work',        color:'#d33c36', hard:false},
+  {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
+  {key:'choors',    label:'Chores',      color:'#3b41c5', hard:false}, /* preserve existing keys if already saved */
+  {key:'chores',    label:'Chores',      color:'#3b41c5', hard:false},
+  {key:'errands',   label:'Errands',     color:'#1d8f2e', hard:false},
+  {key:'meals',     label:'Meal Time',   color:'#e0b21b', hard:false},
+  {key:'hygiene',   label:'Hygiene',     color:'#0ea5e9', hard:false},
+  {key:'selfcare',  label:'Self Care',   color:'#888888', hard:false},
+  {key:'exercise',  label:'Exercise',    color:'#1db954', hard:false},
+  {key:'family',    label:'Family Time', color:'#e3326b', hard:false},
+  {key:'hobbies',   label:'Hobbies',     color:'#f39c12', hard:false},
+  {key:'projects',  label:'Projects',    color:'#6a5acd', hard:false},
+  {key:'school',    label:'School',      color:'#3269e6', hard:true},
+  {key:'relax',     label:'Relaxation',  color:'#24c3d6', hard:false},
+  {key:'free',      label:'Free Time',   color:'#a4a4a4', hard:false},
+  {key:'childcare', label:'Child Care',  color:'#7a5c2e', hard:false},
+  {key:'sleep',     label:'Sleep',       color:'#6aa6ff', hard:false}
+];
+const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
+const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
+
+/* Data stores */
+const SLOTS_PER_DAY=96; // 15-min
+let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+/*
+  EXACT[taskKey][dayIndex] = array of ranges:
+  { startMin, endMin, scope: 'recurring'|'week'|'month', weekKey?, monthKey?, reminderOffsetMin?, flexibility? }
+*/
+const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
+const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
+const MAX_RANGES_PER_DAY=6;
+
+/* Sync editor width to screen */
+function syncPanelWidthVar(){
+  const w = screenEl.getBoundingClientRect().width;
+  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
+}
+new ResizeObserver(syncPanelWidthVar).observe(screenEl);
+syncPanelWidthVar();
+
+/* ---------- PERSISTENCE (IndexedDB) ---------- */
+const DB_NAME = 'chronoDB';
+const DB_VERSION = 5;
+let dbPromise = null;
+
+function idbOpen(){
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if (!db.objectStoreNames.contains('kv')){
+        db.createObjectStore('kv', { keyPath: 'k' });
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+  return dbPromise;
+}
+
+async function idbSet(key, value){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readwrite');
+    tx.objectStore('kv').put({k:key, v:value});
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readonly');
+    const req = tx.objectStore('kv').get(key);
+    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+function snapshotState(){
+  return { TASKS, EXACT, ORDER, SAVE_SEQ, /* do NOT persist visible week/month defaults now */ activeDayISO };
+}
+function hydrateState(snap){
+  try{
+    if(!snap || typeof snap!=='object') return;
+    if (Array.isArray(snap.TASKS)) TASKS = snap.TASKS.map(t=>({key:String(t.key), label:String(t.label), color:String(t.color), hard:!!t.hard}));
+    if (snap.EXACT){
+      for (const k of Object.keys(EXACT)){
+        if (snap.EXACT[k] && Array.isArray(snap.EXACT[k]) && snap.EXACT[k].length===7){
+          EXACT[k] = snap.EXACT[k].map(dayArr => Array.isArray(dayArr) ? dayArr.map(r => ({
+            startMin: Number(r.startMin)||0,
+            endMin: Number(r.endMin)||0,
+            scope: r.scope || 'recurring',
+            weekKey: r.weekKey || undefined,
+            monthKey: r.monthKey || undefined,
+            reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
+            flexibility: r.flexibility || 'firm' /* default firm going forward */
+          })) : []);
+        }
+      }
+    }
+    if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
+    if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
+    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
+  }catch(e){ console.warn('Hydrate failed:', e); }
+}
+async function saveAll(){ try{ await idbSet('state', snapshotState()); }catch(e){ console.warn('Save failed:', e); } }
+let saveTimer=null;
+function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(saveAll, ms); }
+
+/* ---------- Button toggles ---------- */
+document.querySelector('.controls').addEventListener('click', e=>{
+  const b=e.target.closest('.btn'); if(!b) return;
+  const v=b.dataset.view;
+  if(activeView===v){
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+  }else{
+    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
+  }
+  saveSoon(200);
+});
+
+/* ---------- Week View ---------- */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
+      </div>
+
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
+        <div class="grid" id="weekGrid">
+          <div class="blocks" id="blocksLayer"></div>
+          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="now" id="nowMagnify" aria-hidden="true"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+  document.getElement
