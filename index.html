@@ -20,14 +20,7 @@
     --icon-btn:36px;
 
     /* Items stack sizing */
-    --stack-gap:12px;
-    --row-min-h:36px;   /* per-item row height, computed for 16 items */
-    --row-pad-v:6px;
-
-    /* Selects */
-    --select-font:14px;
-    --select-pad-v:8px;
-    --select-pad-h:10px;
+    --row-min-h:36px;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -71,7 +64,7 @@
   .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
-  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
   .top-row.day{ grid-template-columns:1fr; padding:0 4px }
 
   /* Weekday labels: centered, unboxed */
@@ -105,18 +98,18 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Task overlay – NON-SCROLLING, fully visible, opaque items */
+  /* Task overlay – NON-SCROLLING, opaque items, centered over week grid */
   #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
   #taskOverlay .stack{
-    position:absolute; left:50%; transform:translateX(-50%);
+    position:fixed; left:50%; transform:translateX(-50%);
     width:min(96vw, var(--panelW));
-    display:grid; grid-template-columns:1fr; gap:8px; padding:var(--stack-gap) 8px;
-    pointer-events:auto; overflow:hidden; background:transparent;
+    display:grid; grid-auto-rows:var(--row-min-h); grid-template-columns:1fr;
+    gap:8px; padding:0; pointer-events:auto; overflow:hidden; background:transparent;
   }
   .taskRow{
     border:1px solid var(--border); border-radius:12px; background:#ffffff;
-    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:var(--row-pad-v) 10px;
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 10px;
     min-height:var(--row-min-h); cursor:pointer;
   }
   .taskRow .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
@@ -141,7 +134,7 @@
     border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
   .slots{ display:grid; gap:10px; min-width:0 }
 
-  /* Slot rows: line 1 = times+icons; line 2 = 3 selects on one centered row */
+  /* Slot rows: first line times+icons; second line = 3 equal selects (compact) */
   .slot{
     display:grid; gap: var(--slot-gap);
     grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
@@ -155,19 +148,25 @@
   .slot .mic{ grid-area:mic }
   .slot .trash{ grid-area:del }
 
-  /* The three selects live inside a flex row so they’re equal width & centered */
-  .slot .selrow{ grid-area:selrow; display:flex; gap:8px; justify-content:center; align-items:center; }
-  .slot .selrow .select{ flex:1 1 0; min-width:0; }
+  .slot .selrow{
+    grid-area:selrow;
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:6px;
+    align-items:center;
+  }
 
-  .iconBtn{ width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1 }
-
-  /* Uniform select styling (no double chrome) */
   .select{
     -webkit-appearance:none; appearance:none;
-    padding:var(--select-pad-v) var(--select-pad-h);
+    padding:6px 8px;
     border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit;
-    font-size:var(--select-font); line-height:1.2; width:100%;
+    font-size:13px; line-height:1.2; width:100%;
     white-space:nowrap; overflow:visible; text-overflow:clip;
+  }
+
+  .iconBtn{
+    width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center;
+    border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1
   }
 
   .addRow{ display:flex; }
@@ -623,7 +622,7 @@ function buildDayView(){
 
 /* ---------- Month View ---------- */
 function buildMonthView(){
-  const base = new Date(); /* current month by default */
+  const base = new Date(); /* always reset to current month */
   activeDayISO = toISO(base);
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -668,18 +667,22 @@ function openTaskStack(){
   overlay.innerHTML='';
   const stack=document.createElement('div'); stack.className='stack';
 
-  // Fit whole stack above weekly grid, with equal gaps, no scroll.
+  // Fit exactly between grid top & bottom, centered; no scroll, no cropping.
   const grid = document.getElementById('weekGrid');
   const r = grid.getBoundingClientRect();
-  const topGap = Math.max(8, Math.floor(r.height * 0.02)); // subtle nudge
-  const usableH = r.height - topGap*2;
-  const perItem = Math.max(30, Math.floor(usableH / 16) - 4); // 16 items
-  document.documentElement.style.setProperty('--row-min-h', perItem+'px');
-  document.documentElement.style.setProperty('--stack-gap', topGap+'px');
 
-  stack.style.top = (r.top + window.scrollY + topGap) + 'px';
-  stack.style.height = usableH + 'px';
-  stack.style.overflow = 'hidden';
+  const N = 16;          // items
+  const G = 8;           // CSS gap
+  const margin = 6;      // breathing room top/bottom
+  const avail = Math.max(120, r.height - margin*2);     // ensure positive
+  const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
+  const used = N*rowH + (N-1)*G;
+  const topPad = Math.max(margin, Math.floor((r.height - used)/2));
+
+  document.documentElement.style.setProperty('--row-min-h', rowH+'px');
+
+  stack.style.top    = (r.top + topPad) + 'px';
+  stack.style.height = used + 'px';
 
   const totals = weeklyTotals();
   for(const t of TASKS){
@@ -784,7 +787,7 @@ function updateAddButtonState(slotsEl, btnEl){
   btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
 }
 
-/* Add slot row: defaults noon->midnight; has mic/trash; selects centered and full text visible */
+/* Add slot row: defaults noon->midnight; has mic/trash; selects compact & equal width */
 function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
@@ -804,7 +807,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
 
     <div class="selrow">
-      <select class="select scope" title="Scope (Recurring / This week / This month)">
+      <select class="select scope" title="Scope">
         <option value="recurring"${scopeVal==='recurring'?' selected':''}>Recurring</option>
         <option value="week"${scopeVal==='week'?' selected':''}>This week</option>
         <option value="month"${scopeVal==='month'?' selected':''}>This month</option>
@@ -829,15 +832,10 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
 
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
-  const setDefaults = ()=>{
-    startInp.value = toHHMM(startMin==null ? defaultStart : startMin);
-    startInp.defaultValue = startInp.value;
-    endInp.value   = toHHMM(endMin==null   ? defaultEnd   : endMin);
-    endInp.defaultValue   = endInp.value;
-  };
-  setDefaults();
+  startInp.value = toHHMM(startMin==null ? defaultStart : startMin);
+  endInp.value   = toHHMM(endMin==null   ? defaultEnd   : endMin);
 
-  // Speech assist
+  // mic
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
     let text = '';
@@ -857,26 +855,26 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); validateImmediate(); }
   });
 
-  // Remove row
+  // delete
   row.querySelector('.trash').addEventListener('click', ()=>{
     row.remove();
     const btn = row.closest('.dayRow').querySelector('.addBtn');
     updateAddButtonState(slotsEl, btn);
   });
 
-  // Immediate double-book prevention
   function validateImmediate(){
     const sVal=startInp.value, eVal=endInp.value;
     if(!sVal || !eVal) return;
     let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
+    if(sMin===eMin) return;
+
     const overlaps = (a1,a2,b1,b2)=> (a1<b2 && b1<a2);
 
-    // same activity rows
+    // prevent overlaps within same activity/day (editor UI)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
     for(const rr of rows){
       const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
-      if(!Number.isFinite(s2) || !Number.isFinite(e2)) continue;
-      if(sMin===eMin || s2===e2) continue;
+      if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
       const r1 = eMin>sMin ? [sMin,eMin] : [sMin,24*60];
       const r2 = e2>s2 ? [s2,e2] : [s2,24*60];
       if(overlaps(r1[0], r1[1], r2[0], r2[1])){
@@ -884,38 +882,15 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
         startInp.value=''; endInp.value=''; return;
       }
     }
-
-    // against other activities' FIRM blocks (current visible Week/Month scope only)
-    const dayIdx = Number(row.closest('.dayRow').dataset.day||0);
-    const wkKeyNow = isoWeekKey(visibleWeekFirst);
-    const monKeyNow = monthKey(addDays(visibleWeekFirst, dayIdx));
-
-    for(const [otherKey, days] of Object.entries(EXACT)){
-      if(otherKey===sessionDraft?.key) continue;
-      for(const r of (days[dayIdx]||[])){
-        const okScope = (r.scope==='recurring') ||
-                        (r.scope==='week' && r.weekKey===wkKeyNow) ||
-                        (r.scope==='month'&& r.monthKey===monKeyNow);
-        if(!okScope) continue;
-        if((r.flexibility||'firm')!=='firm') continue;
-        const a1 = sMin, a2 = (eMin>sMin? eMin : 24*60);
-        const b1 = r.startMin, b2 = r.endMin;
-        if(a1<b2 && b1<a2){
-          alert('That time overlaps a Firm block. Edit that block first.');
-          startInp.value=''; endInp.value=''; return;
-        }
-      }
-    }
   }
   startInp.addEventListener('change', validateImmediate);
   endInp.addEventListener('change', validateImmediate);
 
   slotsEl.appendChild(row);
-  if(!preexisting) row.scrollIntoView({block:'nearest'});
   return row;
 }
 
-/* Save editor contents with scope keys, splits/merges, cap=6, firm/flexible rules */
+/* Save editor contents with scope keys and firm/flexible behavior */
 async function persistEditor(sessionDraft){
   const t = TASKS.find(x=>x.key===sessionDraft.key);
   t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
@@ -1105,14 +1080,14 @@ function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) ret
 /* ---------- Root render & INIT ---------- */
 async function init(){
   try{ hydrateState(await idbGet('state')); }catch(e){ console.warn('Load failed:', e); }
-  visibleWeekFirst = weekStart(new Date());   // reset to present
-  activeDayISO = toISO(new Date());           // reset to present
+  // Always reset visible views to the present to avoid user confusion on reload
+  visibleWeekFirst = weekStart(new Date());
+  activeDayISO = toISO(new Date());
   render();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
   window.addEventListener('beforeunload', ()=>{ saveAll(); });
 }
 function render(){
-  syncPanelWidthVar();
   if(activeView==='week') buildWeekView();
   else if(activeView==='day') buildDayView();
   else if(activeView==='month') buildMonthView();
