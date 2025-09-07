@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Chrono</title>
 
-<!-- PWA manifest + theme color -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
 
@@ -242,7 +241,7 @@
 
 <script>
 /* ---------------- Build ---------------- */
-console.info('Chrono build r16');
+console.info('Chrono build r17');
 
 /* ---------------- Core / State ---------------- */
 const screenEl = document.getElementById('screen');
@@ -302,9 +301,6 @@ let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
-
-/* Feature flag (documentary) */
-const SINGLE_RECORD_CROSS_MIDNIGHT = true;
 
 /* Sync editor width to screen */
 new ResizeObserver(()=> {
@@ -422,7 +418,7 @@ function buildWeekView(){
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid">
-          <div class="blocks" id="blocksLayer"></"></div>
+          <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
         </div>
@@ -537,48 +533,45 @@ function inScopeForDate(r, date){
   return false;
 }
 
-/* Build slots honoring scope + flexibility, including spillovers */
+/* ---------------- SLOTS (normalized cross-midnight with absolute end) ---------------- */
 function rebuildSlots(){
-  const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
+  // Reset grid
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+  const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
 
-  for(let d=0; d<7; d++){
-    const dateDay  = addDays(visibleWeekFirst, d);
-    const datePrev = addDays(visibleWeekFirst, (d+6)%7);
+  const clampFill = (dayIdx, startSlot, endSlot, key, isFirm) => {
+    const a = Math.max(0, Math.min(96, startSlot));
+    const b = Math.max(0, Math.min(96, endSlot));
+    for(let s=a; s<b; s++){
+      const existing = allSlots[dayIdx][s];
+      if(!existing){ allSlots[dayIdx][s] = key; continue; }
+      const existingFirm = isExistingFirmAtSlot(existing, dayIdx, s);
+      if(isFirm && !existingFirm) allSlots[dayIdx][s] = key;
+    }
+  };
 
-    for(const key of keys){
-      const dayRanges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
-      for(const r of dayRanges){
+  for(const key of keys){
+    for(let d=0; d<7; d++){
+      const dateDay = addDays(visibleWeekFirst, d);
+      const ranges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
+      for(const r of ranges){
         const isFirm = (r.flexibility||'firm')==='firm';
-        let a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
+        const startMin = (r.startMin|0);
+        const rawEnd   = (r.endMin|0);
+        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd); // normalize: next-day if end <= start
 
-        const fillSlot = (dayIdx, slotIdx)=>{
-          const existing = allSlots[dayIdx][slotIdx];
-          if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
-          const existingFirm = isExistingFirmAtSlot(existing, dayIdx, slotIdx);
-          if(isFirm && !existingFirm){ allSlots[dayIdx][slotIdx]=key; }
-        };
-
-        if (b > a){
-          for(let s=a; s<b; s++) fillSlot(d, s);
-        }else if (b < a){
-          for(let s=a; s<96; s++) fillSlot(d, s);
-          // next-day head occupancy comes from prev-day spill below
+        // Today portion
+        const todayStart = startMin;
+        const todayEnd   = Math.min(endAbs, 1440);
+        if(todayEnd > todayStart){
+          clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
         }
-      }
 
-      // prev-day spillovers
-      const prevRanges = (EXACT[key][(d+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
-      for(const r of prevRanges){
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const b=Math.round((r.endMin||0)/15);
-        const fillSlot = (dayIdx, slotIdx)=>{
-          const existing = allSlots[dayIdx][slotIdx];
-          if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
-          const existingFirm = isExistingFirmAtSlot(existing, dayIdx, slotIdx);
-          if(isFirm && !existingFirm){ allSlots[dayIdx][slotIdx]=key; }
-        };
-        for(let s=0; s<b; s++) fillSlot(d, s);
+        // Next-day portion
+        const spill = endAbs - 1440;
+        if(spill > 0 && d+1 <= 6){
+          clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
+        }
       }
     }
   }
@@ -591,22 +584,22 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
     if((r.flexibility||'firm')==='firm'){
-      const a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
-      if(b>a && slotIdx>=a && slotIdx<b) return true;
-      if(b<a && slotIdx>=a && slotIdx<96) return true;
+      const a=Math.floor((r.startMin|0)/15), b=Math.floor((r.endMin|0)/15);
+      if((r.endMin|0) > (r.startMin|0)){ if(slotIdx>=a && slotIdx<b) return true; }
+      else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
-  const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
+  const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin|0) < (r.startMin|0));
   for(const r of prev){
     if((r.flexibility||'firm')==='firm'){
-      const b=Math.round((r.endMin||0)/15);
+      const b=Math.floor((r.endMin|0)/15);
       if(slotIdx>=0 && slotIdx<b) return true;
     }
   }
   return false;
 }
 
-/* Paint week blocks — draw both halves from the same record (with clamps) */
+/* ---------------- Paint week (same normalization) ---------------- */
 function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const colors=COLORS();
@@ -615,15 +608,17 @@ function paintBlocksWeek(geom){
   for(const [key, days] of Object.entries(EXACT)){
     for(let d=0; d<7; d++){
       const dateDay  = addDays(visibleWeekFirst, d);
-
       for(const r of (days[d]||[]).filter(rr=>inScopeForDate(rr, dateDay))){
-        const a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
-        if (b > a){
-          drawFragment(d, a, Math.min(b,96), key);
-        }else if (b < a){
-          if (a < 96) drawFragment(d, a, 96, key);
-          const nextDay = d + 1;
-          if (nextDay <= 6 && b > 0) drawFragment(nextDay, 0, Math.min(b,96), key, /*isSpill*/true);
+        const startMin = (r.startMin|0);
+        const rawEnd   = (r.endMin|0);
+        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd);
+
+        const tStart = startMin, tEnd = Math.min(endAbs, 1440);
+        if (tEnd > tStart) drawFragment(d, Math.floor(tStart/15), Math.floor(tEnd/15), key);
+
+        const spill = endAbs - 1440;
+        if (spill > 0 && d+1 <= 6){
+          drawFragment(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
         }
       }
     }
@@ -715,7 +710,7 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------------- Task picker (centered, no scroll) ---------------- */
+/* ---------------- Task picker (centered, non-scroll) ---------------- */
 const overlay=document.getElementById('taskOverlay');
 
 function openTaskStack(){
@@ -859,7 +854,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
   const defaultStart = 12*60; // 12:00
-  const defaultEnd   = 0;     // 00:00 (next day marker when start > end)
+  const defaultEnd   = 0;     // 00:00 (interpreted as next-day when start > end)
 
   const row=document.createElement('div'); row.className='slot';
   if (!preexisting) row.dataset.pristine = '1';
@@ -901,7 +896,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
 
-  /* IMPORTANT: don't overwrite preexisting values with defaults */
+  // Do NOT override existing values with defaults
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
   if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
 
@@ -943,7 +938,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
     if(sMin===eMin) return;
 
-    // Avoid same-activity overlap within this owner day (cross-midnight second half is not owned here)
+    // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
     for(const rr of rows){
       const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
@@ -967,7 +962,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   return row;
 }
 
-/* Persist editor with single-record cross-midnight + conflict trimming */
+/* Persist editor with conflict checks & flexible trimming (storage unchanged) */
 async function persistEditor(sessionDraft){
   const key = sessionDraft.key;
   const t = TASKS.find(x=>x.key===key);
@@ -994,7 +989,6 @@ async function persistEditor(sessionDraft){
       const reminderOffsetMin = optToOffset(remindVal);
       const flexibility = row.querySelector('.flex').value || 'firm';
 
-      // Preserve 00:00 as next-day marker if start > end (do NOT coerce to 1440 here)
       const rec = { startMin: sMin, endMin: eMin, scope, flexibility };
       if(scope==='week')  rec.weekKey  = isoWeekKey(dayDate);
       if(scope==='month') rec.monthKey = monthKey(dayDate);
