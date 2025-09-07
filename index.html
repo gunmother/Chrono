@@ -709,11 +709,9 @@ const edColor=document.getElementById('edColor');
 function openEditor(task){
   overlay.style.display='none';
 
-  // Safely bind Save once
-  const edSave=document.getElementById('edSave');
-  const newSave = edSave.cloneNode(true);
-  edSave.parentNode.replaceChild(newSave, edSave);
+  // Save button: bind robustly (THIS IS THE FIX)
   const saveBtn = document.getElementById('edSave');
+  saveBtn.onclick = null; // clear any prior handler
 
   const t = TASKS.find(x=>x.key===task.key);
   const sessionDraft = {
@@ -731,13 +729,18 @@ function openEditor(task){
   buildEditorDays(sessionDraft);
   edOverlay.style.display='block';
 
-  saveBtn.addEventListener('click', async ()=>{
-    await persistEditor(sessionDraft);
-    edOverlay.style.display='none';
-    if(activeView==='week') repaintWeek();
-    if(activeView==='day') buildDayView();
-    await saveAll();
-  }, { once:true });
+  saveBtn.onclick = async () => {
+    try {
+      await persistEditor(sessionDraft);
+      edOverlay.style.display='none';
+      if(activeView==='week') repaintWeek();
+      if(activeView==='day')  buildDayView();
+      await saveAll();
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Save failed. See console for details.');
+    }
+  };
 }
 document.getElementById('edCancel').addEventListener('click', ()=>{
   const sure = confirm('Discard edits?');
@@ -870,7 +873,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
 
   function validateImmediate(){
     if (!PATCH_R10){
-      legacyValidate();
       return;
     }
     // Ignore until both fields set & row not pristine
@@ -898,7 +900,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }
     }
   }
-  function legacyValidate(){ /* no-op: was too aggressive; kept for flag completeness */ }
 
   startInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
   endInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
