@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Minimal Scheduler</title>
+<title>Chrono</title>
 
 <!-- PWA manifest + theme color -->
 <link rel="manifest" href="manifest.webmanifest">
@@ -23,7 +23,6 @@
     --panelW:520px;
     --slot-gap:8px;
     --icon-btn:36px;
-
     --row-min-h:36px;
   }
 
@@ -68,12 +67,7 @@
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
   .top-row.day{ grid-template-columns:1fr; padding:0 4px }
 
-  .day-pill{
-    justify-self:center;
-    border:none; padding:0 2px;
-    text-align:center; font-size:clamp(10px, 1.9vw, 12px);
-    background:transparent; color:#000; white-space:nowrap;
-  }
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
 
   .grid{
     position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
@@ -88,6 +82,7 @@
   .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
   .chev:disabled{ opacity:.5; cursor:not-allowed }
 
+  /* Month */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
   .month-dow span{ text-align:center }
@@ -96,6 +91,7 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
+  /* Task stack overlay */
   #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
   #taskOverlay .stack{
@@ -113,6 +109,7 @@
   .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
   .taskRow .dur{ font-variant-numeric:tabular-nums; }
 
+  /* Settings editor */
   #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
   #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
   .card{
@@ -245,7 +242,7 @@
 
 <script>
 /* ---------------- Build ---------------- */
-console.info('Chrono build r15 (draw both halves in one pass)');
+console.info('Chrono build r16');
 
 /* ---------------- Core / State ---------------- */
 const screenEl = document.getElementById('screen');
@@ -274,7 +271,6 @@ function isoWeekKey(date){
 }
 function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
 
-/* Safe deep copy for plain JSON data */
 function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
 
 /* Tasks */
@@ -307,7 +303,7 @@ const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
 
-/* Feature flag (internal) */
+/* Feature flag (documentary) */
 const SINGLE_RECORD_CROSS_MIDNIGHT = true;
 
 /* Sync editor width to screen */
@@ -322,10 +318,7 @@ const DB_VERSION = 6;
 let dbPromise = null;
 let STORAGE_MODE = 'idb'; // 'idb' | 'ls'
 
-function idbSupported(){
-  try { return !!(window.indexedDB); } catch { return false; }
-}
-
+function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
 function idbOpen(){
   if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
   if (dbPromise) return dbPromise;
@@ -342,11 +335,10 @@ function idbOpen(){
   });
   return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
 }
-
 async function storageSet(key, value){
   if (STORAGE_MODE==='ls'){
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-    catch(e){ throw new Error('localStorage write failed: '+e.message); }
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
   }
   const db = await idbOpen();
   if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
@@ -357,11 +349,9 @@ async function storageSet(key, value){
     tx.onerror = ()=>reject(tx.error);
   });
 }
-
 async function storageGet(key){
   if (STORAGE_MODE==='ls'){
-    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined; }
-    catch(e){ throw new Error('localStorage read failed: '+e.message); }
+    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
   }
   const db = await idbOpen();
   if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
@@ -432,7 +422,7 @@ function buildWeekView(){
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid">
-          <div class="blocks" id="blocksLayer"></div>
+          <div class="blocks" id="blocksLayer"></"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
         </div>
@@ -538,7 +528,7 @@ function buildMask(geom, cols){
   }
 }
 
-/* Scope helper */
+/* Scope filter */
 function inScopeForDate(r, date){
   const sc = r.scope || 'recurring';
   if (sc === 'recurring') return true;
@@ -547,7 +537,7 @@ function inScopeForDate(r, date){
   return false;
 }
 
-/* Build visible slots honoring scope + flexibility with cross-midnight spillovers */
+/* Build slots honoring scope + flexibility, including spillovers */
 function rebuildSlots(){
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
@@ -558,7 +548,6 @@ function rebuildSlots(){
 
     for(const key of keys){
       const dayRanges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
-      // Fill current day segments for this key
       for(const r of dayRanges){
         const isFirm = (r.flexibility||'firm')==='firm';
         let a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
@@ -574,15 +563,15 @@ function rebuildSlots(){
           for(let s=a; s<b; s++) fillSlot(d, s);
         }else if (b < a){
           for(let s=a; s<96; s++) fillSlot(d, s);
-          // Do not write next day here; occupancy for next day comes from prev spill pass below.
+          // next-day head occupancy comes from prev-day spill below
         }
       }
 
-      // prev-day spillovers for occupancy
+      // prev-day spillovers
       const prevRanges = (EXACT[key][(d+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
       for(const r of prevRanges){
         const isFirm = (r.flexibility||'firm')==='firm';
-        const b=Math.round((r.endMin||0)/15); // covers [0..b)
+        const b=Math.round((r.endMin||0)/15);
         const fillSlot = (dayIdx, slotIdx)=>{
           const existing = allSlots[dayIdx][slotIdx];
           if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
@@ -595,12 +584,10 @@ function rebuildSlots(){
   }
 }
 
-/* Determine if an existing key is firm at a given slot on dayIdx, considering spillovers */
 function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   const dateDay  = addDays(visibleWeekFirst, dayIdx);
   const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
 
-  // Owned-by-this-day
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
     if((r.flexibility||'firm')==='firm'){
@@ -609,7 +596,6 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
       if(b<a && slotIdx>=a && slotIdx<96) return true;
     }
   }
-  // Spill from previous day
   const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
   for(const r of prev){
     if((r.flexibility||'firm')==='firm'){
@@ -620,6 +606,7 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   return false;
 }
 
+/* Paint week blocks — draw both halves from the same record (with clamps) */
 function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const colors=COLORS();
@@ -629,24 +616,16 @@ function paintBlocksWeek(geom){
     for(let d=0; d<7; d++){
       const dateDay  = addDays(visibleWeekFirst, d);
 
-      // Owned-by-day fragments (draw both halves in one pass if cross-midnight)
       for(const r of (days[d]||[]).filter(rr=>inScopeForDate(rr, dateDay))){
         const a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
         if (b > a){
-          drawFragment(d, a, b, key);
+          drawFragment(d, a, Math.min(b,96), key);
         }else if (b < a){
-          // Today tail
-          drawFragment(d, a, 96, key);
-          // Next-day head (only if within current week columns)
-          const nextDay = d+1;
-          if(nextDay <= 6){
-            drawFragment(nextDay, 0, b, key, /*isSpill*/true);
-          }
+          if (a < 96) drawFragment(d, a, 96, key);
+          const nextDay = d + 1;
+          if (nextDay <= 6 && b > 0) drawFragment(nextDay, 0, Math.min(b,96), key, /*isSpill*/true);
         }
       }
-
-      // NOTE: We intentionally do NOT draw prev-day spillovers here anymore.
-      // Occupancy (conflict logic, totals) still accounts for prev-day spill in rebuildSlots().
     }
   }
 
@@ -736,7 +715,7 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------------- Task picker (fixed, centered, no scroll) ---------------- */
+/* ---------------- Task picker (centered, no scroll) ---------------- */
 const overlay=document.getElementById('taskOverlay');
 
 function openTaskStack(){
@@ -788,6 +767,12 @@ const edTitle=document.getElementById('edTitle');
 const edName=document.getElementById('edName');
 const edColor=document.getElementById('edColor');
 
+document.getElementById('edCancel').addEventListener('click', ()=>{
+  const sure = confirm('Discard edits?');
+  if(!sure) return;
+  edOverlay.style.display='none';
+});
+
 function openEditor(task){
   overlay.style.display='none';
 
@@ -823,11 +808,6 @@ function openEditor(task){
     }
   };
 }
-document.getElementById('edCancel').addEventListener('click', ()=>{
-  const sure = confirm('Discard edits?');
-  if(!sure) return;
-  edOverlay.style.display='none';
-});
 
 function buildEditorDays(sessionDraft){
   edBody.innerHTML='';
@@ -879,7 +859,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
   const defaultStart = 12*60; // 12:00
-  const defaultEnd   = 0;     // 00:00
+  const defaultEnd   = 0;     // 00:00 (next day marker when start > end)
 
   const row=document.createElement('div'); row.className='slot';
   if (!preexisting) row.dataset.pristine = '1';
@@ -921,8 +901,9 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
 
-  startInp.value = toHHMM(startMin==null ? defaultStart : startMin);
-  endInp.value   = toHHMM(endMin==null   ? defaultEnd   : endMin);
+  /* IMPORTANT: don't overwrite preexisting values with defaults */
+  if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
+  if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
 
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
@@ -962,13 +943,12 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
     if(sMin===eMin) return;
 
-    // Prevent same-activity overlap on the same day (start-owner day)
+    // Avoid same-activity overlap within this owner day (cross-midnight second half is not owned here)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
     for(const rr of rows){
       const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
       if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
 
-      // consider only the owner-day segment for overlap check here
       const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
       const b1=s2,   b2=(e2>s2)?e2:24*60;
 
@@ -987,14 +967,13 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   return row;
 }
 
-/* Transactional persist (single-record cross-midnight) + conflict handling */
+/* Persist editor with single-record cross-midnight + conflict trimming */
 async function persistEditor(sessionDraft){
   const key = sessionDraft.key;
   const t = TASKS.find(x=>x.key===key);
   t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
   t.color = document.getElementById('edColor').value || t.color;
 
-  // Build fresh week for this key (single records only; no next-day injection)
   const week = Array.from({length:7},()=>[]);
   edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
     const dayDate = addDays(visibleWeekFirst, d);
@@ -1008,14 +987,15 @@ async function persistEditor(sessionDraft){
 
       let sMin = round15(toMin(sVal));
       let eMin = round15(toMin(eVal));
-      if(sMin===eMin) continue;
+      if (sMin === eMin) continue;
 
       const scope = row.querySelector('.scope').value;
       const remindVal = row.querySelector('.remind').value;
       const reminderOffsetMin = optToOffset(remindVal);
       const flexibility = row.querySelector('.flex').value || 'firm';
 
-      const rec = { startMin:sMin, endMin:eMin, scope, flexibility };
+      // Preserve 00:00 as next-day marker if start > end (do NOT coerce to 1440 here)
+      const rec = { startMin: sMin, endMin: eMin, scope, flexibility };
       if(scope==='week')  rec.weekKey  = isoWeekKey(dayDate);
       if(scope==='month') rec.monthKey = monthKey(dayDate);
       if(reminderOffsetMin!=null) rec.reminderOffsetMin = reminderOffsetMin;
@@ -1023,7 +1003,7 @@ async function persistEditor(sessionDraft){
       tmp.push(rec);
     }
 
-    // merge adjacent same-meta ranges within owner day (only for same-day; cross-midnight remains as is)
+    // Merge adjacent same-meta same-day segments (not cross-midnight)
     tmp.sort((A,B)=>A.startMin-B.startMin);
     const merged=[];
     for(const r of tmp){
@@ -1041,18 +1021,15 @@ async function persistEditor(sessionDraft){
     week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
   });
 
-  // Prepare next state
   const nextEXACT = deepCopy(EXACT);
   nextEXACT[key] = week;
 
-  // Conflict validation & trimming remain unchanged from r13
-  function effectiveSegmentsForDay(dayIdx, includeKey=null){
+  // Firm-to-firm conflict detection (includes spillovers)
+  function effectiveSegmentsForDay(dayIdx){
     const dateDay  = addDays(visibleWeekFirst, dayIdx);
     const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
     const segs = [];
     for(const [k, days] of Object.entries(nextEXACT)){
-      if(includeKey && includeKey!==k) continue;
-
       for(const r of (days[dayIdx]||[])){
         if(!inScopeForDate(r, dateDay)) continue;
         const isFirm = (r.flexibility||'firm')==='firm';
@@ -1083,11 +1060,12 @@ async function persistEditor(sessionDraft){
     }
   }
 
+  // Trim flexible against firm (both owned-day and spillovers)
   function trimDay(dayIdx){
     const firmSegs = effectiveSegmentsForDay(dayIdx).filter(s=>s.firm);
     if(!firmSegs.length) return;
     for(const [otherKey, days] of Object.entries(nextEXACT)){
-      let arr = days[dayIdx]||[];
+      const arr = days[dayIdx]||[];
       const out=[];
       for(const r of arr){
         const isFirm = (r.flexibility||'firm')==='firm'; if(isFirm){ out.push(r); continue; }
@@ -1137,7 +1115,7 @@ function parseSpokenRange(s){
 }
 
 /* Small utils */
-function toHHMM(min){ const h=Math.floor((min%1440)/60), m=(min%60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
 function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
