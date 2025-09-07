@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Minimal Scheduler</title>
 
-<!-- PWA manifest + theme color (added here) -->
+<!-- PWA manifest + theme color -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
 
 <style>
   :root{
-    --r-lg:12px;
+    --r-lg:12px; --r-pill:999px;
     --border:#bdbdbd; --grid-line:#e1e1e1;
     --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
 
@@ -24,7 +24,6 @@
     --slot-gap:8px;
     --icon-btn:36px;
 
-    /* Items stack sizing */
     --row-min-h:36px;
   }
 
@@ -39,7 +38,6 @@
     display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
   }
 
-  /* Center screen */
   #screen{
     border:1px solid var(--border);
     border-radius:var(--r-lg);
@@ -47,7 +45,6 @@
     position:relative; overflow:hidden; min-height:420px;
   }
 
-  /* Four buttons */
   .controls{ display:flex; justify-content:space-between; align-items:center; }
   .btn{
     width:var(--btn); height:var(--btn); border-radius:50%;
@@ -59,7 +56,6 @@
   .icon{ width:60%; height:60% }
   .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
 
-  /* Shared scaffold */
   .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
@@ -72,7 +68,6 @@
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
   .top-row.day{ grid-template-columns:1fr; padding:0 4px }
 
-  /* Weekday labels: centered, unboxed */
   .day-pill{
     justify-self:center;
     border:none; padding:0 2px;
@@ -90,11 +85,9 @@
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
   .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none }
 
-  /* Week chevrons */
   .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
   .chev:disabled{ opacity:.5; cursor:not-allowed }
 
-  /* Month view */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
   .month-dow span{ text-align:center }
@@ -103,7 +96,6 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Task overlay – NON-SCROLLING, opaque items, centered over week grid */
   #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
   #taskOverlay .stack{
@@ -121,7 +113,6 @@
   .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
   .taskRow .dur{ font-variant-numeric:tabular-nums; }
 
-  /* Settings editor */
   #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
   #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
   .card{
@@ -139,7 +130,6 @@
     border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
   .slots{ display:grid; gap:10px; min-width:0 }
 
-  /* Slot rows: first line times+icons; second line = 3 equal selects (compact) */
   .slot{
     display:grid; gap: var(--slot-gap);
     grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
@@ -160,7 +150,6 @@
     gap:6px;
     align-items:center;
   }
-
   .select{
     -webkit-appearance:none; appearance:none;
     padding:6px 8px;
@@ -255,7 +244,11 @@
   </div>
 
 <script>
-/* ---------- Helpers / State ---------- */
+/* ---------------- Core / State ---------------- */
+const PATCH_R10 = true; // feature flag for this patch
+
+console.info('Chrono build r10');
+
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
@@ -273,8 +266,6 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function round15(min){ return Math.round(min/15)*15; }
-
-/* ISO keys */
 function isoWeekKey(date){
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
@@ -284,7 +275,7 @@ function isoWeekKey(date){
 }
 function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
 
-/* Categories (16 items) */
+/* Tasks */
 let TASKS = [
   {key:'work',      label:'Work',        color:'#d33c36', hard:false},
   {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
@@ -315,14 +306,13 @@ const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
 
 /* Sync editor width to screen */
-function syncPanelWidthVar(){
+const screenElRectObserver = new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-}
-new ResizeObserver(syncPanelWidthVar).observe(screenEl);
-syncPanelWidthVar();
+});
+screenElRectObserver.observe(screenEl);
 
-/* ---------- PERSISTENCE (IndexedDB) ---------- */
+/* ---------------- Persistence (IndexedDB) ---------------- */
 const DB_NAME = 'chronoDB';
 const DB_VERSION = 5;
 let dbPromise = null;
@@ -385,11 +375,11 @@ function hydrateState(snap){
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
-async function saveAll(){ try{ await idbSet('state', snapshotState()); }catch(e){ console.warn('Save failed:', e); } }
+async function saveAll(){ try{ await idbSet('lastGood', snapshotState()); await idbSet('state', snapshotState()); }catch(e){ console.warn('Save failed:', e); } }
 let saveTimer=null;
 function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(saveAll, ms); }
 
-/* ---------- Button toggles ---------- */
+/* ---------------- Controls ---------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
   const v=b.dataset.view;
@@ -401,7 +391,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View ---------- */
+/* ---------------- Week View ---------------- */
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -520,7 +510,7 @@ function buildMask(geom, cols){
   }
 }
 
-/* Build visible slots honoring scope + flexibility */
+/* Build visible slots honoring scope + flexibility (unchanged except logic order) */
 function rebuildSlots(){
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
   const wkKey = isoWeekKey(visibleWeekFirst);
@@ -546,7 +536,6 @@ function rebuildSlots(){
         const fillSlot = (dayIdx, slotIdx)=>{
           const existing = allSlots[dayIdx][slotIdx];
           if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
-          // Firm beats Flexible
           const existingRanges = EXACT[existing][dayIdx]||[];
           const exr = existingRanges.find(rr=>{
             const exA=Math.round(rr.startMin/15), exB=Math.round(rr.endMin/15);
@@ -613,7 +602,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (blank) ---------- */
+/* ---------------- Day View (blank) ---------------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -625,9 +614,9 @@ function buildDayView(){
   `;
 }
 
-/* ---------- Month View ---------- */
+/* ---------------- Month View ---------------- */
 function buildMonthView(){
-  const base = new Date(); /* always reset to current month */
+  const base = new Date(); /* reset to current month on entry */
   activeDayISO = toISO(base);
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -665,21 +654,20 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------- Task picker (non-scrolling, fully visible) ---------- */
+/* ---------------- Task picker (non-scrolling, centered) ---------------- */
 const overlay=document.getElementById('taskOverlay');
 
 function openTaskStack(){
   overlay.innerHTML='';
   const stack=document.createElement('div'); stack.className='stack';
 
-  // Fit exactly between grid top & bottom, centered; no scroll, no cropping.
   const grid = document.getElementById('weekGrid');
   const r = grid.getBoundingClientRect();
 
   const N = 16;          // items
   const G = 8;           // CSS gap
   const margin = 6;      // breathing room top/bottom
-  const avail = Math.max(120, r.height - margin*2);     // ensure positive
+  const avail = Math.max(120, r.height - margin*2);
   const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
   const used = N*rowH + (N-1)*G;
   const topPad = Math.max(margin, Math.floor((r.height - used)/2));
@@ -711,7 +699,7 @@ function weeklyTotals(){
 }
 function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
 
-/* ---------- Settings editor ---------- */
+/* ---------------- Editor ---------------- */
 const edOverlay=document.getElementById('settingsOverlay');
 const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
@@ -720,6 +708,13 @@ const edColor=document.getElementById('edColor');
 
 function openEditor(task){
   overlay.style.display='none';
+
+  // Safely bind Save once
+  const edSave=document.getElementById('edSave');
+  const newSave = edSave.cloneNode(true);
+  edSave.parentNode.replaceChild(newSave, edSave);
+  const saveBtn = document.getElementById('edSave');
+
   const t = TASKS.find(x=>x.key===task.key);
   const sessionDraft = {
     key: t.key, label: t.label, color: toHex(t.color),
@@ -736,16 +731,13 @@ function openEditor(task){
   buildEditorDays(sessionDraft);
   edOverlay.style.display='block';
 
-  const edSave=document.getElementById('edSave');
-  const onSave = async ()=>{
+  saveBtn.addEventListener('click', async ()=>{
     await persistEditor(sessionDraft);
     edOverlay.style.display='none';
     if(activeView==='week') repaintWeek();
     if(activeView==='day') buildDayView();
     await saveAll();
-    edSave.removeEventListener('click', onSave);
-  };
-  edSave.addEventListener('click', onSave, { once:false });
+  }, { once:true });
 }
 document.getElementById('edCancel').addEventListener('click', ()=>{
   const sure = confirm('Discard edits?');
@@ -792,7 +784,7 @@ function updateAddButtonState(slotsEl, btnEl){
   btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
 }
 
-/* Add slot row: defaults noon->midnight; has mic/trash; selects compact & equal width */
+/* ---- PATCH_R10: safer addSlotRow with pristine rows & defaults ---- */
 function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
@@ -800,6 +792,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const defaultEnd   = 0;     // 00:00
 
   const row=document.createElement('div'); row.className='slot';
+  if (PATCH_R10 && !preexisting) row.dataset.pristine = '1';
 
   const scopeVal  = existingMeta?.scope || 'recurring';
   const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
@@ -837,6 +830,8 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
 
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
+
+  // Defaults: noon → midnight (do not trigger warnings)
   startInp.value = toHHMM(startMin==null ? defaultStart : startMin);
   endInp.value   = toHHMM(endMin==null   ? defaultEnd   : endMin);
 
@@ -857,7 +852,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }catch{ text = prompt(sample) || ''; }
     }else{ text = prompt(sample) || ''; }
     const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); validateImmediate(); }
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); if(PATCH_R10){ row.dataset.pristine='0'; validateImmediate(); } }
   });
 
   // delete
@@ -867,46 +862,74 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     updateAddButtonState(slotsEl, btn);
   });
 
+  function isRowComplete(r){
+    const s=r.querySelector('.start').value;
+    const e=r.querySelector('.end').value;
+    return !!(s && e);
+  }
+
   function validateImmediate(){
+    if (!PATCH_R10){
+      legacyValidate();
+      return;
+    }
+    // Ignore until both fields set & row not pristine
+    if (row.dataset.pristine==='1' || !isRowComplete(row)) return;
+
     const sVal=startInp.value, eVal=endInp.value;
-    if(!sVal || !eVal) return;
     let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
     if(sMin===eMin) return;
 
-    const overlaps = (a1,a2,b1,b2)=> (a1<b2 && b1<a2);
-
-    // prevent overlaps within same activity/day (editor UI)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
+
+    // Compare only to non-pristine other rows
     for(const rr of rows){
+      if (rr.dataset.pristine==='1' && !preexisting) continue;
       const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
       if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
-      const r1 = eMin>sMin ? [sMin,eMin] : [sMin,24*60];
-      const r2 = e2>s2 ? [s2,e2] : [s2,24*60];
-      if(overlaps(r1[0], r1[1], r2[0], r2[1])){
+
+      const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
+      const b1=s2,   b2=(e2>s2)?e2:24*60;
+
+      if (a1 < b2 && b1 < a2){
         alert('Double booking not allowed for the same activity on this day.');
-        startInp.value=''; endInp.value=''; return;
+        startInp.value=''; endInp.value=''; row.dataset.pristine='1';
+        return;
       }
     }
   }
-  startInp.addEventListener('change', validateImmediate);
-  endInp.addEventListener('change', validateImmediate);
+  function legacyValidate(){ /* no-op: was too aggressive; kept for flag completeness */ }
+
+  startInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
+  endInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
 
   slotsEl.appendChild(row);
   return row;
 }
 
-/* Save editor contents with scope keys and firm/flexible behavior */
+/* ---- PATCH_R10: transactional persist with correct overnight keys ---- */
 async function persistEditor(sessionDraft){
-  const t = TASKS.find(x=>x.key===sessionDraft.key);
+  // Build next state transactionally
+  const nextEXACT = structuredClone(EXACT);
+  const key = sessionDraft.key;
+
+  // Update task label/color by immutable key
+  const t = TASKS.find(x=>x.key===key);
   t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
   t.color = document.getElementById('edColor').value || t.color;
 
   const week = Array.from({length:7},()=>[]);
   const wkKeyNow = isoWeekKey(visibleWeekFirst);
 
+  const deriveKeys = (scope, date)=>{
+    if(scope==='week')  return { scope:'week',  weekKey: isoWeekKey(date) };
+    if(scope==='month') return { scope:'month', monthKey: monthKey(date) };
+    return { scope:'recurring' };
+  };
+
+  // Collect rows from UI → compose ranges (with proper split + keys)
   edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
     const dayDate = addDays(visibleWeekFirst, d);
-    const monKeyNow = monthKey(dayDate);
     const rows=[...wrap.querySelectorAll('.slot')];
 
     const pushed = [];
@@ -925,27 +948,25 @@ async function persistEditor(sessionDraft){
       const reminderOffsetMin = optToOffset(remindVal);
       const flexibility = row.querySelector('.flex').value || 'firm';
 
-      const meta = { scope, flexibility };
-      if(scope==='week')  meta.weekKey  = wkKeyNow;
-      if(scope==='month') meta.monthKey = monKeyNow;
-      if(reminderOffsetMin!=null) meta.reminderOffsetMin = reminderOffsetMin;
+      const metaToday = { ...deriveKeys(scope, dayDate), flexibility };
+      if(reminderOffsetMin!=null) metaToday.reminderOffsetMin = reminderOffsetMin;
 
       if(eMin > sMin){
-        pushed.push({startMin:sMin, endMin:eMin, ...meta});
+        pushed.push({startMin:sMin, endMin:eMin, ...metaToday});
       }else{
-        // overnight split
-        pushed.push({startMin:sMin, endMin:24*60, ...meta});
+        // split today until midnight
+        pushed.push({startMin:sMin, endMin:24*60, ...metaToday});
+        // next day segment: derive keys from next day's actual date
         const dn=(d+1)%7;
-        const nextMeta = {...meta};
-        if(scope==='month'){
-          const nextDate = addDays(visibleWeekFirst, dn);
-          nextMeta.monthKey = monthKey(nextDate);
-        }
-        week[dn].push({startMin:0, endMin:eMin, ...nextMeta});
+        const nextDate = addDays(visibleWeekFirst, dn);
+        const metaNext = { ...deriveKeys(scope, nextDate), flexibility };
+        if(reminderOffsetMin!=null) metaNext.reminderOffsetMin = reminderOffsetMin;
+        if(!week[dn]) week[dn]=[];
+        week[dn].push({startMin:0, endMin:eMin, ...metaNext});
       }
     }
 
-    // Merge contiguous with identical metadata
+    // Merge contiguous identical-meta segments (cap at 6)
     pushed.sort((A,B)=>A.startMin-B.startMin);
     const merged=[];
     for(const r of pushed){
@@ -957,98 +978,61 @@ async function persistEditor(sessionDraft){
     week[d]=(merged.slice(0,MAX_RANGES_PER_DAY));
   });
 
-  // Cross-activity firm/flexible policy
-  for(let day=0; day<7; day++){
-    const newRanges = week[day];
-
-    // Flexible ranges cannot overlap existing firm ranges from other tasks
-    const filtered=[];
-    for(const r of newRanges){
-      const pieces = subtractFirmOverlapsFromRange(day, r, sessionDraft.key);
-      filtered.push(...pieces);
+  // Respect firm blocks across tasks (apply after composition, not during typing)
+  function trimFlexibleByFirms(ranges, firmRanges){
+    const out=[];
+    for(const r of ranges){
+      if((r.flexibility||'firm')==='firm'){ out.push(r); continue; }
+      let pieces=[{...r}];
+      for(const f of firmRanges){
+        const next=[];
+        for(const p of pieces){
+          const A=p.startMin, B=p.endMin, C=f.startMin, D=f.endMin;
+          if(B<=C || D<=A){ next.push(p); continue; }
+          if(C<=A && B<=D){ /* drop */ }
+          else if(A<C && D<B){ next.push({...p, endMin:C}); next.push({...p, startMin:D}); }
+          else if(A<C && C<B && B<=D){ next.push({...p, endMin:C}); }
+          else if(C<=A && A<D && D<B){ next.push({...p, startMin:D}); }
+        }
+        pieces = next;
+        if(!pieces.length) break;
+      }
+      out.push(...pieces);
     }
-    week[day]=filtered;
+    out.sort((A,B)=>A.startMin-B.startMin);
+    const merged=[];
+    for(const r of out){
+      if(!merged.length){ merged.push({...r}); continue; }
+      const L=merged[merged.length-1];
+      if(r.startMin<=L.endMin && sameMeta(L,r)){ L.endMin=Math.max(L.endMin,r.endMin); }
+      else merged.push({...r});
+    }
+    return merged.slice(0, MAX_RANGES_PER_DAY);
+  }
 
-    // Our new firm ranges trim other tasks' flexible ranges
-    const firmRanges = filtered.filter(x=> (x.flexibility||'firm')==='firm');
+  // Write into the transactional copy
+  nextEXACT[key] = week;
+
+  // For each day, trim other tasks' flexible blocks against our new firms
+  for(let day=0; day<7; day++){
+    const firmRanges = (week[day]||[]).filter(x=> (x.flexibility||'firm')==='firm');
+
     if(firmRanges.length){
-      for(const [otherKey, days] of Object.entries(EXACT)){
-        if(otherKey===sessionDraft.key) continue;
+      for(const [otherKey, days] of Object.entries(nextEXACT)){
+        if(otherKey===key) continue;
         const old = days[day]||[];
         const trimmed = trimFlexibleByFirms(old, firmRanges);
-        EXACT[otherKey][day]=trimmed;
+        nextEXACT[otherKey][day]=trimmed;
       }
     }
   }
 
-  EXACT[t.key] = week;
-  ORDER.recurring[t.key] = ORDER.recurring[t.key] || (SAVE_SEQ++);
+  // Commit atomically
+  EXACT = nextEXACT;
+  ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
   saveSoon(200);
 }
 
-/* helpers for firm/flexible interactions */
-function subtractFirmOverlapsFromRange(dayIdx, range, taskKey){
-  const wkKeyNow = isoWeekKey(visibleWeekFirst);
-  const monKeyNow = monthKey(addDays(visibleWeekFirst, dayIdx));
-  const isFlexible = (range.flexibility||'firm')==='flexible';
-  if(!isFlexible) return [range];
-
-  let pieces = [ {...range} ];
-  for(const [otherKey, days] of Object.entries(EXACT)){
-    if(otherKey===taskKey) continue;
-    for(const r of (days[dayIdx]||[])){
-      const okScope = (r.scope==='recurring') ||
-                      (r.scope==='week' && r.weekKey===wkKeyNow) ||
-                      (r.scope==='month'&& r.monthKey===monKeyNow);
-      if(!okScope) continue;
-      if((r.flexibility||'firm')!=='firm') continue;
-
-      const nextPieces=[];
-      for(const p of pieces){
-        const A=p.startMin, B=p.endMin, C=r.startMin, D=r.endMin;
-        if(B<=C || D<=A){ nextPieces.push(p); continue; }
-        if(C<=A && B<=D){ /* drop */ }
-        else if(A<C && D<B){ nextPieces.push({...p, endMin:C}); nextPieces.push({...p, startMin:D}); }
-        else if(A<C && C<B && B<=D){ nextPieces.push({...p, endMin:C}); }
-        else if(C<=A && A<D && D<B){ nextPieces.push({...p, startMin:D}); }
-      }
-      pieces = nextPieces;
-      if(!pieces.length) break;
-    }
-    if(!pieces.length) break;
-  }
-  return pieces;
-}
-function trimFlexibleByFirms(ranges, firmRanges){
-  const out=[];
-  for(const r of ranges){
-    if((r.flexibility||'firm')==='firm'){ out.push(r); continue; }
-    let pieces=[{...r}];
-    for(const f of firmRanges){
-      const next=[];
-      for(const p of pieces){
-        const A=p.startMin, B=p.endMin, C=f.startMin, D=f.endMin;
-        if(B<=C || D<=A){ next.push(p); continue; }
-        if(C<=A && B<=D){ /* drop */ }
-        else if(A<C && D<B){ next.push({...p, endMin:C}); next.push({...p, startMin:D}); }
-        else if(A<C && C<B && B<=D){ next.push({...p, endMin:C}); }
-        else if(C<=A && A<D && D<B){ next.push({...p, startMin:D}); }
-      }
-      pieces = next;
-      if(!pieces.length) break;
-    }
-    out.push(...pieces);
-  }
-  out.sort((A,B)=>A.startMin-B.startMin);
-  const merged=[];
-  for(const r of out){
-    if(!merged.length){ merged.push({...r}); continue; }
-    const L=merged[merged.length-1];
-    if(r.startMin<=L.endMin && sameMeta(L,r)){ L.endMin=Math.max(L.endMin,r.endMin); }
-    else merged.push({...r});
-  }
-  return merged.slice(0, MAX_RANGES_PER_DAY);
-}
 function sameMeta(a,b){
   return a.scope===b.scope && a.weekKey===b.weekKey && a.monthKey===b.monthKey &&
          (a.reminderOffsetMin??null)===(b.reminderOffsetMin??null) &&
@@ -1077,15 +1061,14 @@ function optToOffset(val){
 }
 
 /* Small utils */
-function toHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function toHHMM(min){ const h=Math.floor((min%1440)/60), m=(min%60); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
 function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
-/* ---------- Root render & INIT ---------- */
+/* ---------------- Init & Render ---------------- */
 async function init(){
   try{ hydrateState(await idbGet('state')); }catch(e){ console.warn('Load failed:', e); }
-  // Always reset visible views to the present to avoid user confusion on reload
   visibleWeekFirst = weekStart(new Date());
   activeDayISO = toISO(new Date());
   render();
@@ -1101,7 +1084,7 @@ function render(){
 init();
 </script>
 
-<!-- Service worker registration (added here) -->
+<!-- Service worker registration -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
