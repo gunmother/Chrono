@@ -168,6 +168,11 @@
 
   .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
   .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
+
+  /* Tiny diagnostics banner */
+  #diag{position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;
+        background:#fff3cd;border:1px solid #ffe08a;color:#6b5500;
+        padding:8px 10px;border-radius:10px;font-size:13px;display:none}
 </style>
 </head>
 <body>
@@ -243,12 +248,23 @@
     </div>
   </div>
 
+  <!-- Diagnostics banner -->
+  <div id="diag" role="status" aria-live="polite"></div>
+
 <script>
+/* ---------------- Build / Banner ---------------- */
+console.info('Chrono build r11');
+
+/* ---------------- Diagnostics helper ---------------- */
+function showDiag(msg){
+  const el = document.getElementById('diag');
+  el.textContent = String(msg);
+  el.style.display = 'block';
+  clearTimeout(showDiag._t);
+  showDiag._t = setTimeout(()=>{ el.style.display='none'; }, 6000);
+}
+
 /* ---------------- Core / State ---------------- */
-const PATCH_R10 = true; // feature flag for this patch
-
-console.info('Chrono build r10');
-
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
@@ -274,6 +290,9 @@ function isoWeekKey(date){
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
 }
 function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
+
+/* Safe deep copy for plain JSON data */
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
 
 /* Tasks */
 let TASKS = [
@@ -306,18 +325,23 @@ const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
 
 /* Sync editor width to screen */
-const screenElRectObserver = new ResizeObserver(()=> {
+new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-});
-screenElRectObserver.observe(screenEl);
+}).observe(screenEl);
 
-/* ---------------- Persistence (IndexedDB) ---------------- */
+/* ---------------- Storage: IndexedDB with localStorage fallback ---------------- */
 const DB_NAME = 'chronoDB';
 const DB_VERSION = 5;
 let dbPromise = null;
+let STORAGE_MODE = 'idb'; // 'idb' | 'ls'
+
+function idbSupported(){
+  try { return !!(window.indexedDB); } catch { return false; }
+}
 
 function idbOpen(){
+  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -330,10 +354,16 @@ function idbOpen(){
     req.onsuccess = ()=>resolve(req.result);
     req.onerror = ()=>reject(req.error);
   });
-  return dbPromise;
+  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; showDiag('Storage fell back to local storage.'); return null; });
 }
-async function idbSet(key, value){
+
+async function storageSet(key, value){
+  if (STORAGE_MODE==='ls'){
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch(e){ throw new Error('localStorage write failed: '+e.message); }
+  }
   const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
   return new Promise((resolve, reject)=>{
     const tx = db.transaction('kv','readwrite');
     tx.objectStore('kv').put({k:key, v:value});
@@ -341,8 +371,14 @@ async function idbSet(key, value){
     tx.onerror = ()=>reject(tx.error);
   });
 }
-async function idbGet(key){
+
+async function storageGet(key){
+  if (STORAGE_MODE==='ls'){
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined; }
+    catch(e){ throw new Error('localStorage read failed: '+e.message); }
+  }
   const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
   return new Promise((resolve, reject)=>{
     const tx = db.transaction('kv','readonly');
     const req = tx.objectStore('kv').get(key);
@@ -350,6 +386,7 @@ async function idbGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
+
 function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
 function hydrateState(snap){
   try{
@@ -375,9 +412,14 @@ function hydrateState(snap){
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
-async function saveAll(){ try{ await idbSet('lastGood', snapshotState()); await idbSet('state', snapshotState()); }catch(e){ console.warn('Save failed:', e); } }
+
+async function saveAll(){
+  const snap = snapshotState();
+  await storageSet('lastGood', snap);
+  await storageSet('state', snap);
+}
 let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(saveAll, ms); }
+function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>showDiag('Save error: '+e.message)); }, ms); }
 
 /* ---------------- Controls ---------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -510,7 +552,7 @@ function buildMask(geom, cols){
   }
 }
 
-/* Build visible slots honoring scope + flexibility (unchanged except logic order) */
+/* Build visible slots honoring scope + flexibility */
 function rebuildSlots(){
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
   const wkKey = isoWeekKey(visibleWeekFirst);
@@ -709,9 +751,9 @@ const edColor=document.getElementById('edColor');
 function openEditor(task){
   overlay.style.display='none';
 
-  // Save button: bind robustly (THIS IS THE FIX)
+  // robust Save binding
   const saveBtn = document.getElementById('edSave');
-  saveBtn.onclick = null; // clear any prior handler
+  saveBtn.onclick = null;
 
   const t = TASKS.find(x=>x.key===task.key);
   const sessionDraft = {
@@ -736,9 +778,10 @@ function openEditor(task){
       if(activeView==='week') repaintWeek();
       if(activeView==='day')  buildDayView();
       await saveAll();
+      showDiag('Saved ✔︎');
     } catch (err) {
       console.error('Save failed:', err);
-      alert('Save failed. See console for details.');
+      showDiag('Save failed: ' + (err && err.message ? err.message : String(err)));
     }
   };
 }
@@ -787,7 +830,6 @@ function updateAddButtonState(slotsEl, btnEl){
   btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
 }
 
-/* ---- PATCH_R10: safer addSlotRow with pristine rows & defaults ---- */
 function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
@@ -795,7 +837,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const defaultEnd   = 0;     // 00:00
 
   const row=document.createElement('div'); row.className='slot';
-  if (PATCH_R10 && !preexisting) row.dataset.pristine = '1';
+  if (!preexisting) row.dataset.pristine = '1';
 
   const scopeVal  = existingMeta?.scope || 'recurring';
   const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
@@ -834,11 +876,9 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
 
-  // Defaults: noon → midnight (do not trigger warnings)
   startInp.value = toHHMM(startMin==null ? defaultStart : startMin);
   endInp.value   = toHHMM(endMin==null   ? defaultEnd   : endMin);
 
-  // mic
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
     let text = '';
@@ -855,10 +895,9 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }catch{ text = prompt(sample) || ''; }
     }else{ text = prompt(sample) || ''; }
     const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); if(PATCH_R10){ row.dataset.pristine='0'; validateImmediate(); } }
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); }
   });
 
-  // delete
   row.querySelector('.trash').addEventListener('click', ()=>{
     row.remove();
     const btn = row.closest('.dayRow').querySelector('.addBtn');
@@ -872,10 +911,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   }
 
   function validateImmediate(){
-    if (!PATCH_R10){
-      return;
-    }
-    // Ignore until both fields set & row not pristine
     if (row.dataset.pristine==='1' || !isRowComplete(row)) return;
 
     const sVal=startInp.value, eVal=endInp.value;
@@ -884,7 +919,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
 
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
 
-    // Compare only to non-pristine other rows
     for(const rr of rows){
       if (rr.dataset.pristine==='1' && !preexisting) continue;
       const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
@@ -901,26 +935,25 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     }
   }
 
-  startInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
-  endInp.addEventListener('change', ()=>{ if(PATCH_R10) row.dataset.pristine='0'; validateImmediate(); });
+  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
+  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
 
   slotsEl.appendChild(row);
   return row;
 }
 
-/* ---- PATCH_R10: transactional persist with correct overnight keys ---- */
+/* Transactional persist with deepCopy and firm/flexible trimming */
 async function persistEditor(sessionDraft){
   // Build next state transactionally
-  const nextEXACT = structuredClone(EXACT);
+  const nextEXACT = deepCopy(EXACT);
   const key = sessionDraft.key;
 
-  // Update task label/color by immutable key
+  // Update task label/color
   const t = TASKS.find(x=>x.key===key);
   t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
   t.color = document.getElementById('edColor').value || t.color;
 
   const week = Array.from({length:7},()=>[]);
-  const wkKeyNow = isoWeekKey(visibleWeekFirst);
 
   const deriveKeys = (scope, date)=>{
     if(scope==='week')  return { scope:'week',  weekKey: isoWeekKey(date) };
@@ -928,7 +961,6 @@ async function persistEditor(sessionDraft){
     return { scope:'recurring' };
   };
 
-  // Collect rows from UI → compose ranges (with proper split + keys)
   edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
     const dayDate = addDays(visibleWeekFirst, d);
     const rows=[...wrap.querySelectorAll('.slot')];
@@ -955,9 +987,7 @@ async function persistEditor(sessionDraft){
       if(eMin > sMin){
         pushed.push({startMin:sMin, endMin:eMin, ...metaToday});
       }else{
-        // split today until midnight
         pushed.push({startMin:sMin, endMin:24*60, ...metaToday});
-        // next day segment: derive keys from next day's actual date
         const dn=(d+1)%7;
         const nextDate = addDays(visibleWeekFirst, dn);
         const metaNext = { ...deriveKeys(scope, nextDate), flexibility };
@@ -967,7 +997,6 @@ async function persistEditor(sessionDraft){
       }
     }
 
-    // Merge contiguous identical-meta segments (cap at 6)
     pushed.sort((A,B)=>A.startMin-B.startMin);
     const merged=[];
     for(const r of pushed){
@@ -979,7 +1008,6 @@ async function persistEditor(sessionDraft){
     week[d]=(merged.slice(0,MAX_RANGES_PER_DAY));
   });
 
-  // Respect firm blocks across tasks (apply after composition, not during typing)
   function trimFlexibleByFirms(ranges, firmRanges){
     const out=[];
     for(const r of ranges){
@@ -1011,13 +1039,10 @@ async function persistEditor(sessionDraft){
     return merged.slice(0, MAX_RANGES_PER_DAY);
   }
 
-  // Write into the transactional copy
   nextEXACT[key] = week;
 
-  // For each day, trim other tasks' flexible blocks against our new firms
   for(let day=0; day<7; day++){
     const firmRanges = (week[day]||[]).filter(x=> (x.flexibility||'firm')==='firm');
-
     if(firmRanges.length){
       for(const [otherKey, days] of Object.entries(nextEXACT)){
         if(otherKey===key) continue;
@@ -1029,7 +1054,9 @@ async function persistEditor(sessionDraft){
   }
 
   // Commit atomically
-  EXACT = nextEXACT;
+  for(let i=0;i<7;i++){
+    EXACT[key][i] = nextEXACT[key][i];
+  }
   ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
   saveSoon(200);
 }
@@ -1069,12 +1096,12 @@ function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) ret
 
 /* ---------------- Init & Render ---------------- */
 async function init(){
-  try{ hydrateState(await idbGet('state')); }catch(e){ console.warn('Load failed:', e); }
+  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
   visibleWeekFirst = weekStart(new Date());
   activeDayISO = toISO(new Date());
   render();
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll(); });
-  window.addEventListener('beforeunload', ()=>{ saveAll(); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>showDiag('Save error: '+e.message)); });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 }
 function render(){
   if(activeView==='week') buildWeekView();
