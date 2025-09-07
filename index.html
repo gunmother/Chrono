@@ -245,7 +245,7 @@
 
 <script>
 /* ---------------- Build ---------------- */
-console.info('Chrono build r13 (single-record cross-midnight)');
+console.info('Chrono build r15 (draw both halves in one pass)');
 
 /* ---------------- Core / State ---------------- */
 const screenEl = document.getElementById('screen');
@@ -538,42 +538,13 @@ function buildMask(geom, cols){
   }
 }
 
-/* Scope helper: does range r apply for a given date? */
+/* Scope helper */
 function inScopeForDate(r, date){
   const sc = r.scope || 'recurring';
   if (sc === 'recurring') return true;
   if (sc === 'week')     return r.weekKey === isoWeekKey(date);
   if (sc === 'month')    return r.monthKey === monthKey(date);
   return false;
-}
-
-/* Does a range cover a given slot on dayIdx, considering spillover from previous day */
-function rangeCoversSlot(r, dayIdx, slotIdx, dateForDay, prevDateForDay){
-  const a = Math.round((r.startMin||0)/15);
-  const b = Math.round((r.endMin||0)/15);
-
-  if (b > a){
-    // normal same-day segment
-    return slotIdx>=a && slotIdx<b;
-  }else if (b < a){
-    // cross-midnight owned by this day: covers [a..96) on this day
-    return slotIdx>=a && slotIdx<96;
-  }else{
-    return false;
-  }
-}
-
-/* Check if key's ranges (owned by previous day) spill into this day slot */
-function prevDaySpillCoversSlot(key, dayIdx, slotIdx){
-  const dPrev = (dayIdx+6)%7;
-  const datePrev = addDays(visibleWeekFirst, dPrev);
-  const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const ranges = (EXACT[key][dPrev]||[]).filter(r => inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
-  for(const r of ranges){
-    const b = Math.round((r.endMin||0)/15);
-    if (slotIdx>=0 && slotIdx<b) return r; // covers [0..b) on this day
-  }
-  return null;
 }
 
 /* Build visible slots honoring scope + flexibility with cross-midnight spillovers */
@@ -595,7 +566,6 @@ function rebuildSlots(){
         const fillSlot = (dayIdx, slotIdx)=>{
           const existing = allSlots[dayIdx][slotIdx];
           if(!existing){ allSlots[dayIdx][slotIdx]=key; return; }
-          // Determine existing firmness at this slot considering owned day + prev-day spill
           const existingFirm = isExistingFirmAtSlot(existing, dayIdx, slotIdx);
           if(isFirm && !existingFirm){ allSlots[dayIdx][slotIdx]=key; }
         };
@@ -604,11 +574,11 @@ function rebuildSlots(){
           for(let s=a; s<b; s++) fillSlot(d, s);
         }else if (b < a){
           for(let s=a; s<96; s++) fillSlot(d, s);
-          // NOTE: We DO NOT write into next day here; the next day's pass will bring prev-day spillovers for visibility.
+          // Do not write next day here; occupancy for next day comes from prev spill pass below.
         }
       }
 
-      // Now bring in prev-day spillovers for this key (visual only)
+      // prev-day spillovers for occupancy
       const prevRanges = (EXACT[key][(d+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin||0) < (r.startMin||0));
       for(const r of prevRanges){
         const isFirm = (r.flexibility||'firm')==='firm';
@@ -658,28 +628,30 @@ function paintBlocksWeek(geom){
   for(const [key, days] of Object.entries(EXACT)){
     for(let d=0; d<7; d++){
       const dateDay  = addDays(visibleWeekFirst, d);
-      const datePrev = addDays(visibleWeekFirst, (d+6)%7);
 
-      // Owned-by-day fragments
+      // Owned-by-day fragments (draw both halves in one pass if cross-midnight)
       for(const r of (days[d]||[]).filter(rr=>inScopeForDate(rr, dateDay))){
         const a=Math.round((r.startMin||0)/15), b=Math.round((r.endMin||0)/15);
         if (b > a){
           drawFragment(d, a, b, key);
         }else if (b < a){
-          drawFragment(d, a, 96, key); // today tail
-          // next-day head is drawn when iterating that next day below (as spillover)
+          // Today tail
+          drawFragment(d, a, 96, key);
+          // Next-day head (only if within current week columns)
+          const nextDay = d+1;
+          if(nextDay <= 6){
+            drawFragment(nextDay, 0, b, key, /*isSpill*/true);
+          }
         }
       }
 
-      // Prev-day spillover fragments
-      for(const r of (days[(d+6)%7]||[]).filter(rr=>inScopeForDate(rr, datePrev) && (rr.endMin||0) < (rr.startMin||0))){
-        const b=Math.round((r.endMin||0)/15);
-        drawFragment(d, 0, b, key, /*isSpill*/true);
-      }
+      // NOTE: We intentionally do NOT draw prev-day spillovers here anymore.
+      // Occupancy (conflict logic, totals) still accounts for prev-day spill in rebuildSlots().
     }
   }
 
   function drawFragment(dayIdx, slotStart, slotEnd, key, isSpill=false){
+    if(slotEnd<=slotStart) return;
     const left=colX[dayIdx], right=colX[dayIdx+1];
     const top=slotY[slotStart], bottom=slotY[slotEnd];
     const div=document.createElement('div'); div.className='blk';
@@ -1060,11 +1032,11 @@ async function persistEditor(sessionDraft){
       const sameMeta = (L.scope===r.scope) && (L.weekKey===r.weekKey) && (L.monthKey===r.monthKey) &&
                        ((L.flexibility||'firm')===(r.flexibility||'firm')) &&
                        ((L.reminderOffsetMin??null)===(r.reminderOffsetMin??null));
-      if(sameMeta && L.endMin<=r.startMin && L.endMin<=24*60 && r.endMin>=L.startMin && L.endMin<=r.startMin){
-        // merge only if both are same-day intervals (end>start)
-        if(L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin){ L.endMin=r.endMin; }
-        else merged.push({...r});
-      }else merged.push({...r});
+      if(sameMeta && L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin){
+        L.endMin=r.endMin;
+      }else{
+        merged.push({...r});
+      }
     }
     week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
   });
@@ -1073,16 +1045,14 @@ async function persistEditor(sessionDraft){
   const nextEXACT = deepCopy(EXACT);
   nextEXACT[key] = week;
 
-  // === Conflict validation (firm vs firm) and trimming (firm vs flexible) ===
-  // Build effective firm segments per day from ALL tasks in nextEXACT (including this key)
+  // Conflict validation & trimming remain unchanged from r13
   function effectiveSegmentsForDay(dayIdx, includeKey=null){
     const dateDay  = addDays(visibleWeekFirst, dayIdx);
     const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
     const segs = [];
     for(const [k, days] of Object.entries(nextEXACT)){
-      if(includeKey && includeKey!==k) continue; // optional filter
+      if(includeKey && includeKey!==k) continue;
 
-      // owned-by-day
       for(const r of (days[dayIdx]||[])){
         if(!inScopeForDate(r, dateDay)) continue;
         const isFirm = (r.flexibility||'firm')==='firm';
@@ -1090,7 +1060,6 @@ async function persistEditor(sessionDraft){
         if(b>a){ segs.push({k, a, b, firm:isFirm}); }
         else if(b<a){ segs.push({k, a, b:24*60, firm:isFirm}); }
       }
-      // spill from prev day
       for(const r of (days[(dayIdx+6)%7]||[])){
         if(!inScopeForDate(r, datePrev)) continue;
         const isFirm = (r.flexibility||'firm')==='firm';
@@ -1098,12 +1067,9 @@ async function persistEditor(sessionDraft){
         if(b<a){ segs.push({k, a:0, b:b, firm:isFirm}); }
       }
     }
-    // normalize and sort
-    const norm = segs.filter(s=>s.b>s.a).sort((A,B)=>A.a-B.a);
-    return norm;
+    return segs.filter(s=>s.b>s.a).sort((A,B)=>A.a-B.a);
   }
 
-  // Check firm-vs-firm overlaps and abort if found
   for(let d=0; d<7; d++){
     const segs = effectiveSegmentsForDay(d);
     for(let i=0;i<segs.length;i++){
@@ -1117,25 +1083,20 @@ async function persistEditor(sessionDraft){
     }
   }
 
-  // Trim flexible around firm (both same day & next-day spillovers)
   function trimDay(dayIdx){
     const firmSegs = effectiveSegmentsForDay(dayIdx).filter(s=>s.firm);
     if(!firmSegs.length) return;
     for(const [otherKey, days] of Object.entries(nextEXACT)){
       let arr = days[dayIdx]||[];
-      // produce effective flexible owned-by-day segments (only modify owned-by-day records)
       const out=[];
       for(const r of arr){
         const isFirm = (r.flexibility||'firm')==='firm'; if(isFirm){ out.push(r); continue; }
-        // Split r (which may be cross-midnight; we only trim its owned-day portion)
         let pieces=[];
         if(r.endMin>r.startMin){
           pieces=[{startMin:r.startMin, endMin:r.endMin}];
         }else if(r.endMin<r.startMin){
           pieces=[{startMin:r.startMin, endMin:24*60}];
-          // NOTE: the 0..endMin piece shows on next day visually, but we do not edit it here
         }
-        // subtract firmSegs on this day
         for(const f of firmSegs){
           const next=[];
           for(const p of pieces){
@@ -1149,10 +1110,7 @@ async function persistEditor(sessionDraft){
           pieces=next;
           if(!pieces.length) break;
         }
-        // rebuild records preserving meta
-        for(const p of pieces){
-          out.push({...r, startMin:p.startMin, endMin:p.endMin});
-        }
+        for(const p of pieces){ out.push({...r, startMin:p.startMin, endMin:p.endMin}); }
       }
       out.sort((A,B)=>A.startMin-B.startMin);
       nextEXACT[otherKey][dayIdx] = out.slice(0, MAX_RANGES_PER_DAY);
@@ -1160,10 +1118,7 @@ async function persistEditor(sessionDraft){
   }
   for(let d=0; d<7; d++) trimDay(d);
 
-  // Commit atomically
-  for(let i=0;i<7;i++){
-    EXACT[key][i] = nextEXACT[key][i];
-  }
+  for(let i=0;i<7;i++){ EXACT[key][i] = nextEXACT[key][i]; }
   ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
   saveSoon(200);
 }
