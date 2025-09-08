@@ -131,19 +131,13 @@
     grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
     grid-template-areas:
       "start end mic del"
-      "selrow selrow selrow selrow"
-      "overnight overnight overnight overnight";
+      "selrow selrow selrow selrow";
     align-items:center; width:100%;
   }
   .slot .start{ grid-area:start }
   .slot .end{ grid-area:end }
   .slot .mic{ grid-area:mic }
   .slot .trash{ grid-area:del }
-  /* NEW: next-day indicator line */
-  .slot .overnightBadge{
-    grid-area:overnight; font-size:12px; color:#0284C7; font-weight:800;
-    background:#E0F2FE; border-radius:999px; padding:4px 8px; display:none;
-  }
 
   .slot .selrow{
     grid-area:selrow;
@@ -195,8 +189,8 @@
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
-          <line x1="6" y1="10" x2="6"  y2="18"/>
-          <line x1="8" y1="10" x2="8"  y2="18"/>
+          <line x1="6" y1="10" x2="6" y2="18"/>
+          <line x1="8" y1="10" x2="8" y2="18"/>
           <line x1="10" y1="10" x2="10" y2="18"/>
           <line x1="12" y1="10" x2="12" y2="18"/>
           <line x1="14" y1="10" x2="14" y2="18"/>
@@ -247,7 +241,7 @@
 
 <script>
 /* ---------------- Build ---------------- */
-console.info('Chrono build r18'); // NEW: bump for this revision
+console.info('Chrono build r17');
 
 /* ---------------- Core / State ---------------- */
 const screenEl = document.getElementById('screen');
@@ -397,13 +391,8 @@ async function saveAll(){
   await storageSet('state', snap);
 }
 let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ save All().catch(e=>console.error('Save error:', e)); }, ms); } // NOTE: Intentional space removed next line
-</script>
-<script>
-// Fix tiny typo introduced above (without altering your structure)
 function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
-</script>
-<script>
+
 /* ---------------- Controls ---------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
@@ -561,7 +550,6 @@ function rebuildSlots(){
     }
   };
 
-  // Paint current week ranges and within-week spills
   for(const key of keys){
     for(let d=0; d<7; d++){
       const dateDay = addDays(visibleWeekFirst, d);
@@ -570,7 +558,7 @@ function rebuildSlots(){
         const isFirm = (r.flexibility||'firm')==='firm';
         const startMin = (r.startMin|0);
         const rawEnd   = (r.endMin|0);
-        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd);
+        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd); // normalize: next-day if end <= start
 
         // Today portion
         const todayStart = startMin;
@@ -579,7 +567,7 @@ function rebuildSlots(){
           clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
         }
 
-        // Next-day portion (only if inside same visible week)
+        // Next-day portion
         const spill = endAbs - 1440;
         if(spill > 0 && d+1 <= 6){
           clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
@@ -587,29 +575,11 @@ function rebuildSlots(){
       }
     }
   }
-
-  // NEW: Pull-in spill from the **previous calendar Saturday** into visible Sunday (dayIdx 0).
-  // This fixes week-boundary Sunday for 'week'/'month' scopes because we check the true previous date.
-  const sundayIdx = 0;
-  const prevCalDate = addDays(visibleWeekFirst, -1); // real previous calendar day
-  const prevIdx = 6; // Saturday column index in our 0..6
-  for(const key of keys){
-    const prevDayRanges = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevCalDate));
-    for(const r of prevDayRanges){
-      const isFirm = (r.flexibility||'firm')==='firm';
-      const a = (r.startMin|0), b=(r.endMin|0);
-      if(b<=a && b>0){ // overnight (cross-midnight)
-        clampFill(sundayIdx, 0, Math.floor(Math.min(b,1440)/15), key, isFirm);
-      }
-    }
-  }
 }
 
 function isExistingFirmAtSlot(key, dayIdx, slotIdx){
-  // NEW: Use the **true previous calendar date** (dayIdx-1), not "Saturday of this visible week".
   const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const datePrev = addDays(visibleWeekFirst, dayIdx-1);
-  const prevIdx  = (dayIdx+6)%7;
+  const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
 
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
@@ -619,8 +589,7 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
       else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
-  // Check previous calendar day's spill (proper scope keys for week/month)
-  const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin|0) < (r.startMin|0));
+  const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin|0) < (r.startMin|0));
   for(const r of prev){
     if((r.flexibility||'firm')==='firm'){
       const b=Math.floor((r.endMin|0)/15);
@@ -636,7 +605,6 @@ function paintBlocksWeek(geom){
   const colors=COLORS();
   const {colX, slotY} = geom;
 
-  // Draw all current-week blocks and within-week spills
   for(const [key, days] of Object.entries(EXACT)){
     for(let d=0; d<7; d++){
       const dateDay  = addDays(visibleWeekFirst, d);
@@ -653,16 +621,6 @@ function paintBlocksWeek(geom){
           drawFragment(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
         }
       }
-    }
-  }
-
-  // NEW: Also paint **previous calendar Saturday → this Sunday** spill.
-  const sundayIdx = 0;
-  const prevCalDate = addDays(visibleWeekFirst, -1);
-  for(const [key, days] of Object.entries(EXACT)){
-    const satRangesPrevCal = (days[6]||[]).filter(r=>inScopeForDate(r, prevCalDate) && (r.endMin|0)<(r.startMin|0) && (r.endMin|0)>0);
-    for(const r of satRangesPrevCal){
-      drawFragment(sundayIdx, 0, Math.floor(Math.min((r.endMin|0),1440)/15), key, true);
     }
   }
 
@@ -933,7 +891,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
         <option value="flexible"${flexVal==='flexible'?' selected':''}>Flexible</option>
       </select>
     </div>
-    <div class="overnightBadge"></div>
   `;
 
   const startInp = row.querySelector('.start');
@@ -942,20 +899,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   // Do NOT override existing values with defaults
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
   if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
-
-  // NEW: live next-day initial indicator (e.g., "S 23:30 — M 02:00")
-  const badge = row.querySelector('.overnightBadge');
-  function updateBadge(){
-    const sVal=startInp.value, eVal=endInp.value;
-    if(!sVal || !eVal){ badge.style.display='none'; return; }
-    const sMin=toMin(sVal), eMin=toMin(eVal);
-    const crosses = eMin < sMin;
-    if(!crosses){ badge.style.display='none'; return; }
-    const iniStart = SHORT_DOW[dayIndex][0];
-    const iniEnd   = SHORT_DOW[(dayIndex+1)%7][0];
-    badge.textContent = `${iniStart} ${sVal} — ${iniEnd} ${eVal}`;
-    badge.style.display='block';
-  }
 
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
@@ -973,7 +916,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }catch{ text = prompt(sample) || ''; }
     }else{ text = prompt(sample) || ''; }
     const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); updateBadge(); }
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); }
   });
 
   row.querySelector('.trash').addEventListener('click', ()=>{
@@ -1006,15 +949,14 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
 
       if (a1 < b2 && b1 < a2){
         alert('Double booking not allowed for the same activity on this day.');
-        startInp.value=''; endInp.value=''; row.dataset.pristine='1'; updateBadge();
+        startInp.value=''; endInp.value=''; row.dataset.pristine='1';
         return;
       }
     }
   }
 
-  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); updateBadge(); });
-  endInp.addEventListener('change',   ()=>{ row.dataset.pristine='0'; validateImmediate(); updateBadge(); });
-  updateBadge();
+  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
+  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
 
   slotsEl.appendChild(row);
   return row;
@@ -1079,7 +1021,7 @@ async function persistEditor(sessionDraft){
   // Firm-to-firm conflict detection (includes spillovers)
   function effectiveSegmentsForDay(dayIdx){
     const dateDay  = addDays(visibleWeekFirst, dayIdx);
-    const prevDate = addDays(visibleWeekFirst, dayIdx-1); // NEW: true previous calendar day
+    const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
     const segs = [];
     for(const [k, days] of Object.entries(nextEXACT)){
       for(const r of (days[dayIdx]||[])){
@@ -1089,10 +1031,8 @@ async function persistEditor(sessionDraft){
         if(b>a){ segs.push({k, a, b, firm:isFirm}); }
         else if(b<a){ segs.push({k, a, b:24*60, firm:isFirm}); }
       }
-      // Include previous calendar day's spill (proper scope)
-      const prevIdx=(dayIdx+6)%7;
-      for(const r of (days[prevIdx]||[])){
-        if(!inScopeForDate(r, prevDate)) continue;
+      for(const r of (days[(dayIdx+6)%7]||[])){
+        if(!inScopeForDate(r, datePrev)) continue;
         const isFirm = (r.flexibility||'firm')==='firm';
         const a=r.startMin|0, b=r.endMin|0;
         if(b<a){ segs.push({k, a:0, b:b, firm:isFirm}); }
@@ -1114,7 +1054,7 @@ async function persistEditor(sessionDraft){
     }
   }
 
-  // Trim flexible against firm (owned-day and true-prev spillovers)
+  // Trim flexible against firm (both owned-day and spillovers)
   function trimDay(dayIdx){
     const firmSegs = effectiveSegmentsForDay(dayIdx).filter(s=>s.firm);
     if(!firmSegs.length) return;
