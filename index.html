@@ -164,6 +164,22 @@
 
   .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
   .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
+
+  /* Saturday spill badge */
+  .spillBadge{
+    position:absolute;
+    right:4px;
+    bottom:4px;
+    padding:2px 6px;
+    border-radius:10px;
+    font-size:11px;
+    line-height:1.2;
+    background:#0EA5E9;
+    color:#fff;
+    border:1px solid rgba(0,0,0,.15);
+    pointer-events:none;
+    opacity:0.95;
+  }
 </style>
 </head>
 <body>
@@ -240,10 +256,9 @@
   </div>
 
 <script>
-/* ---------------- Build ---------------- */
-console.info('Chrono build r17');
+console.info('Chrono build r18');
 
-/* ---------------- Core / State ---------------- */
+/* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
@@ -269,10 +284,9 @@ function isoWeekKey(date){
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
 }
 function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
-
 function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
 
-/* Tasks */
+/* ---------- Tasks ---------- */
 let TASKS = [
   {key:'work',      label:'Work',        color:'#d33c36', hard:false},
   {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
@@ -294,7 +308,7 @@ let TASKS = [
 const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
 const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 
-/* Data stores */
+/* ---------- Data stores ---------- */
 const SLOTS_PER_DAY=96; // 15-min
 let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
 /* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility}] */
@@ -302,13 +316,13 @@ const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
 
-/* Sync editor width to screen */
+/* ---------- Width sync ---------- */
 new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* ---------------- Storage: IndexedDB with localStorage fallback ---------------- */
+/* ---------- Storage (IndexedDB + fallback) ---------- */
 const DB_NAME = 'chronoDB';
 const DB_VERSION = 6;
 let dbPromise = null;
@@ -358,7 +372,6 @@ async function storageGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
-
 function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
 function hydrateState(snap){
   try{
@@ -384,7 +397,6 @@ function hydrateState(snap){
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
-
 async function saveAll(){
   const snap = snapshotState();
   await storageSet('lastGood', snap);
@@ -393,7 +405,7 @@ async function saveAll(){
 let saveTimer=null;
 function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
 
-/* ---------------- Controls ---------------- */
+/* ---------- Controls ---------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
   const v=b.dataset.view;
@@ -405,7 +417,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------------- Week View ---------------- */
+/* ---------- Week View ---------- */
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -533,9 +545,8 @@ function inScopeForDate(r, date){
   return false;
 }
 
-/* ---------------- SLOTS (normalized cross-midnight with absolute end) ---------------- */
+/* ---------- Slots (normalize cross-midnight with absolute end) ---------- */
 function rebuildSlots(){
-  // Reset grid
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
 
@@ -558,7 +569,7 @@ function rebuildSlots(){
         const isFirm = (r.flexibility||'firm')==='firm';
         const startMin = (r.startMin|0);
         const rawEnd   = (r.endMin|0);
-        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd); // normalize: next-day if end <= start
+        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd); // normalize to next-day if needed
 
         // Today portion
         const todayStart = startMin;
@@ -599,7 +610,7 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   return false;
 }
 
-/* ---------------- Paint week (same normalization) ---------------- */
+/* ---------- Paint week (with Saturday spill badge) ---------- */
 function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const colors=COLORS();
@@ -619,6 +630,20 @@ function paintBlocksWeek(geom){
         const spill = endAbs - 1440;
         if (spill > 0 && d+1 <= 6){
           drawFragment(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
+        }
+        // If it spills past Saturday into Sunday of next week (off-screen), show a badge.
+        if (spill > 0 && d === 6){
+          const right = geom.colX[7];
+          const left  = geom.colX[6];
+          const badge = document.createElement('div');
+          badge.className = 'spillBadge';
+          const spillM = Math.min(spill, 1440);
+          const hh = Math.floor(spillM/60);
+          const mm = String(spillM%60).padStart(2,'0');
+          badge.textContent = `→ Sun ${hh}:${mm}`;
+          badge.style.left = (left+2) + 'px';
+          badge.style.width = Math.max(0,(right-left-6)) + 'px';
+          layer.appendChild(badge);
         }
       }
     }
@@ -658,7 +683,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------------- Day View (blank) ---------------- */
+/* ---------- Day View (blank) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -670,9 +695,9 @@ function buildDayView(){
   `;
 }
 
-/* ---------------- Month View ---------------- */
+/* ---------- Month View ---------- */
 function buildMonthView(){
-  const base = new Date(); /* reset to current month on entry */
+  const base = new Date(); // reset to current month on entry
   activeDayISO = toISO(base);
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -710,7 +735,7 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------------- Task picker (centered, non-scroll) ---------------- */
+/* ---------- Task picker (centered, non-scroll) ---------- */
 const overlay=document.getElementById('taskOverlay');
 
 function openTaskStack(){
@@ -755,7 +780,7 @@ function weeklyTotals(){
 }
 function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
 
-/* ---------------- Editor ---------------- */
+/* ---------- Editor ---------- */
 const edOverlay=document.getElementById('settingsOverlay');
 const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
@@ -896,7 +921,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const startInp = row.querySelector('.start');
   const endInp   = row.querySelector('.end');
 
-  // Do NOT override existing values with defaults
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
   if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
 
@@ -962,7 +986,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   return row;
 }
 
-/* Persist editor with conflict checks & flexible trimming (storage unchanged) */
 async function persistEditor(sessionDraft){
   const key = sessionDraft.key;
   const t = TASKS.find(x=>x.key===key);
@@ -1095,7 +1118,7 @@ async function persistEditor(sessionDraft){
   saveSoon(200);
 }
 
-/* Speech parse */
+/* ---------- Speech parse & utils ---------- */
 function parseSpokenRange(s){
   if(!s) return null;
   const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -1108,13 +1131,12 @@ function parseSpokenRange(s){
   return {s:sMin, e:eMin};
 }
 
-/* Small utils */
 function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
 function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
-/* ---------------- Init & Render ---------------- */
+/* ---------- Init & render ---------- */
 async function init(){
   try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
   visibleWeekFirst = weekStart(new Date());
@@ -1124,10 +1146,18 @@ async function init(){
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 }
 function render(){
-  if(activeView==='week') buildWeekView();
-  else if(activeView==='day') buildDayView();
-  else if(activeView==='month') buildMonthView();
-  else screenEl.innerHTML='';
+  if(activeView==='week'){
+    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
+    buildWeekView();
+  } else if(activeView==='day'){
+    activeDayISO = toISO(new Date());          // sync to today
+    buildDayView();
+  } else if(activeView==='month'){
+    activeDayISO = toISO(new Date());          // reset to current month on entry
+    buildMonthView();
+  } else {
+    screenEl.innerHTML='';
+  }
 }
 init();
 </script>
