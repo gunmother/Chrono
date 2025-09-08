@@ -241,7 +241,7 @@
 
 <script>
 /* ---------------- Build ---------------- */
-console.info('Chrono build r17');
+console.info('Chrono build r18');
 
 /* ---------------- Core / State ---------------- */
 const screenEl = document.getElementById('screen');
@@ -567,7 +567,7 @@ function rebuildSlots(){
           clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
         }
 
-        // Next-day portion
+        // Next-day portion within SAME week
         const spill = endAbs - 1440;
         if(spill > 0 && d+1 <= 6){
           clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
@@ -575,12 +575,28 @@ function rebuildSlots(){
       }
     }
   }
+
+  // --- Prev-week Saturday -> this-week Sunday spill-ins (NEW) ---
+  (() => {
+    const prevSaturdayDate = addDays(visibleWeekFirst, -1); // real previous Saturday
+    for (const [key, days] of Object.entries(EXACT)) {
+      const prevSatRanges = (days[6] || []).filter(r =>
+        (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevSaturdayDate)
+      );
+      for (const r of prevSatRanges) {
+        const isFirm = (r.flexibility||'firm') === 'firm';
+        const endSlot = Math.floor((r.endMin|0) / 15);
+        const safeEnd = Math.max(0, Math.min(96, endSlot));
+        if (safeEnd > 0) clampFill(0 /* Sunday */, 0, safeEnd, key, isFirm);
+      }
+    }
+  })();
 }
 
 function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
 
+  // Owned-day firm windows
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
     if((r.flexibility||'firm')==='firm'){
@@ -589,7 +605,12 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
       else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
-  const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin|0) < (r.startMin|0));
+
+  // Prev-day spill using REAL previous calendar date for Sunday
+  const prevDayIdx = (dayIdx+6)%7;
+  const prevDate = (dayIdx===0) ? addDays(visibleWeekFirst, -1) : addDays(visibleWeekFirst, dayIdx-1);
+
+  const prev = (EXACT[key][prevDayIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
   for(const r of prev){
     if((r.flexibility||'firm')==='firm'){
       const b=Math.floor((r.endMin|0)/15);
@@ -636,6 +657,19 @@ function paintBlocksWeek(geom){
     div.title = LABELS()[key] + (isSpill?' (continues)':'');
     layer.appendChild(div);
   }
+
+  // --- Draw previous-week Saturday -> this-week Sunday fragment(s) (NEW) ---
+  (() => {
+    const prevSaturdayDate = addDays(visibleWeekFirst, -1);
+    for (const [key, days] of Object.entries(EXACT)) {
+      for (const r of (days[6]||[])) {
+        if ((r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevSaturdayDate)) {
+          const spillSlots = Math.floor((r.endMin|0)/15);
+          if (spillSlots > 0) drawFragment(0 /* Sunday */, 0, spillSlots, key, /*isSpill*/true);
+        }
+      }
+    }
+  })();
 }
 
 function paintNowMagnifier(geom){
@@ -845,6 +879,7 @@ function updateAddButtonState(slotsEl, btnEl){
 
 function offsetToOpt(min){ const map = {5:'5m',10:'10m',15:'15m',30:'30m',60:'1h',1440:'24h'}; return map[min] || 'off'; }
 function optToOffset(val){
+  if(val==='off') return undefined;
   if(val==='5m') return 5; if(val==='10m') return 10; if(val==='15m') return 15;
   if(val==='30m') return 30; if(val==='1h') return 60; if(val==='24h') return 1440;
   return undefined;
@@ -900,6 +935,26 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
   if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
 
+  // --- Compact display with next-day initials (NEW) ---
+  const disp = document.createElement('div');
+  disp.style.fontSize = '12px';
+  disp.style.opacity = '0.8';
+  disp.style.gridColumn = '1 / -1';
+  disp.style.marginTop = '-2px';
+  row.insertBefore(disp, row.firstChild);
+  function updateDisp(){
+    const sVal = startInp.value, eVal = endInp.value;
+    if (!sVal || !eVal) { disp.textContent = ''; return; }
+    const sMin = round15(toMin(sVal));
+    const eMin = round15(toMin(eVal));
+    const startInitial = SHORT_DOW[dayIndex][0];
+    const endInitial = (eMin > sMin) ? SHORT_DOW[dayIndex][0] : SHORT_DOW[(dayIndex+1)%7][0];
+    disp.textContent = `${startInitial} ${toHHMM(sMin)} – ${endInitial} ${toHHMM(eMin)}` + (eMin <= sMin ? ' (next day)' : '');
+  }
+  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; updateDisp(); validateImmediate(); });
+  endInp.addEventListener('change',   ()=>{ row.dataset.pristine='0'; updateDisp(); validateImmediate(); });
+  updateDisp();
+
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
     let text = '';
@@ -916,7 +971,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }catch{ text = prompt(sample) || ''; }
     }else{ text = prompt(sample) || ''; }
     const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); }
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; updateDisp(); validateImmediate(); }
   });
 
   row.querySelector('.trash').addEventListener('click', ()=>{
@@ -950,13 +1005,11 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       if (a1 < b2 && b1 < a2){
         alert('Double booking not allowed for the same activity on this day.');
         startInp.value=''; endInp.value=''; row.dataset.pristine='1';
+        updateDisp();
         return;
       }
     }
   }
-
-  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
-  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
 
   slotsEl.appendChild(row);
   return row;
@@ -1018,29 +1071,40 @@ async function persistEditor(sessionDraft){
   const nextEXACT = deepCopy(EXACT);
   nextEXACT[key] = week;
 
-  // Firm-to-firm conflict detection (includes spillovers)
+  // Build effective segments with real prev-Saturday spill for Sunday
   function effectiveSegmentsForDay(dayIdx){
     const dateDay  = addDays(visibleWeekFirst, dayIdx);
-    const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
     const segs = [];
+
+    // Owned-day segments
     for(const [k, days] of Object.entries(nextEXACT)){
       for(const r of (days[dayIdx]||[])){
         if(!inScopeForDate(r, dateDay)) continue;
-        const isFirm = (r.flexibility||'firm')==='firm';
+        const firm = (r.flexibility||'firm')==='firm';
         const a=r.startMin|0, b=r.endMin|0;
-        if(b>a){ segs.push({k, a, b, firm:isFirm}); }
-        else if(b<a){ segs.push({k, a, b:24*60, firm:isFirm}); }
-      }
-      for(const r of (days[(dayIdx+6)%7]||[])){
-        if(!inScopeForDate(r, datePrev)) continue;
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const a=r.startMin|0, b=r.endMin|0;
-        if(b<a){ segs.push({k, a:0, b:b, firm:isFirm}); }
+        if(b>a){ segs.push({k, a, b, firm}); }
+        else if(b<a){ segs.push({k, a, b:24*60, firm}); }
       }
     }
+
+    // Real previous-week Saturday -> this Sunday spill
+    if (dayIdx === 0){
+      const prevDate = addDays(visibleWeekFirst, -1);
+      for(const [k, days] of Object.entries(nextEXACT)){
+        for(const r of (days[6]||[])){
+          if(!inScopeForDate(r, prevDate)) continue;
+          if((r.endMin|0) < (r.startMin|0)){
+            const firm=(r.flexibility||'firm')==='firm';
+            segs.push({k, a:0, b:(r.endMin|0), firm});
+          }
+        }
+      }
+    }
+
     return segs.filter(s=>s.b>s.a).sort((A,B)=>A.a-B.a);
   }
 
+  // Firm-to-firm conflict detection
   for(let d=0; d<7; d++){
     const segs = effectiveSegmentsForDay(d);
     for(let i=0;i<segs.length;i++){
@@ -1054,7 +1118,7 @@ async function persistEditor(sessionDraft){
     }
   }
 
-  // Trim flexible against firm (both owned-day and spillovers)
+  // Trim flexible against firm
   function trimDay(dayIdx){
     const firmSegs = effectiveSegmentsForDay(dayIdx).filter(s=>s.firm);
     if(!firmSegs.length) return;
