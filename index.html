@@ -77,8 +77,7 @@
   .blocks{ position:absolute; inset:0; z-index:1 }
   .blk{ position:absolute; border:1px solid var(--border) }
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
-  .hud{ position:absolute; inset:0; pointer-events:none; z-index:3 } /* NEW: sits above mask */
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:4 }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
 
   .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
   .chev:disabled{ opacity:.5; cursor:not-allowed }
@@ -136,8 +135,8 @@
       "selrow selrow selrow selrow";
     align-items:center; width:100%;
   }
-  .slot .start{ grid-area:start }
-  .slot .end{ grid-area:end }
+  .slot .start{ grid-area:start; position:relative }
+  .slot .end{ grid-area:end; position:relative }
   .slot .mic{ grid-area:mic }
   .slot .trash{ grid-area:del }
 
@@ -167,29 +166,16 @@
   .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
   .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
 
-  /* Spill visuals (on top of mask) */
-  .spillBadge{
-    position:absolute;
-    right:6px;
-    bottom:6px;
-    padding:2px 6px;
-    border-radius:10px;
-    font-size:11px;
-    line-height:1.2;
-    background:#0EA5E9;
-    color:#fff;
-    border:1px solid rgba(0,0,0,.18);
-    pointer-events:none;
-    opacity:0.98;
-    box-shadow:0 1px 2px rgba(0,0,0,.15);
-  }
-  .spillStrip{
-    position:absolute; height:6px;
-    left:0; right:0;
-    bottom:0;
-    opacity:.9;
+  /* Day initials badges next to inputs (only for cross-midnight) */
+  .dayTag{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6;
     pointer-events:none;
   }
+
+  /* Day “screensaver” watermark */
+  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+
 </style>
 </head>
 <body>
@@ -266,7 +252,7 @@
   </div>
 
 <script>
-console.info('Chrono build r19');
+console.info('Chrono build r20');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -336,7 +322,7 @@ new ResizeObserver(()=> {
 const DB_NAME = 'chronoDB';
 const DB_VERSION = 6;
 let dbPromise = null;
-let STORAGE_MODE = 'idb'; // 'idb' | 'ls'
+let STORAGE_MODE = 'idb';
 
 function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
 function idbOpen(){
@@ -442,7 +428,6 @@ function buildWeekView(){
         <div class="grid" id="weekGrid">
           <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="hud" id="hudLayer" aria-hidden="true"></div> <!-- NEW: Above mask -->
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
         </div>
         <div class="hours" id="weekHours"></div>
@@ -557,7 +542,7 @@ function inScopeForDate(r, date){
   return false;
 }
 
-/* ---------- Slots (normalize cross-midnight with absolute end) ---------- */
+/* ---------- Slots (carryover both directions per visible week) ---------- */
 function rebuildSlots(){
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
@@ -573,24 +558,22 @@ function rebuildSlots(){
     }
   };
 
+  // Fill from current day ranges
   for(const key of keys){
     for(let d=0; d<7; d++){
       const dateDay = addDays(visibleWeekFirst, d);
       const ranges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
       for(const r of ranges){
         const isFirm = (r.flexibility||'firm')==='firm';
-        const startMin = (r.startMin|0);
-        const rawEnd   = (r.endMin|0);
-        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd); // normalize to next-day if needed
+        const s = (r.startMin|0), e = (r.endMin|0);
+        const endAbs = (e <= s ? e + 1440 : e);
 
-        // Today portion
-        const todayStart = startMin;
+        const todayStart = s;
         const todayEnd   = Math.min(endAbs, 1440);
         if(todayEnd > todayStart){
           clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
         }
 
-        // Next-day portion
         const spill = endAbs - 1440;
         if(spill > 0 && d+1 <= 6){
           clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
@@ -598,12 +581,30 @@ function rebuildSlots(){
       }
     }
   }
+
+  // ALSO: pull in previous-day spillovers (so Sunday can show Saturday→Sunday)
+  for(const key of keys){
+    for(let d=0; d<7; d++){
+      const prevDayIdx = (d===0? 6 : d-1);
+      const prevDate   = addDays(visibleWeekFirst, d-1); // NOTE: for d=0 this is last week's Saturday
+      const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
+        // only cross-midnight ranges spilling into this day
+        return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
+      });
+      for(const r of prevRanges){
+        const isFirm = (r.flexibility||'firm')==='firm';
+        const spillEnd = Math.min(r.endMin|0, 1440);
+        if (spillEnd > 0){
+          clampFill(d, 0, Math.floor(spillEnd/15), key, isFirm);
+        }
+      }
+    }
+  }
 }
 
 function isExistingFirmAtSlot(key, dayIdx, slotIdx){
+  // Check same-day firm
   const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
-
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
     if((r.flexibility||'firm')==='firm'){
@@ -612,7 +613,10 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
       else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
-  const prev = (EXACT[key][(dayIdx+6)%7]||[]).filter(r=>inScopeForDate(r, datePrev) && (r.endMin|0) < (r.startMin|0));
+  // Check previous-day spill firm (using true previous date)
+  const prevDate = addDays(visibleWeekFirst, dayIdx-1);
+  const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
+  const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
   for(const r of prev){
     if((r.flexibility||'firm')==='firm'){
       const b=Math.floor((r.endMin|0)/15);
@@ -622,66 +626,29 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   return false;
 }
 
-/* ---------- Paint week (with on-top Saturday spill cues) ---------- */
+/* ---------- Paint week ---------- */
 function paintBlocksWeek(geom){
-  const blocks=document.getElementById('blocksLayer'); blocks.innerHTML='';
-  const hud=document.getElementById('hudLayer'); hud.innerHTML='';
+  const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const colors=COLORS();
   const {colX, slotY} = geom;
 
-  for(const [key, days] of Object.entries(EXACT)){
-    for(let d=0; d<7; d++){
-      const dateDay  = addDays(visibleWeekFirst, d);
-      for(const r of (days[d]||[]).filter(rr=>inScopeForDate(rr, dateDay))){
-        const startMin = (r.startMin|0);
-        const rawEnd   = (r.endMin|0);
-        const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd);
-
-        const tStart = startMin, tEnd = Math.min(endAbs, 1440);
-        if (tEnd > tStart) drawFragment(blocks, d, Math.floor(tStart/15), Math.floor(tEnd/15), key);
-
-        const spill = endAbs - 1440;
-        if (spill > 0){
-          if (d+1 <= 6){
-            // Render Sunday fragment inside the week if present
-            drawFragment(blocks, d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
-          } else if (d === 6){
-            // Saturday → offscreen Sunday: draw HUD badge + continuation strip ON TOP
-            const left  = geom.colX[6], right = geom.colX[7];
-            // 1) Continuation strip (colored)
-            const strip = document.createElement('div');
-            strip.className = 'spillStrip';
-            strip.style.left = left+'px';
-            strip.style.width = (right-left-1)+'px';
-            strip.style.background = colors[key] || '#0EA5E9';
-            hud.appendChild(strip);
-            // 2) Badge
-            const spillM = Math.min(spill, 1440);
-            const hh = Math.floor(spillM/60);
-            const mm = String(spillM%60).padStart(2,'0');
-            const badge = document.createElement('div');
-            badge.className = 'spillBadge';
-            badge.textContent = `→ Sun ${hh}:${mm}`;
-            badge.style.left = (left+6)+'px';
-            badge.style.width = Math.max(0,(right-left-12)) + 'px';
-            hud.appendChild(badge);
-          }
-        }
-      }
+  for(let d=0; d<7; d++){
+    let s=0;
+    while(s<SLOTS_PER_DAY){
+      const key=allSlots[d][s];
+      if(!key){ s++; continue; }
+      let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
+      const left=colX[d], right=colX[d+1];
+      const top=slotY[s], bottom=slotY[e];
+      const div=document.createElement('div'); div.className='blk';
+      div.style.left=left+'px'; div.style.top=top+'px';
+      div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
+      div.style.height=(bottom-top)+'px';
+      div.style.background = colors[key] || '#ddd';
+      div.title = LABELS()[key];
+      layer.appendChild(div);
+      s=e;
     }
-  }
-
-  function drawFragment(parent, dayIdx, slotStart, slotEnd, key, isSpill=false){
-    if(slotEnd<=slotStart) return;
-    const left=colX[dayIdx], right=colX[dayIdx+1];
-    const top=slotY[slotStart], bottom=slotY[slotEnd];
-    const div=document.createElement('div'); div.className='blk';
-    div.style.left=left+'px'; div.style.top=top+'px';
-    div.style.width=Math.max(0,(dayIdx===6?right-left-1:right-left))+'px';
-    div.style.height=(bottom-top)+'px';
-    div.style.background = colors[key] || '#ddd';
-    div.title = LABELS()[key] + (isSpill?' (continues)':'');
-    parent.appendChild(div);
   }
 }
 
@@ -705,13 +672,13 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (blank) ---------- */
+/* ---------- Day View (blank + version) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div style="opacity:.75">Day view is blank for now</div>
+        <div class="watermark">Chrono build r20</div>
       </div>
     </div>
   `;
@@ -767,9 +734,9 @@ function openTaskStack(){
   const grid = document.getElementById('weekGrid');
   const r = grid.getBoundingClientRect();
 
-  const N = 16;          // items
-  const G = 8;           // CSS gap
-  const margin = 6;      // breathing room top/bottom
+  const N = 16;
+  const G = 8;
+  const margin = 6;
   const avail = Math.max(120, r.height - margin*2);
   const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
   const used = N*rowH + (N-1)*G;
@@ -911,8 +878,14 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const flexVal   = existingMeta?.flexibility || 'firm'; // default Firm
 
   row.innerHTML = `
-    <input type="time" class="in start" step="900" autocomplete="off" inputmode="numeric">
-    <input type="time" class="in end"   step="900" autocomplete="off" inputmode="numeric">
+    <div class="start">
+      <input type="time" class="in start" step="900" autocomplete="off" inputmode="numeric">
+      <span class="dayTag startTag" style="display:none"></span>
+    </div>
+    <div class="end">
+      <input type="time" class="in end"   step="900" autocomplete="off" inputmode="numeric">
+      <span class="dayTag endTag" style="display:none"></span>
+    </div>
     <button class="iconBtn mic"   title="Speak time" aria-label="Microphone">🎤</button>
     <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
 
@@ -940,11 +913,32 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     </div>
   `;
 
-  const startInp = row.querySelector('.start');
-  const endInp   = row.querySelector('.end');
+  const startInp = row.querySelector('input.start');
+  const endInp   = row.querySelector('input.end');
+  const startTag = row.querySelector('.startTag');
+  const endTag   = row.querySelector('.endTag');
 
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
   if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
+
+  function refreshDayTags(){
+    const sVal=startInp.value, eVal=endInp.value;
+    if(!sVal || !eVal){ startTag.style.display='none'; endTag.style.display='none'; return; }
+    const s=toMin(sVal), e=toMin(eVal);
+    if (e > s){
+      startTag.style.display='none';
+      endTag.style.display='none';
+    } else if (e < s){
+      // Cross-midnight: show DOW initials (e.g., Sat → Sun)
+      const startDow = SHORT_DOW[dayIndex];
+      const endDow   = SHORT_DOW[(dayIndex+1)%7];
+      startTag.textContent = startDow;
+      endTag.textContent   = endDow;
+      startTag.style.display='inline-block';
+      endTag.style.display  ='inline-block';
+    }
+  }
+  refreshDayTags();
 
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
@@ -962,7 +956,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       }catch{ text = prompt(sample) || ''; }
     }else{ text = prompt(sample) || ''; }
     const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); }
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
   });
 
   row.querySelector('.trash').addEventListener('click', ()=>{
@@ -972,8 +966,8 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   });
 
   function isRowComplete(r){
-    const s=r.querySelector('.start').value;
-    const e=r.querySelector('.end').value;
+    const s=r.querySelector('input.start').value;
+    const e=r.querySelector('input.end').value;
     return !!(s && e);
   }
 
@@ -987,7 +981,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
     for(const rr of rows){
-      const s2=round15(toMin(rr.querySelector('.start').value||'')); const e2=round15(toMin(rr.querySelector('.end').value||''));
+      const s2=round15(toMin(rr.querySelector('input.start').value||'')); const e2=round15(toMin(rr.querySelector('input.end').value||''));
       if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
 
       const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
@@ -996,13 +990,14 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       if (a1 < b2 && b1 < a2){
         alert('Double booking not allowed for the same activity on this day.');
         startInp.value=''; endInp.value=''; row.dataset.pristine='1';
+        refreshDayTags();
         return;
       }
     }
   }
 
-  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
-  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); });
+  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
+  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
 
   slotsEl.appendChild(row);
   return row;
@@ -1021,8 +1016,8 @@ async function persistEditor(sessionDraft){
 
     const tmp=[];
     for(const row of rows){
-      const sVal=row.querySelector('.start').value;
-      const eVal=row.querySelector('.end').value;
+      const sVal=row.querySelector('input.start').value;
+      const eVal=row.querySelector('input.end').value;
       if(!sVal || !eVal) continue;
 
       let sMin = round15(toMin(sVal));
@@ -1042,7 +1037,6 @@ async function persistEditor(sessionDraft){
       tmp.push(rec);
     }
 
-    // Merge adjacent same-meta same-day segments (not cross-midnight)
     tmp.sort((A,B)=>A.startMin-B.startMin);
     const merged=[];
     for(const r of tmp){
@@ -1060,82 +1054,8 @@ async function persistEditor(sessionDraft){
     week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
   });
 
-  const nextEXACT = deepCopy(EXACT);
-  nextEXACT[key] = week;
-
-  // Firm-to-firm conflict detection (includes spillovers)
-  function effectiveSegmentsForDay(dayIdx){
-    const dateDay  = addDays(visibleWeekFirst, dayIdx);
-    const datePrev = addDays(visibleWeekFirst, (dayIdx+6)%7);
-    const segs = [];
-    for(const [k, days] of Object.entries(nextEXACT)){
-      for(const r of (days[dayIdx]||[])){
-        if(!inScopeForDate(r, dateDay)) continue;
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const a=r.startMin|0, b=r.endMin|0;
-        if(b>a){ segs.push({k, a, b, firm:isFirm}); }
-        else if(b<a){ segs.push({k, a, b:24*60, firm:isFirm}); }
-      }
-      for(const r of (days[(dayIdx+6)%7]||[])){
-        if(!inScopeForDate(r, datePrev)) continue;
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const a=r.startMin|0, b=r.endMin|0;
-        if(b<a){ segs.push({k, a:0, b:b, firm:isFirm}); }
-      }
-    }
-    return segs.filter(s=>s.b>s.a).sort((A,B)=>A.a-B.a);
-  }
-
-  for(let d=0; d<7; d++){
-    const segs = effectiveSegmentsForDay(d);
-    for(let i=0;i<segs.length;i++){
-      if(!segs[i].firm) continue;
-      for(let j=i+1;j<segs.length;j++){
-        if(!segs[j].firm) continue;
-        if(segs[i].k===segs[j].k) continue;
-        if(segs[i].b<=segs[j].a || segs[j].b<=segs[i].a) continue;
-        throw new Error('Firm time conflict detected on '+DAY_NAMES[d]+'. Adjust times to avoid overlap.');
-      }
-    }
-  }
-
-  // Trim flexible against firm (both owned-day and spillovers)
-  function trimDay(dayIdx){
-    const firmSegs = effectiveSegmentsForDay(dayIdx).filter(s=>s.firm);
-    if(!firmSegs.length) return;
-    for(const [otherKey, days] of Object.entries(nextEXACT)){
-      const arr = days[dayIdx]||[];
-      const out=[];
-      for(const r of arr){
-        const isFirm = (r.flexibility||'firm')==='firm'; if(isFirm){ out.push(r); continue; }
-        let pieces=[];
-        if(r.endMin>r.startMin){
-          pieces=[{startMin:r.startMin, endMin:r.endMin}];
-        }else if(r.endMin<r.startMin){
-          pieces=[{startMin:r.startMin, endMin:24*60}];
-        }
-        for(const f of firmSegs){
-          const next=[];
-          for(const p of pieces){
-            const A=p.startMin, B=p.endMin, C=f.a, D=f.b;
-            if(B<=C || D<=A){ next.push(p); continue; }
-            if(C<=A && B<=D){ /* drop */ }
-            else if(A<C && D<B){ next.push({startMin:A, endMin:C}); next.push({startMin:D, endMin:B}); }
-            else if(A<C && C<B && B<=D){ next.push({startMin:A, endMin:C}); }
-            else if(C<=A && A<D && D<B){ next.push({startMin:D, endMin:B}); }
-          }
-          pieces=next;
-          if(!pieces.length) break;
-        }
-        for(const p of pieces){ out.push({...r, startMin:p.startMin, endMin:p.endMin}); }
-      }
-      out.sort((A,B)=>A.startMin-B.startMin);
-      nextEXACT[otherKey][dayIdx] = out.slice(0, MAX_RANGES_PER_DAY);
-    }
-  }
-  for(let d=0; d<7; d++) trimDay(d);
-
-  for(let i=0;i<7;i++){ EXACT[key][i] = nextEXACT[key][i]; }
+  // Commit
+  EXACT[key] = week;
   ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
   saveSoon(200);
 }
