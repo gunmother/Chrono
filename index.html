@@ -59,7 +59,7 @@
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
   .grid-area{ position:relative; overflow:hidden }
-  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
   .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
@@ -72,11 +72,13 @@
     position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
     background:var(--chart-bg);
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+    z-index:0;
   }
-  .blocks{ position:absolute; inset:0 }
+  .blocks{ position:absolute; inset:0; z-index:1 }
   .blk{ position:absolute; border:1px solid var(--border) }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges }
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
+  .hud{ position:absolute; inset:0; pointer-events:none; z-index:3 } /* NEW: sits above mask */
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:4 }
 
   .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
   .chev:disabled{ opacity:.5; cursor:not-allowed }
@@ -165,20 +167,28 @@
   .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
   .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
 
-  /* Saturday spill badge */
+  /* Spill visuals (on top of mask) */
   .spillBadge{
     position:absolute;
-    right:4px;
-    bottom:4px;
+    right:6px;
+    bottom:6px;
     padding:2px 6px;
     border-radius:10px;
     font-size:11px;
     line-height:1.2;
     background:#0EA5E9;
     color:#fff;
-    border:1px solid rgba(0,0,0,.15);
+    border:1px solid rgba(0,0,0,.18);
     pointer-events:none;
-    opacity:0.95;
+    opacity:0.98;
+    box-shadow:0 1px 2px rgba(0,0,0,.15);
+  }
+  .spillStrip{
+    position:absolute; height:6px;
+    left:0; right:0;
+    bottom:0;
+    opacity:.9;
+    pointer-events:none;
   }
 </style>
 </head>
@@ -256,7 +266,7 @@
   </div>
 
 <script>
-console.info('Chrono build r18');
+console.info('Chrono build r19');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -432,6 +442,7 @@ function buildWeekView(){
         <div class="grid" id="weekGrid">
           <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="hud" id="hudLayer" aria-hidden="true"></div> <!-- NEW: Above mask -->
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
         </div>
         <div class="hours" id="weekHours"></div>
@@ -466,7 +477,8 @@ function repaintWeek(){
   }
 
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
-  const geom=computeGeometry(document.getElementById('weekGrid'), 7);
+  const gridEl = document.getElementById('weekGrid');
+  const geom=computeGeometry(gridEl, 7);
   for(let i=0;i<24;i++){
     const el=document.createElement('div'); el.className='hour-stamp';
     el.textContent = `${String(i).padStart(2,'0')}:00`;
@@ -610,9 +622,10 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   return false;
 }
 
-/* ---------- Paint week (with Saturday spill badge) ---------- */
+/* ---------- Paint week (with on-top Saturday spill cues) ---------- */
 function paintBlocksWeek(geom){
-  const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
+  const blocks=document.getElementById('blocksLayer'); blocks.innerHTML='';
+  const hud=document.getElementById('hudLayer'); hud.innerHTML='';
   const colors=COLORS();
   const {colX, slotY} = geom;
 
@@ -625,31 +638,40 @@ function paintBlocksWeek(geom){
         const endAbs   = (rawEnd <= startMin ? rawEnd + 1440 : rawEnd);
 
         const tStart = startMin, tEnd = Math.min(endAbs, 1440);
-        if (tEnd > tStart) drawFragment(d, Math.floor(tStart/15), Math.floor(tEnd/15), key);
+        if (tEnd > tStart) drawFragment(blocks, d, Math.floor(tStart/15), Math.floor(tEnd/15), key);
 
         const spill = endAbs - 1440;
-        if (spill > 0 && d+1 <= 6){
-          drawFragment(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
-        }
-        // If it spills past Saturday into Sunday of next week (off-screen), show a badge.
-        if (spill > 0 && d === 6){
-          const right = geom.colX[7];
-          const left  = geom.colX[6];
-          const badge = document.createElement('div');
-          badge.className = 'spillBadge';
-          const spillM = Math.min(spill, 1440);
-          const hh = Math.floor(spillM/60);
-          const mm = String(spillM%60).padStart(2,'0');
-          badge.textContent = `→ Sun ${hh}:${mm}`;
-          badge.style.left = (left+2) + 'px';
-          badge.style.width = Math.max(0,(right-left-6)) + 'px';
-          layer.appendChild(badge);
+        if (spill > 0){
+          if (d+1 <= 6){
+            // Render Sunday fragment inside the week if present
+            drawFragment(blocks, d+1, 0, Math.floor(Math.min(spill,1440)/15), key, /*isSpill*/true);
+          } else if (d === 6){
+            // Saturday → offscreen Sunday: draw HUD badge + continuation strip ON TOP
+            const left  = geom.colX[6], right = geom.colX[7];
+            // 1) Continuation strip (colored)
+            const strip = document.createElement('div');
+            strip.className = 'spillStrip';
+            strip.style.left = left+'px';
+            strip.style.width = (right-left-1)+'px';
+            strip.style.background = colors[key] || '#0EA5E9';
+            hud.appendChild(strip);
+            // 2) Badge
+            const spillM = Math.min(spill, 1440);
+            const hh = Math.floor(spillM/60);
+            const mm = String(spillM%60).padStart(2,'0');
+            const badge = document.createElement('div');
+            badge.className = 'spillBadge';
+            badge.textContent = `→ Sun ${hh}:${mm}`;
+            badge.style.left = (left+6)+'px';
+            badge.style.width = Math.max(0,(right-left-12)) + 'px';
+            hud.appendChild(badge);
+          }
         }
       }
     }
   }
 
-  function drawFragment(dayIdx, slotStart, slotEnd, key, isSpill=false){
+  function drawFragment(parent, dayIdx, slotStart, slotEnd, key, isSpill=false){
     if(slotEnd<=slotStart) return;
     const left=colX[dayIdx], right=colX[dayIdx+1];
     const top=slotY[slotStart], bottom=slotY[slotEnd];
@@ -659,7 +681,7 @@ function paintBlocksWeek(geom){
     div.style.height=(bottom-top)+'px';
     div.style.background = colors[key] || '#ddd';
     div.title = LABELS()[key] + (isSpill?' (continues)':'');
-    layer.appendChild(div);
+    parent.appendChild(div);
   }
 }
 
