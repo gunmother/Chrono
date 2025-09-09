@@ -29,6 +29,7 @@
     --danger:#d33c36;
     --ok:#1d8f2e;
     --hint:#111;
+    --accent:#0EA5E9;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -81,9 +82,9 @@
     z-index:0;
   }
   .blocks{ position:absolute; inset:0; z-index:1 }
-  .blk{ position:absolute; border:1px solid var(--border) }
+  .blk{ position:absolute; border:1px solid var(--border); cursor:pointer }
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
+  .now{ position:absolute; border:2px solid var(--accent); border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
 
   .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
   .chev:disabled{ opacity:.5; cursor:not-allowed }
@@ -94,10 +95,10 @@
   .month-dow span{ text-align:center }
   .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
   .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
-  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
+  .mcell.today{ outline:2px solid var(--accent); outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Task stack overlay */
+  /* Task overlay */
   #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
   #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
   #taskOverlay .stack{
@@ -172,39 +173,40 @@
   .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
   .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
 
-  /* Day initials badges next to inputs (only for cross-midnight) */
-  .dayTag{
-    position:absolute; right:6px; top:50%; transform:translateY(-50%);
-    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6;
-    pointer-events:none;
+  .dayTag{ position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6; pointer-events:none; }
+
+  /* Watermark + tools in Day view */
+  .wm-wrap{ display:grid; gap:8px; place-items:center; }
+  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+  .nukeRow{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center }
+  .btnL{
+    border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer;
   }
+  .btnDanger{ color:#b00020; border-color:#b00020 }
 
-  /* Day “screensaver” watermark */
-  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; cursor:pointer; }
-
-  /* ---------------- NEW: Thumb editing layer (no visual redesign) -------------- */
-  /* Selection box */
+  /* ---------------- Thumb editing layer (contrast & visibility) -------------- */
   .draftSel{
     position:absolute; left:0; width:0; top:0; height:0;
-    border:2px dashed #0EA5E9; border-radius:6px;
-    background:rgba(14,165,233,.06);
+    border:3px solid var(--accent); border-radius:8px;
+    background:rgba(14,165,233,.07);
+    box-shadow:0 0 0 2px rgba(14,165,233,.15) inset;
     z-index:4; pointer-events:none;
   }
-  /* Triangles (full-width above/below) */
+  /* Full-hour handles with matching stroke color */
   .handle{
-    position:absolute; left:0; right:0; height:18px; z-index:5;
+    position:absolute; left:-2px; right:-2px; height:calc(var(--hourH, 0px)); z-index:5;
     display:grid; place-items:center; pointer-events:auto; touch-action:none;
   }
-  .handle:after{
-    content:""; width:0; height:0;
-    border-left:9px solid transparent; border-right:9px solid transparent;
-  }
-  .handle.top{ top:-18px; }
-  .handle.top:after{ border-bottom:12px solid #0EA5E9; }
-  .handle.bottom{ bottom:-18px; }
-  .handle.bottom:after{ border-top:12px solid #0EA5E9; }
+  .handle.top{ top:calc(-1 * var(--hourH, 0px)); }
+  .handle.bottom{ bottom:calc(-1 * var(--hourH, 0px)); }
 
-  /* Floating control bar (plus/minus/assign/edit/dup/del) */
+  .handleBadge{
+    display:inline-block; padding:4px 8px; border:2px solid var(--accent); border-radius:999px; background:#fff; font-size:12px; font-weight:800; color:#000;
+    box-shadow:var(--ctrl-shadow);
+  }
+
+  /* Floating control bar that auto-positions */
   .ctrlBar{
     position:absolute; z-index:6; display:flex; flex-direction:column; gap:8px;
     background:var(--ctrl-bg); border:1px solid var(--border); border-radius:12px; padding:8px;
@@ -216,34 +218,34 @@
   }
   .ctrlBar button[disabled]{ opacity:.5; cursor:not-allowed }
 
-  /* Assign row (activity chips) */
-  .assignRow{
-    position:absolute; left:50%; transform:translateX(-50%);
-    bottom:10px; z-index:7; display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
-    width:min(96%, 500px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:8px;
-    box-shadow:var(--ctrl-shadow);
+  /* Assign dropdown (scrollable) */
+  .assignDrop{
+    position:absolute; z-index:7; background:#fff; border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--ctrl-shadow); max-height:280px; overflow:auto; width:min(92%, 420px); padding:6px;
   }
-  .chip{
-    display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:10px; background:#fff; cursor:pointer;
-    min-height:40px; font-size:13px;
+  .listItem{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px; border:1px solid var(--border);
+    border-radius:10px; margin:6px; cursor:pointer; background:#fff; font-size:13px;
   }
-  .chip .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
+  .listItem .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
+
+  /* Block chooser when multiple tiny blocks overlap */
+  .chooser{
+    position:absolute; z-index:7; background:#fff; border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--ctrl-shadow); overflow:auto; max-height:240px; width:260px; padding:6px;
+  }
 
   /* Undo/Redo */
-  .undoDock{
-    position:absolute; right:10px; bottom:10px; z-index:7; display:flex; gap:8px;
-  }
-  .undoDock button{
-    border:1px solid var(--border); border-radius:10px; background:#fff; padding:8px 10px; font-weight:800; cursor:pointer;
-  }
+  .undoDock{ position:absolute; right:10px; bottom:10px; z-index:7; display:flex; gap:8px; }
+  .undoDock button{ border:1px solid var(--border); border-radius:10px; background:#fff; padding:8px 10px; font-weight:800; cursor:pointer; }
 
-  /* Onboarding bubbles */
+  /* Tips */
   .tip{
     position:absolute; left:50%; transform:translateX(-50%);
     bottom:12px; z-index:8; background:#fff; color:#111; border:1px solid var(--border); border-radius:12px; padding:10px 12px; box-shadow:var(--ctrl-shadow);
     font-size:13px; display:flex; align-items:center; gap:10px;
   }
-  .tip .dot{ width:8px; height:8px; background:#0EA5E9; border-radius:50%; }
+  .tip .dot{ width:8px; height:8px; background:var(--accent); border-radius:50%; }
 
   /* Spillover confirm */
   .confirm{
@@ -254,19 +256,6 @@
   .confirm .q{ font-size:13px; }
   .confirm button{ width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .confirm .yes{ color:var(--ok) } .confirm .no{ color:var(--danger) }
-
-  /* Build panel (Day view) */
-  .buildPanel{
-    position:absolute; left:50%; transform:translateX(-50%);
-    bottom:18px; z-index:10; background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:var(--ctrl-shadow);
-    display:grid; gap:8px; width:min(92%, 460px);
-  }
-  .buildPanel .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .buildPanel .actions{ display:flex; gap:8px; flex-wrap:wrap; }
-  .buildPanel .btnL{
-    border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer;
-  }
-  .buildPanel .chk{ display:flex; align-items:center; gap:6px; font-size:13px; }
 </style>
 </head>
 <body>
@@ -322,10 +311,8 @@
     </nav>
   </main>
 
-  <!-- Task picker overlay -->
   <div id="taskOverlay" aria-hidden="true"></div>
 
-  <!-- Settings editor (existing) -->
   <div id="settingsOverlay" aria-hidden="true">
     <div class="backdrop"></div>
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
@@ -343,7 +330,7 @@
   </div>
 
 <script>
-console.info('Chrono build r21');
+console.info('Chrono build r22');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -399,7 +386,7 @@ const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 /* ---------- Data stores ---------- */
 const SLOTS_PER_DAY=96; // 15-min
 let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility, note?, private?}] */
+/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility,note?,private?}] */
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
@@ -435,14 +422,16 @@ function idbOpen(){
 }
 async function storageSet(key, value){
   if (STORAGE_MODE==='ls'){
-    localStorage.setItem(key, JSON.stringify(value));
+    if (value===null || value===undefined) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
     return true;
   }
   const db = await idbOpen();
   if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
   return new Promise((resolve, reject)=>{
     const tx = db.transaction('kv','readwrite');
-    tx.objectStore('kv').put({k:key, v:value});
+    if (value===null || value===undefined) tx.objectStore('kv').delete(key);
+    else tx.objectStore('kv').put({k:key, v:value});
     tx.oncomplete = ()=>resolve(true);
     tx.onerror = ()=>reject(tx.error);
   });
@@ -460,7 +449,7 @@ async function storageGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
-function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO, tutorial: TUTORIAL_STATE }; }
+function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO, tutorial: TUTORIAL_STATE, build:'r22' }; }
 function hydrateState(snap){
   try{
     if(!snap || typeof snap!=='object') return;
@@ -527,12 +516,14 @@ function buildWeekView(){
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
+
       <div class="undoDock" id="undoDock" aria-hidden="true" style="display:none">
         <button id="undoBtn">Undo</button>
         <button id="redoBtn">Redo</button>
       </div>
       <div class="tip" id="tip" style="display:none"><span class="dot"></span><span id="tipText"></span></div>
-      <div class="assignRow" id="assignRow" style="display:none"></div>
+      <div class="assignDrop" id="assignDrop" style="display:none"></div>
+      <div class="chooser" id="blkChooser" style="display:none"></div>
       <div class="confirm" id="spillConfirm" style="display:none">
         <span class="q" id="spillText">Spill over?</span>
         <button class="no" id="spillNo">✕</button>
@@ -543,12 +534,8 @@ function buildWeekView(){
   document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
   document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
 
-  // Tap-to-create interactions
   const grid = document.getElementById('weekGrid');
-  grid.addEventListener('click', (e)=> {
-    if (e.target.closest('.ctrlBar') || e.target.closest('.assignRow') || e.target.closest('.confirm')) return;
-    startTapCreate(e);
-  });
+  grid.addEventListener('click', onGridClick);
 
   repaintWeek();
   new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
@@ -576,6 +563,10 @@ function repaintWeek(){
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const gridEl = document.getElementById('weekGrid');
   const geom=computeGeometry(gridEl, 7);
+  // expose hour height to CSS (for handle size)
+  const hourH = geom.rowY[1]-geom.rowY[0];
+  document.documentElement.style.setProperty('--hourH', hourH+'px');
+
   for(let i=0;i<24;i++){
     const el=document.createElement('div'); el.className='hour-stamp';
     el.textContent = `${String(i).padStart(2,'0')}:00`;
@@ -588,6 +579,7 @@ function repaintWeek(){
   buildMask(geom, 7);
   paintNowMagnifier(geom);
 
+  hookUndoButtons();
   setupOnboarding();
 }
 
@@ -700,8 +692,7 @@ function rebuildSlots(){
   for(const key of keys){
     for(let d=0; d<7; d++){
       const prevDayIdx = (d===0? 6 : d-1);
-      // FIX: wrap within visible week
-      const prevDate   = addDays(visibleWeekFirst, (d+6)%7);
+      const prevDate   = addDays(visibleWeekFirst, (d+6)%7); // FIX
       const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
         return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
       });
@@ -717,7 +708,6 @@ function rebuildSlots(){
 }
 
 function isExistingFirmAtSlot(key, dayIdx, slotIdx){
-  // Check same-day firm
   const dateDay  = addDays(visibleWeekFirst, dayIdx);
   const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
   for(const r of owned){
@@ -727,7 +717,6 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
       else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
-  // Check previous-day spill firm (using true previous date)
   const prevDate = addDays(visibleWeekFirst, (dayIdx+6)%7);
   const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
   const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
@@ -752,6 +741,8 @@ function paintBlocksWeek(geom){
       const key=allSlots[d][s];
       if(!key){ s++; continue; }
       let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
+
+      // compute block actual start/end minutes by walking EXACT to avoid painting merged wrong
       const left=colX[d], right=colX[d+1];
       const top=slotY[s], bottom=slotY[e];
       const div=document.createElement('div'); div.className='blk';
@@ -760,6 +751,10 @@ function paintBlocksWeek(geom){
       div.style.height=(bottom-top)+'px';
       div.style.background = colors[key] || '#ddd';
       div.title = LABELS()[key];
+      div.dataset.day = d;
+      div.dataset.key = key;
+      div.dataset.startSlot = s;
+      div.dataset.endSlot = e;
       layer.appendChild(div);
       s=e;
     }
@@ -786,24 +781,32 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (build panel location) ---------- */
+/* ---------- Day View (with ALWAYS-VISIBLE NUKE BUTTONS) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
-      <div class="grid-area" style="display:grid;place-items:center;color:#666;position:relative">
-        <div class="watermark" id="wm">Chrono build r21 — Build &amp; Tools</div>
+      <div class="grid-area" style="display:grid;place-items:center;color:#666;position:relative;padding:16px">
+        <div class="wm-wrap">
+          <div class="watermark">Chrono build r22</div>
+          <div class="nukeRow">
+            <button class="btnL" id="exportBtn">Export Data (JSON)</button>
+            <button class="btnL btnDanger" id="resetBtn">Factory Reset (local)</button>
+            <label class="btnL" style="display:flex;gap:8px;align-items:center">
+              <input type="checkbox" id="resetCode"> Reset Code Cache
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   `;
-  const wm = document.getElementById('wm');
-  wm.addEventListener('click', openBuildPanel);
+  document.getElementById('exportBtn').onclick=exportData;
+  document.getElementById('resetBtn').onclick=()=>confirmReset(document.getElementById('resetCode').checked);
 }
 
 /* ---------- Month View ---------- */
 function buildMonthView(){
-  // FIX: use activeDayISO as base (not always new Date)
-  const base = fromISO(activeDayISO);
+  const base = fromISO(activeDayISO); // FIX
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
   const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
@@ -982,15 +985,15 @@ function optToOffset(val){
 function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
   if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
 
-  const defaultStart = 12*60; // 12:00
-  const defaultEnd   = 0;     // 00:00 (interpreted as next-day when start > end)
+  const defaultStart = 12*60;
+  const defaultEnd   = 0;
 
   const row=document.createElement('div'); row.className='slot';
   if (!preexisting) row.dataset.pristine = '1';
 
   const scopeVal  = existingMeta?.scope || 'recurring';
   const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
-  const flexVal   = existingMeta?.flexibility || 'firm'; // default Firm
+  const flexVal   = existingMeta?.flexibility || 'firm';
 
   row.innerHTML = `
     <div class="start">
@@ -1033,42 +1036,28 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const startTag = row.querySelector('.startTag');
   const endTag   = row.querySelector('.endTag');
 
-  if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
-  if (endMin   == null) { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
+  startInp.value = toHHMM(startMin==null? defaultStart : startMin);
+  endInp.value   = toHHMM(endMin==null? defaultEnd : endMin);
 
   function refreshDayTags(){
     const sVal=startInp.value, eVal=endInp.value;
     if(!sVal || !eVal){ startTag.style.display='none'; endTag.style.display='none'; return; }
     const s=toMin(sVal), e=toMin(eVal);
     if (e > s){
-      startTag.style.display='none';
-      endTag.style.display='none';
+      startTag.style.display='none'; endTag.style.display='none';
     } else if (e < s){
       const startDow = SHORT_DOW[dayIndex];
       const endDow   = SHORT_DOW[(dayIndex+1)%7];
       startTag.textContent = startDow;
       endTag.textContent   = endDow;
-      startTag.style.display='inline-block';
-      endTag.style.display  ='inline-block';
+      startTag.style.display='inline-block'; endTag.style.display='inline-block';
     }
   }
   refreshDayTags();
 
   row.querySelector('.mic').addEventListener('click', async ()=>{
     const sample = 'Say: "9:00 AM to 5:00 PM"';
-    let text = '';
-    if('webkitSpeechRecognition' in window){
-      try{
-        const rec = new webkitSpeechRecognition(); rec.lang='en-US'; rec.interimResults=false; rec.continuous=false;
-        alert(sample);
-        text = await new Promise((resolve,reject)=>{
-          rec.onresult = e=>resolve(e.results[0][0].transcript);
-          rec.onerror = e=>reject(e.error);
-          rec.onend = ()=>{};
-          rec.start(); setTimeout(()=>{ try{rec.stop();}catch{} }, 4500);
-        });
-      }catch{ text = prompt(sample) || ''; }
-    }else{ text = prompt(sample) || ''; }
+    let text = prompt(sample) || '';
     const parsed=parseSpokenRange(text);
     if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
   });
@@ -1172,7 +1161,7 @@ async function persistEditor(sessionDraft){
   saveSoon(200);
 }
 
-/* ---------- Speech parse & utils ---------- */
+/* ---------- Utilities ---------- */
 function parseSpokenRange(s){
   if(!s) return null;
   const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -1184,14 +1173,13 @@ function parseSpokenRange(s){
   const eMin = to24(eH,eM,eA);
   return {s:sMin, e:eMin};
 }
-
 function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
 function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
-/* ================= NEW: Thumb-editing controller (week view) ================== */
-let draft = null; // {dayIdx, startMin, endMin, geom, el, ctrlBar, mode:'idle'|'dragTop'|'dragBottom'|'moving'}
+/* ================= Thumb-editing controller ================== */
+let draft = null; // {type:'new'|'existing', taskKey?, dayIdx, startMin, endMin, geom, el, ctrlBar, mode}
 let history = { past:[], future:[] };
 
 function pushHistory(){
@@ -1205,32 +1193,29 @@ function undo(){
   history.future.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
   const snap=JSON.parse(history.past.pop());
   TASKS=snap.TASKS; Object.keys(EXACT).forEach(k=>EXACT[k]=snap.EXACT[k]); Object.assign(ORDER, snap.ORDER); SAVE_SEQ=snap.SAVE_SEQ;
-  repaintWeek(); saveSoon(50);
+  removeDraft(true); repaintWeek(); saveSoon(50);
 }
 function redo(){
   if(!history.future.length) return;
   history.past.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
   const snap=JSON.parse(history.future.pop());
   TASKS=snap.TASKS; Object.keys(EXACT).forEach(k=>EXACT[k]=snap.EXACT[k]); Object.assign(ORDER, snap.ORDER); SAVE_SEQ=snap.SAVE_SEQ;
-  repaintWeek(); saveSoon(50);
+  removeDraft(true); repaintWeek(); saveSoon(50);
 }
 function hookUndoButtons(){
   const u=document.getElementById('undoBtn'), r=document.getElementById('redoBtn');
   if(u){ u.onclick=undo; } if(r){ r.onclick=redo; }
 }
-function setupOnboarding(){
-  hookUndoButtons();
-  maybeShowTip();
-}
 
+/* Onboarding */
 const TUTORIAL_STATE={ created:0, assigned:0, resized:0, completed:false };
 function maybeShowTip(){
   const tip=document.getElementById('tip'); if(!tip) return;
   const text=document.getElementById('tipText');
   if(TUTORIAL_STATE.completed){ tip.style.display='none'; return; }
-  if(TUTORIAL_STATE.created<1){ text.textContent='Tap anywhere on the chart to start a block.'; tip.style.display='flex'; return; }
-  if(TUTORIAL_STATE.resized<1){ text.textContent='Drag the triangles to adjust time in 15-minute steps.'; tip.style.display='flex'; return; }
-  if(TUTORIAL_STATE.assigned<1){ text.textContent='Tap “Assign” to choose an activity.'; tip.style.display='flex'; return; }
+  if(TUTORIAL_STATE.created<1){ text.textContent='Tap an empty area to create a block. Tap a colored block to select it.'; tip.style.display='flex'; return; }
+  if(TUTORIAL_STATE.resized<1){ text.textContent='Drag the full-hour handles to adjust time in 15-minute steps.'; tip.style.display='flex'; return; }
+  if(TUTORIAL_STATE.assigned<1){ text.textContent='Use “Assign” to choose an activity.'; tip.style.display='flex'; return; }
   tip.style.display='none';
 }
 function progressTutorial(kind){
@@ -1247,46 +1232,106 @@ function percentFilledThisWeek(){
   return used/(96*7);
 }
 
-function startTapCreate(e){
+/* Hit detection & click routing */
+function onGridClick(e){
   const grid=document.getElementById('weekGrid');
   const geom=computeGeometry(grid,7);
   const rect=grid.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
-  // map to day column
-  let dayIdx=0; for(let i=0;i<7;i++){ if(x>=geom.colX[i] && x<geom.colX[i+1]){ dayIdx=i; break; } }
-  // map to nearest hour slot start
-  let hourIdx=0; for(let h=0;h<24;h++){ if(y>=geom.rowY[h] && y<geom.rowY[h+1]){ hourIdx=h; break; } }
-  const startMin = hourIdx*60;
-  const endMin   = Math.min(1440, startMin+60);
 
-  spawnDraft(dayIdx, startMin, endMin, geom);
+  // Day & slot
+  let dayIdx=0; for(let i=0;i<7;i++){ if(x>=geom.colX[i] && x<geom.colX[i+1]){ dayIdx=i; break; } }
+  let slot=0; for(let i=0;i<geom.slotY.length-1;i++){ if(y>=geom.slotY[i] && y<geom.slotY[i+1]){ slot=i; break; } }
+  const startMin = slot*15;
+
+  // If clicked inside an existing block → select that whole block
+  const hitBlocks = blocksAt(dayIdx, startMin);
+  if(hitBlocks.length>0){
+    if(hitBlocks.length===1){
+      selectExistingBlock(hitBlocks[0], geom);
+    }else{
+      openBlockChooser(hitBlocks, geom, x, y);
+    }
+    return;
+  }
+
+  // Empty area → create 1-hour draft (selection box)
+  const hourStart = Math.floor(startMin/60)*60;
+  spawnDraft({type:'new', dayIdx, startMin:hourStart, endMin:Math.min(hourStart+60, 1440), geom});
   progressTutorial('created');
 }
 
-function spawnDraft(dayIdx, startMin, endMin, geom){
+function blocksAt(dayIdx, min){
+  const dateDay = addDays(visibleWeekFirst, dayIdx);
+  const results=[];
+  for(const key of Object.keys(EXACT)){
+    for(const r of (EXACT[key][dayIdx]||[])){
+      if(!inScopeForDate(r, dateDay)) continue;
+      const s=r.startMin|0, e=r.endMin|0;
+      if(e>s){ if(min>=s && min<e) results.push({key, dayIdx, startMin:s, endMin:e}); }
+      else{ // cross-midnight into next day: show only the portion on this day
+        if(min>=s && min<1440) results.push({key, dayIdx, startMin:s, endMin:1440});
+        if(dayIdx+1<=6 && min<e && min>=0) {/* handled when clicking next day */}
+      }
+    }
+  }
+  // If multiple tiny blocks within the same hour, results >1 – chooser will handle
+  return results;
+}
+
+function openBlockChooser(blocks, geom, x, y){
+  const chooser=document.getElementById('blkChooser'); if(!chooser) return;
+  chooser.innerHTML='';
+  blocks.sort((a,b)=>a.startMin-b.startMin).forEach((b,idx)=>{
+    const li=document.createElement('div'); li.className='listItem';
+    const name=LABELS()[b.key]||b.key;
+    li.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><span class="dot" style="background:${COLORS()[b.key]}"></span><strong>${name}</strong></div><span>${toHHMM(b.startMin)}–${toHHMM(b.endMin)}</span>`;
+    li.onclick=()=>{ chooser.style.display='none'; selectExistingBlock(b, geom); };
+    chooser.appendChild(li);
+    if(idx===0) chooser.style.maxWidth='280px';
+  });
+  // Place chooser near click but keep on-screen
+  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+  const cx=Math.min(Math.max(x+gridRect.left+8, 12), window.innerWidth-300);
+  const cy=Math.min(Math.max(y+gridRect.top+8, 12), window.innerHeight-260);
+  chooser.style.left=cx+'px'; chooser.style.top=cy+'px'; chooser.style.display='block';
+}
+
+function selectExistingBlock(info, geom){
+  spawnDraft({type:'existing', taskKey:info.key, dayIdx:info.dayIdx, startMin:info.startMin, endMin:info.endMin, geom});
+}
+
+/* Draft creation */
+function spawnDraft(opts){
   removeDraft();
 
-  draft={ dayIdx, startMin, endMin, geom, mode:'idle', spillDir:null, spillArmed:false };
+  draft = { ...opts, mode:'idle', spillDir:null };
   const layer=document.getElementById('blocksLayer');
   const sel=document.createElement('div'); sel.className='draftSel'; draft.el=sel;
   layer.appendChild(sel);
 
-  // handles
+  // full-hour handles
   const topH=document.createElement('div'); topH.className='handle top';
   const botH=document.createElement('div'); botH.className='handle bottom';
+  const topBadge=document.createElement('div'); topBadge.className='handleBadge'; topBadge.textContent=toHHMM(draft.startMin);
+  const botBadge=document.createElement('div'); botBadge.className='handleBadge'; botBadge.textContent=toHHMM(draft.endMin%1440);
+  topH.appendChild(topBadge); botH.appendChild(botBadge);
   sel.appendChild(topH); sel.appendChild(botH);
 
-  // control bar
+  // toolbar (ordered intuitively)
   const bar=document.createElement('div'); bar.className='ctrlBar'; draft.ctrlBar=bar;
   bar.innerHTML=`
-    <button title="Extend up 15m" data-act="plusTop">＋</button>
+    <!-- TOP SIDE: plus above minus -->
+    <button title="Expand up 15m" data-act="plusTop">＋</button>
     <button title="Shrink from top 15m" data-act="minusTop">－</button>
+    <!-- ASSIGN / EDIT / DUPLICATE / DELETE -->
     <button title="Assign activity" data-act="assign">A</button>
-    <button title="Edit details" data-act="edit" disabled>✎</button>
-    <button title="Duplicate" data-act="dup">⎘</button>
-    <button title="Delete" data-act="del">🗑</button>
-    <button title="Extend down 15m" data-act="plusBot">＋</button>
+    <button title="Edit details" data-act="edit"${draft.type==='new'?' disabled':''}>✎</button>
+    <button title="Duplicate" data-act="dup"${draft.type==='new'?' disabled':''}>⎘</button>
+    <button title="Delete" data-act="del"${draft.type==='new'?' disabled':''}>🗑</button>
+    <!-- BOTTOM SIDE: minus above plus (so plus is below) -->
     <button title="Shrink from bottom 15m" data-act="minusBot">－</button>
+    <button title="Expand down 15m" data-act="plusBot">＋</button>
   `;
   layer.appendChild(bar);
 
@@ -1297,37 +1342,46 @@ function spawnDraft(dayIdx, startMin, endMin, geom){
     if(act==='minusTop') adjustTop(+15);
     if(act==='plusBot')  adjustBottom(+15);
     if(act==='minusBot') adjustBottom(-15);
-    if(act==='assign')   showAssignRow();
-    if(act==='edit')     quickEdit();
-    if(act==='dup')      duplicateDraft();
-    if(act==='del')      { removeDraft(); }
+    if(act==='assign')   showAssignDropdown();
+    if(act==='edit')     openEditor({key: draft.taskKey});
+    if(act==='dup')      duplicateCurrentBlock();
+    if(act==='del')      deleteCurrentBlock();
   });
 
-  // Drag handles
-  topH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragTop'; topH.setPointerCapture(ev.pointerId); });
-  botH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragBottom'; botH.setPointerCapture(ev.pointerId); });
-
-  const move=(ev)=>{
-    if(draft.mode==='dragTop' || draft.mode==='dragBottom'){
-      const rect=document.getElementById('weekGrid').getBoundingClientRect();
-      const y=ev.clientY-rect.top;
-      // compute minute from y
-      const slotY=draft.geom.slotY;
-      let slot=0; for(let i=0;i<slotY.length-1;i++){ if(y>=slotY[i] && y<slotY[i+1]){ slot=i; break; } if(y>=slotY[slotY.length-1]) slot=slotY.length-1; }
-      const min=clamp15(slot*15);
-      if(draft.mode==='dragTop'){
-        draft.startMin=Math.min(min, draft.endMin-15);
-      }else{
-        draft.endMin=Math.max(min, draft.startMin+15);
-      }
-      enforceBoundsOrSpill();
+  // Drag body to move whole piece (existing) or move draft
+  sel.style.pointerEvents='auto';
+  sel.addEventListener('pointerdown',(ev)=>{
+    ev.preventDefault();
+    draft.mode='moving';
+    const startY=ev.clientY, startX=ev.clientX;
+    const startStart=draft.startMin, startEnd=draft.endMin, startDay=draft.dayIdx;
+    const rect=document.getElementById('weekGrid').getBoundingClientRect();
+    const move=(mv)=>{
+      const dx=mv.clientX-startX, dy=mv.clientY-startY;
+      const g=draft.geom;
+      // vertical move
+      const totalH=g.totalH; const minDelta=Math.round((dy/totalH)*24*60/15)*15;
+      let newStart = clamp15(startStart + minDelta);
+      let newEnd   = clamp15(startEnd   + minDelta);
+      if(newEnd<=newStart){ newEnd = newStart+15; }
+      // horizontal day move
+      const colW=(g.colX[1]-g.colX[0]); const dayShift=Math.round(dx/colW);
+      let newDay = Math.min(6, Math.max(0, startDay + dayShift));
+      draft.dayIdx=newDay; draft.startMin=newStart; draft.endMin=newEnd;
       layoutDraft();
-      progressTutorial('resized');
-    }
-  };
-  const up=()=>{ draft.mode='idle'; hideSpillConfirm(); };
-  document.addEventListener('pointermove', move, {passive:true});
-  document.addEventListener('pointerup', up, {once:true});
+    };
+    const up=()=>{ draft.mode='idle'; document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); };
+    document.addEventListener('pointermove', move, {passive:true});
+    document.addEventListener('pointerup', up, {once:true});
+  });
+
+  // Handle drags
+  const moveTop=(ev)=>{ if(draft.mode!=='dragTop') return; updateFromPointer(ev,true); };
+  const moveBot=(ev)=>{ if(draft.mode!=='dragBottom') return; updateFromPointer(ev,false); };
+  const up=()=>{ draft.mode='idle'; hideSpillConfirm(); document.removeEventListener('pointermove', moveTop); document.removeEventListener('pointermove', moveBot); document.removeEventListener('pointerup', up); };
+
+  topH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragTop'; document.addEventListener('pointermove', moveTop, {passive:true}); document.addEventListener('pointerup', up, {once:true}); });
+  botH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragBottom'; document.addEventListener('pointermove', moveBot, {passive:true}); document.addEventListener('pointerup', up, {once:true}); });
 
   layoutDraft();
 }
@@ -1342,13 +1396,50 @@ function layoutDraft(){
   draft.el.style.width=Math.max(0,(draft.dayIdx===6?right-left-1:right-left))+'px';
   draft.el.style.height=(bottom-top)+'px';
 
-  // place ctrl bar to the right if room, else to left
-  const bar=draft.ctrlBar;
+  // Update handle badges
+  draft.el.querySelector('.handle.top .handleBadge').textContent=toHHMM(draft.startMin);
+  draft.el.querySelector('.handle.bottom .handleBadge').textContent=toHHMM(draft.endMin%1440);
+
+  // Auto-position toolbar to opposite corner & keep on-screen
+  positionToolbarOpposite(draft.ctrlBar, {left, right, top, bottom});
+}
+
+function positionToolbarOpposite(bar, box){
   const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
-  const selRect=draft.el.getBoundingClientRect();
-  const preferLeft = (selRect.right+56>gridRect.right);
-  bar.style.left = (preferLeft ? (selRect.left-48)+'px' : (selRect.right+8)+'px');
-  bar.style.top  = (selRect.top)+'px';
+  const centerX=(gridRect.left+gridRect.right)/2, centerY=(gridRect.top+gridRect.bottom)/2;
+  const boxRect={left:gridRect.left+box.left, right:gridRect.left+(box.right), top:gridRect.top+box.top, bottom:gridRect.top+box.bottom};
+
+  const placeLeft = (boxRect.right > centerX);   // if editing on right, place toolbar to the left
+  const placeTop  = (boxRect.bottom > centerY);  // if editing on bottom, place toolbar above
+
+  // base position near opposite corner
+  let x = placeLeft ? (boxRect.left - 8 - 48) : (boxRect.right + 8);
+  let y = placeTop  ? (boxRect.top - 8)       : (boxRect.bottom + 8);
+
+  // clamp to viewport
+  const bw = 56; // approx
+  const bh = 320; // max stack height estimate
+  x = Math.min(Math.max(x, 8), window.innerWidth - bw - 8);
+  y = Math.min(Math.max(y, 8), window.innerHeight - 8 - 56);
+
+  bar.style.left = x+'px';
+  bar.style.top  = y+'px';
+}
+
+function updateFromPointer(ev, isTop){
+  const rect=document.getElementById('weekGrid').getBoundingClientRect();
+  const y=ev.clientY-rect.top;
+  const slotY=draft.geom.slotY;
+  let slot=0; for(let i=0;i<slotY.length-1;i++){ if(y>=slotY[i] && y<slotY[i+1]){ slot=i; break; } if(y>=slotY[slotY.length-1]) slot=slotY.length-1; }
+  const min=clamp15(slot*15);
+  if(isTop){
+    draft.startMin=Math.min(min, draft.endMin-15);
+  }else{
+    draft.endMin=Math.max(min, draft.startMin+15);
+  }
+  enforceBoundsOrSpill();
+  layoutDraft();
+  progressTutorial('resized');
 }
 
 function adjustTop(delta){
@@ -1370,7 +1461,6 @@ function adjustBottom(delta){
 
 function enforceBoundsOrSpill(){
   if(!draft) return;
-  // top bound
   if(draft.startMin<=0){
     showSpillConfirm(-1);
     draft.startMin=0;
@@ -1381,68 +1471,81 @@ function enforceBoundsOrSpill(){
     hideSpillConfirm();
   }
 }
-
 function showSpillConfirm(dir){
   const c=document.getElementById('spillConfirm'); const t=document.getElementById('spillText');
   if(!c) return;
   draft.spillDir=dir;
   const nxt = dir>0 ? (draft.dayIdx+1<=6? draft.dayIdx+1 : null) : (draft.dayIdx-1>=0 ? draft.dayIdx-1 : null);
   if(nxt==null){ c.style.display='none'; return; }
-  t.textContent = (dir>0)
-    ? `Spill into ${DAY_NAMES[nxt]}?`
-    : `Spill back into ${DAY_NAMES[nxt]}?`;
+  t.textContent = (dir>0)? `Spill into ${DAY_NAMES[nxt]}?` : `Spill back into ${DAY_NAMES[nxt]}?`;
+  // position confirm above bottom margin
   c.style.display='flex';
-  document.getElementById('spillNo').onclick=()=>{ hideSpillConfirm(); };
-  document.getElementById('spillYes').onclick=()=>{ acceptSpill(); };
+  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+  c.style.left = (gridRect.left + (gridRect.width/2))+'px';
 }
 function hideSpillConfirm(){ const c=document.getElementById('spillConfirm'); if(c) c.style.display='none'; draft && (draft.spillDir=null); }
-
 function acceptSpill(){
   if(!draft || draft.spillDir==null) return;
   const dir=draft.spillDir;
-  // Commit current edge, move draft to next day edge ready to continue
   if(dir>0){
-    // commit [startMin,1440) to this day as 'free' until assigned later
-    // For user flow we keep draft and shift to next day from 0..end (user keeps extending)
-    if(draft.endMin<1440) draft.endMin=1440;
-    // Shift into next day minimal 15m selection at start
+    draft.endMin=1440;
     if(draft.dayIdx<6){ draft.dayIdx+=1; draft.startMin=0; draft.endMin=15; }
   }else{
-    if(draft.startMin>0) draft.startMin=0;
-    if(draft.dayIdx>0){ draft.dayIdx-=1; draft.startMin=1425; draft.endMin=1440; } // place at end; user will extend upward
+    draft.startMin=0;
+    if(draft.dayIdx>0){ draft.dayIdx-=1; draft.startMin=1425; draft.endMin=1440; }
   }
   hideSpillConfirm();
   layoutDraft();
 }
+document.addEventListener('click',(e)=>{
+  if(e.target.id==='spillYes') acceptSpill();
+  if(e.target.id==='spillNo') hideSpillConfirm();
+}, true);
 
-/* ------------ Assign / Edit / Duplicate ------------- */
-function showAssignRow(){
-  const row=document.getElementById('assignRow'); if(!row||!draft) return;
-  row.innerHTML='';
-  for(const t of TASKS){
-    const chip=document.createElement('button'); chip.className='chip'; chip.innerHTML=`<span class="dot" style="background:${t.color}"></span><span>${t.label}</span>`;
-    chip.addEventListener('click',()=>{ assignDraftTo(t.key); row.style.display='none'; progressTutorial('assigned'); });
-    row.appendChild(chip);
-  }
-  row.style.display='grid';
+/* Assign dropdown */
+function showAssignDropdown(){
+  const drop=document.getElementById('assignDrop'); if(!drop||!draft) return;
+  drop.innerHTML='';
+  TASKS.forEach(t=>{
+    const li=document.createElement('div'); li.className='listItem';
+    li.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><span class="dot" style="background:${t.color}"></span><strong>${t.label}</strong></div><span style="opacity:.7">${t.key}</span>`;
+    li.onclick=()=>{ assignDraftTo(t.key); drop.style.display='none'; progressTutorial('assigned'); };
+    drop.appendChild(li);
+  });
+  // place away from editing area (opposite corner, similar logic as toolbar)
+  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+  const selRect=draft.el.getBoundingClientRect();
+  const placeLeft = (selRect.right > (gridRect.left+gridRect.width/2));
+  const placeTop  = (selRect.bottom > (gridRect.top+gridRect.height/2));
+  let x = placeLeft ? (selRect.left-12-380) : (selRect.right+12);
+  let y = placeTop  ? (selRect.top-12-240)  : (selRect.bottom+12);
+  x = Math.min(Math.max(x, 8), window.innerWidth-400-8);
+  y = Math.min(Math.max(y, 8), window.innerHeight-12-8);
+  drop.style.left=x+'px'; drop.style.top=y+'px';
+  drop.style.display='block';
 }
+
 function assignDraftTo(taskKey){
   if(!draft) return;
   pushHistory();
 
-  // Split if cross-midnight *within* draft (we only keep within-day selection here)
-  const makeRec=(dIdx, s, e)=>({startMin:s, endMin:e, scope:'recurring', flexibility:'firm'});
-
-  // Commit current draft segment
-  if(draft.startMin<draft.endMin){
-    EXACT[taskKey][draft.dayIdx].push(makeRec(draft.dayIdx, draft.startMin, draft.endMin));
+  if(draft.type==='existing'){
+    // remove original block then add new one with same taskKey (no change) – or allow reassignment by calling with new key
+    removeRange(draft.taskKey, draft.dayIdx, draft.startMin, draft.endMin);
   }
-  // Commit any filled edges we left via spill: for simplicity we skip; user will continue dragging post-spill.
 
-  // Normalize merges for that day
-  const dayArr=EXACT[taskKey][draft.dayIdx].sort((a,b)=>a.startMin-b.startMin);
+  addRange(taskKey, draft.dayIdx, draft.startMin, draft.endMin);
+  ORDER.recurring[taskKey]=ORDER.recurring[taskKey] || (SAVE_SEQ++);
+  saveSoon(50);
+  removeDraft();
+  repaintWeek();
+}
+
+function addRange(taskKey, dayIdx, s, e){
+  const arr=EXACT[taskKey][dayIdx]; arr.push({startMin:s, endMin:e, scope:'recurring', flexibility:'firm'});
+  arr.sort((a,b)=>a.startMin-b.startMin);
   const merged=[];
-  for(const r of dayArr){
+  for(const r of arr){
     if(!merged.length){ merged.push({...r}); continue; }
     const L=merged[merged.length-1];
     if(L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin && (L.scope===r.scope) && ((L.flexibility||'firm')===(r.flexibility||'firm'))){
@@ -1451,28 +1554,32 @@ function assignDraftTo(taskKey){
       merged.push({...r});
     }
   }
-  EXACT[taskKey][draft.dayIdx]=merged.slice(0,MAX_RANGES_PER_DAY);
-  ORDER.recurring[taskKey]=ORDER.recurring[taskKey] || (SAVE_SEQ++);
-
-  saveSoon(50);
-  removeDraft();
-  repaintWeek();
+  EXACT[taskKey][dayIdx]=merged.slice(0,MAX_RANGES_PER_DAY);
 }
-function quickEdit(){
-  // enable the existing full editor for the chosen task via task picker, or no-op until assigned
-  alert('Pick an activity via Assign, then use the top menu (⋯) or task list to open full Edit.');
+function removeRange(taskKey, dayIdx, s, e){
+  EXACT[taskKey][dayIdx]= (EXACT[taskKey][dayIdx]||[]).filter(r=>!(r.startMin===s && r.endMin===e));
 }
 
-/* Duplicate simply re-spawns a draft at same size on same day to drag elsewhere */
-function duplicateDraft(){
+/* Existing block actions */
+function deleteCurrentBlock(){
+  if(!draft || draft.type!=='existing') return;
+  if(!confirm('Delete this block?')) return;
+  pushHistory();
+  removeRange(draft.taskKey, draft.dayIdx, draft.startMin, draft.endMin);
+  saveSoon(50); removeDraft(); repaintWeek();
+}
+function duplicateCurrentBlock(){
   if(!draft) return;
-  const {dayIdx, startMin, endMin, geom}=draft;
-  spawnDraft(dayIdx, startMin, endMin, geom);
+  // spawn a new movable draft same size & day
+  spawnDraft({type:'new', dayIdx:draft.dayIdx, startMin:draft.startMin, endMin:draft.endMin, geom:draft.geom});
 }
 
-/* Remove draft UI elements */
-function removeDraft(){
-  const row=document.getElementById('assignRow'); if(row) row.style.display='none';
+/* Remove draft UI */
+function removeDraft(keepAssign=false){
+  if(!keepAssign){
+    const drop=document.getElementById('assignDrop'); if(drop) drop.style.display='none';
+    const chooser=document.getElementById('blkChooser'); if(chooser) chooser.style.display='none';
+  }
   const c=document.getElementById('spillConfirm'); if(c) c.style.display='none';
   if(draft){
     draft.el?.remove();
@@ -1481,26 +1588,7 @@ function removeDraft(){
   }
 }
 
-/* ================= Build panel (Day view) — Export / Factory Reset ============= */
-function openBuildPanel(){
-  const host=document.querySelector('.grid-area'); if(!host) return;
-  let panel=document.querySelector('.buildPanel');
-  if(panel){ panel.remove(); return; }
-  panel=document.createElement('div'); panel.className='buildPanel';
-  panel.innerHTML=`
-    <div class="row"><strong>Build & Tools</strong><span style="opacity:.6">r21</span></div>
-    <div class="actions">
-      <button class="btnL" id="exportBtn">Export Data (JSON)</button>
-      <button class="btnL" id="resetBtn" style="color:#b00020;border-color:#b00020">Factory Reset (local)</button>
-    </div>
-    <label class="chk"><input type="checkbox" id="resetCode"> Reset Code Cache (advanced)</label>
-  `;
-  host.appendChild(panel);
-
-  panel.querySelector('#exportBtn').onclick=exportData;
-  panel.querySelector('#resetBtn').onclick=()=>confirmReset(panel.querySelector('#resetCode').checked);
-}
-
+/* ================= Day view tools (Export / Factory Reset) ============= */
 function exportData(){
   const snap=snapshotState();
   const blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
@@ -1512,36 +1600,28 @@ function exportData(){
   document.body.appendChild(a); a.click(); a.remove();
 }
 
-let undoResetTimer=null, backupBeforeReset=null;
 async function confirmReset(resetCodeCache){
   const typed=prompt('Delete all local data on this device.\nType RESET to confirm.\n(10s countdown will apply)');
   if(typed!=='RESET') return;
-  const btnOK=confirm('Proceed in 10 seconds? Press OK and wait…');
-  if(!btnOK) return;
+  const go=confirm('Proceed in 10 seconds? Press OK and wait…');
+  if(!go) return;
   await new Promise(res=>setTimeout(res, 10000));
 
-  // backup then wipe
-  backupBeforeReset = await storageGet('state');
-  await storageSet('state', null);
-  await storageSet('lastGood', null);
-  // Try IndexedDB nuke
   try{
+    await storageSet('state', null);
+    await storageSet('lastGood', null);
+    // nuke IDB
     const db = await idbOpen();
     if(db){ db.close(); await new Promise((resolve)=>{ const delReq=indexedDB.deleteDatabase(DB_NAME); delReq.onsuccess=resolve; delReq.onerror=resolve; delReq.onblocked=resolve; }); }
   }catch{}
-  // Optionally clear SW caches
+
   if(resetCodeCache && 'caches' in window){
     try{
       const keys=await caches.keys();
       await Promise.all(keys.filter(k=>k.startsWith('chrono-cache')).map(k=>caches.delete(k)));
     }catch{}
   }
-  alert('All local data deleted. (You can undo within 60s.)');
-  // Offer undo
-  clearTimeout(undoResetTimer);
-  undoResetTimer=setTimeout(()=>{ backupBeforeReset=null; }, 60000);
-
-  // Reload UI state
+  alert('All local data deleted.');
   location.reload();
 }
 
@@ -1554,7 +1634,6 @@ async function init(){
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 
-  // Undo window after reset (if backup exists in memory, only works pre-reload; for post-reload this is informational)
   window.addEventListener('keydown',(e)=>{
     if(e.key==='z' && (e.ctrlKey||e.metaKey)) undo();
     if(e.key==='y' && (e.ctrlKey||e.metaKey)) redo();
@@ -1562,13 +1641,13 @@ async function init(){
 }
 function render(){
   if(activeView==='week'){
-    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
+    visibleWeekFirst = weekStart(new Date());
     buildWeekView();
   } else if(activeView==='day'){
-    activeDayISO = toISO(new Date());          // sync to today
+    activeDayISO = toISO(new Date());
     buildDayView();
   } else if(activeView==='month'){
-    activeDayISO = toISO(new Date());          // reset to current month on entry
+    activeDayISO = toISO(new Date());
     buildMonthView();
   } else {
     screenEl.innerHTML='';
@@ -1577,7 +1656,7 @@ function render(){
 init();
 </script>
 
-<!-- Service worker registration (unchanged; if you want a true fresh code load, bump your SW cache name in service-worker.js) -->
+<!-- Service worker registration (no change needed; bump cache name in your SW if you want a hard refresh of code) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -1590,3 +1669,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+```0
