@@ -185,28 +185,33 @@
   }
   .btnDanger{ color:#b00020; border-color:#b00020 }
 
-  /* ---------------- Thumb editing layer (contrast & visibility) -------------- */
+  /* ---------- Selection visuals ---------- */
   .draftSel{
     position:absolute; left:0; width:0; top:0; height:0;
     border:3px solid var(--accent); border-radius:8px;
     background:rgba(14,165,233,.07);
     box-shadow:0 0 0 2px rgba(14,165,233,.15) inset;
-    z-index:4; pointer-events:none;
-  }
-  /* Full-hour handles with matching stroke color */
-  .handle{
-    position:absolute; left:-2px; right:-2px; height:calc(var(--hourH, 0px)); z-index:5;
-    display:grid; place-items:center; pointer-events:auto; touch-action:none;
-  }
-  .handle.top{ top:calc(-1 * var(--hourH, 0px)); }
-  .handle.bottom{ bottom:calc(-1 * var(--hourH, 0px)); }
-
-  .handleBadge{
-    display:inline-block; padding:4px 8px; border:2px solid var(--accent); border-radius:999px; background:#fff; font-size:12px; font-weight:800; color:#000;
-    box-shadow:var(--ctrl-shadow);
+    z-index:4; 
   }
 
-  /* Floating control bar that auto-positions */
+  /* Triangles: full-hour width, high-contrast stroke */
+  .tri{
+    position:absolute; left:-3px; right:-3px; height:0; z-index:5; pointer-events:none;
+  }
+  .tri::before{
+    content:""; position:absolute; left:0; right:0; height:0; border-left:calc(50% - 12px) solid transparent;
+    border-right:calc(50% - 12px) solid transparent;
+  }
+  .tri.top::before{ border-bottom:12px solid var(--accent); top:-14px; }
+  .tri.bottom::before{ border-top:12px solid var(--accent); bottom:-14px; }
+
+  /* Editable time inputs near triangles */
+  .timeField{
+    position:absolute; z-index:6; background:#fff; border:2px solid var(--accent); border-radius:8px; padding:4px 8px; box-shadow:var(--ctrl-shadow);
+    font-weight:800; font-size:12px;
+  }
+
+  /* Toolbar */
   .ctrlBar{
     position:absolute; z-index:6; display:flex; flex-direction:column; gap:8px;
     background:var(--ctrl-bg); border:1px solid var(--border); border-radius:12px; padding:8px;
@@ -216,9 +221,9 @@
     width:36px; height:36px; border-radius:50%;
     border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
   }
-  .ctrlBar button[disabled]{ opacity:.5; cursor:not-allowed }
+  .ctrlBar .danger{ color:var(--danger) }
 
-  /* Assign dropdown (scrollable) */
+  /* Assign dropdown */
   .assignDrop{
     position:absolute; z-index:7; background:#fff; border:1px solid var(--border); border-radius:12px;
     box-shadow:var(--ctrl-shadow); max-height:280px; overflow:auto; width:min(92%, 420px); padding:6px;
@@ -229,17 +234,11 @@
   }
   .listItem .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
 
-  /* Block chooser when multiple tiny blocks overlap */
   .chooser{
     position:absolute; z-index:7; background:#fff; border:1px solid var(--border); border-radius:12px;
     box-shadow:var(--ctrl-shadow); overflow:auto; max-height:240px; width:260px; padding:6px;
   }
 
-  /* Undo/Redo */
-  .undoDock{ position:absolute; right:10px; bottom:10px; z-index:7; display:flex; gap:8px; }
-  .undoDock button{ border:1px solid var(--border); border-radius:10px; background:#fff; padding:8px 10px; font-weight:800; cursor:pointer; }
-
-  /* Tips */
   .tip{
     position:absolute; left:50%; transform:translateX(-50%);
     bottom:12px; z-index:8; background:#fff; color:#111; border:1px solid var(--border); border-radius:12px; padding:10px 12px; box-shadow:var(--ctrl-shadow);
@@ -247,7 +246,6 @@
   }
   .tip .dot{ width:8px; height:8px; background:var(--accent); border-radius:50%; }
 
-  /* Spillover confirm */
   .confirm{
     position:absolute; z-index:9; left:50%; transform:translateX(-50%);
     bottom:calc(12px + 52px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; display:flex; gap:10px; align-items:center;
@@ -330,13 +328,12 @@
   </div>
 
 <script>
-console.info('Chrono build r22');
+console.info('Chrono build r23');
 
-/* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
-let activeView = null;               // starts blank
+let activeView = null;
 let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
@@ -353,7 +350,7 @@ function round15(min){ return Math.round(min/15)*15; }
 function clamp15(min){ return Math.max(0, Math.min(1440, round15(min))); }
 function isoWeekKey(date){
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCFullDay||d.getUTCDay) ? (d.getUTCDay()||7) : 7); // defensive
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
   const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
@@ -383,21 +380,20 @@ let TASKS = [
 const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
 const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 
-/* ---------- Data stores ---------- */
-const SLOTS_PER_DAY=96; // 15-min
+/* ---------- Data ---------- */
+const SLOTS_PER_DAY=96;
 let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility,note?,private?}] */
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
 
-/* ---------- Width sync ---------- */
+/* ---------- Layout sync ---------- */
 new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* ---------- Storage (IndexedDB + fallback) ---------- */
+/* ---------- Storage ---------- */
 const DB_NAME = 'chronoDB';
 const DB_VERSION = 6;
 let dbPromise = null;
@@ -449,7 +445,7 @@ async function storageGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
-function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO, tutorial: TUTORIAL_STATE, build:'r22' }; }
+function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO, build:'r23' }; }
 function hydrateState(snap){
   try{
     if(!snap || typeof snap!=='object') return;
@@ -474,7 +470,6 @@ function hydrateState(snap){
     if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
     if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
-    if (snap.tutorial) Object.assign(TUTORIAL_STATE, snap.tutorial);
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
 async function saveAll(){
@@ -517,10 +512,6 @@ function buildWeekView(){
         <div class="hours" id="weekHours"></div>
       </div>
 
-      <div class="undoDock" id="undoDock" aria-hidden="true" style="display:none">
-        <button id="undoBtn">Undo</button>
-        <button id="redoBtn">Redo</button>
-      </div>
       <div class="tip" id="tip" style="display:none"><span class="dot"></span><span id="tipText"></span></div>
       <div class="assignDrop" id="assignDrop" style="display:none"></div>
       <div class="chooser" id="blkChooser" style="display:none"></div>
@@ -563,7 +554,6 @@ function repaintWeek(){
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const gridEl = document.getElementById('weekGrid');
   const geom=computeGeometry(gridEl, 7);
-  // expose hour height to CSS (for handle size)
   const hourH = geom.rowY[1]-geom.rowY[0];
   document.documentElement.style.setProperty('--hourH', hourH+'px');
 
@@ -578,8 +568,6 @@ function repaintWeek(){
   paintBlocksWeek(geom);
   buildMask(geom, 7);
   paintNowMagnifier(geom);
-
-  hookUndoButtons();
   setupOnboarding();
 }
 
@@ -639,7 +627,6 @@ function buildMask(geom, cols){
   }
 }
 
-/* Scope filter */
 function inScopeForDate(r, date){
   const sc = r.scope || 'recurring';
   if (sc === 'recurring') return true;
@@ -648,7 +635,6 @@ function inScopeForDate(r, date){
   return false;
 }
 
-/* ---------- Slots (carryover both directions per visible week) ---------- */
 function rebuildSlots(){
   allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
   const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
@@ -664,7 +650,6 @@ function rebuildSlots(){
     }
   };
 
-  // Fill from current day ranges
   for(const key of keys){
     for(let d=0; d<7; d++){
       const dateDay = addDays(visibleWeekFirst, d);
@@ -688,11 +673,10 @@ function rebuildSlots(){
     }
   }
 
-  // ALSO: pull in previous-day spillovers (so Sunday can show Saturday→Sunday)
   for(const key of keys){
     for(let d=0; d<7; d++){
       const prevDayIdx = (d===0? 6 : d-1);
-      const prevDate   = addDays(visibleWeekFirst, (d+6)%7); // FIX
+      const prevDate   = addDays(visibleWeekFirst, (d+6)%7);
       const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
         return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
       });
@@ -729,7 +713,6 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
   return false;
 }
 
-/* ---------- Paint week ---------- */
 function paintBlocksWeek(geom){
   const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
   const colors=COLORS();
@@ -742,7 +725,6 @@ function paintBlocksWeek(geom){
       if(!key){ s++; continue; }
       let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
 
-      // compute block actual start/end minutes by walking EXACT to avoid painting merged wrong
       const left=colX[d], right=colX[d+1];
       const top=slotY[s], bottom=slotY[e];
       const div=document.createElement('div'); div.className='blk';
@@ -781,33 +763,29 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (with ALWAYS-VISIBLE NUKE BUTTONS) ---------- */
+/* ---------- Day View (with SIMPLE NUKE) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666;position:relative;padding:16px">
         <div class="wm-wrap">
-          <div class="watermark">Chrono build r22</div>
+          <div class="watermark">Chrono build r23</div>
           <div class="nukeRow">
             <button class="btnL" id="exportBtn">Export Data (JSON)</button>
-            <button class="btnL btnDanger" id="resetBtn">Factory Reset (local)</button>
-            <label class="btnL" style="display:flex;gap:8px;align-items:center">
-              <input type="checkbox" id="resetCode"> Reset Code Cache
-            </label>
+            <button class="btnL btnDanger" id="resetBtn">Nuke (Reset Everything)</button>
           </div>
         </div>
       </div>
     </div>
   `;
   document.getElementById('exportBtn').onclick=exportData;
-  document.getElementById('resetBtn').onclick=()=>confirmReset(document.getElementById('resetCode').checked);
+  document.getElementById('resetBtn').onclick=immediateReset; // no confirmation, no countdown
 }
 
 /* ---------- Month View ---------- */
 function buildMonthView(){
-  const base = fromISO(activeDayISO); // FIX
-
+  const base = fromISO(activeDayISO);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
   const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
   const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
@@ -843,8 +821,10 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------- Task picker (unchanged trigger) ---------- */
+/* ---------- Task Picker (unchanged) ---------- */
 const overlay=document.getElementById('taskOverlay');
+overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
+
 function openTaskStack(){
   overlay.innerHTML='';
   const stack=document.createElement('div'); stack.className='stack';
@@ -852,9 +832,7 @@ function openTaskStack(){
   const grid = document.getElementById('weekGrid');
   const r = grid.getBoundingClientRect();
 
-  const N = 16;
-  const G = 8;
-  const margin = 6;
+  const N = 16, G = 8, margin = 6;
   const avail = Math.max(120, r.height - margin*2);
   const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
   const used = N*rowH + (N-1)*G;
@@ -877,12 +855,11 @@ function openTaskStack(){
   overlay.appendChild(stack);
   overlay.style.display='block';
 }
-overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
 
 function weeklyTotals(){
   rebuildSlots();
   const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
-  for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
+  for(let d=0; d<7; d++){ for(let s=0; s<96; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
   return out;
 }
 function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
@@ -1055,11 +1032,9 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   }
   refreshDayTags();
 
-  row.querySelector('.mic').addEventListener('click', async ()=>{
-    const sample = 'Say: "9:00 AM to 5:00 PM"';
-    let text = prompt(sample) || '';
-    const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
+  row.querySelector('.mic').addEventListener('click', ()=>{
+    const sample = 'Type e.g. "09:00" start and "17:00" end in the fields.';
+    alert(sample);
   });
 
   row.querySelector('.trash').addEventListener('click', ()=>{
@@ -1178,15 +1153,14 @@ function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
-/* ================= Thumb-editing controller ================== */
-let draft = null; // {type:'new'|'existing', taskKey?, dayIdx, startMin, endMin, geom, el, ctrlBar, mode}
+/* ================== Thumb-Editing (updated per spec) ================== */
+let draft = null; // {type, taskKey?, dayIdx, startMin, endMin, geom, el, ctrlBar}
 let history = { past:[], future:[] };
 
 function pushHistory(){
   history.past.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
-  if(history.past.length>6) history.past.shift();
+  if(history.past.length>12) history.past.shift();
   history.future.length=0;
-  const dock=document.getElementById('undoDock'); if(dock){ dock.style.display='flex'; }
 }
 function undo(){
   if(!history.past.length) return;
@@ -1202,49 +1176,25 @@ function redo(){
   TASKS=snap.TASKS; Object.keys(EXACT).forEach(k=>EXACT[k]=snap.EXACT[k]); Object.assign(ORDER, snap.ORDER); SAVE_SEQ=snap.SAVE_SEQ;
   removeDraft(true); repaintWeek(); saveSoon(50);
 }
-function hookUndoButtons(){
-  const u=document.getElementById('undoBtn'), r=document.getElementById('redoBtn');
-  if(u){ u.onclick=undo; } if(r){ r.onclick=redo; }
-}
 
-/* Onboarding */
-const TUTORIAL_STATE={ created:0, assigned:0, resized:0, completed:false };
-function maybeShowTip(){
+/* Onboarding - minimal tip */
+function setupOnboarding(){
   const tip=document.getElementById('tip'); if(!tip) return;
-  const text=document.getElementById('tipText');
-  if(TUTORIAL_STATE.completed){ tip.style.display='none'; return; }
-  if(TUTORIAL_STATE.created<1){ text.textContent='Tap an empty area to create a block. Tap a colored block to select it.'; tip.style.display='flex'; return; }
-  if(TUTORIAL_STATE.resized<1){ text.textContent='Drag the full-hour handles to adjust time in 15-minute steps.'; tip.style.display='flex'; return; }
-  if(TUTORIAL_STATE.assigned<1){ text.textContent='Use “Assign” to choose an activity.'; tip.style.display='flex'; return; }
-  tip.style.display='none';
-}
-function progressTutorial(kind){
-  if(kind==='created') TUTORIAL_STATE.created++;
-  if(kind==='resized') TUTORIAL_STATE.resized++;
-  if(kind==='assigned') TUTORIAL_STATE.assigned++;
-  const filled = percentFilledThisWeek();
-  if(filled>=0.66) TUTORIAL_STATE.completed=true;
-  maybeShowTip(); saveSoon(200);
-}
-function percentFilledThisWeek(){
-  rebuildSlots();
-  let used=0; for(let d=0; d<7; d++){ for(let s=0; s<96; s++){ if(allSlots[d][s]) used++; } }
-  return used/(96*7);
+  tip.querySelector('#tipText').textContent='Tap empty space to create a 1-hour selection; tap a colored block to select it.';
+  tip.style.display='flex';
+  setTimeout(()=>{ if(tip) tip.style.display='none'; }, 3000);
 }
 
-/* Hit detection & click routing */
 function onGridClick(e){
   const grid=document.getElementById('weekGrid');
   const geom=computeGeometry(grid,7);
   const rect=grid.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
 
-  // Day & slot
   let dayIdx=0; for(let i=0;i<7;i++){ if(x>=geom.colX[i] && x<geom.colX[i+1]){ dayIdx=i; break; } }
   let slot=0; for(let i=0;i<geom.slotY.length-1;i++){ if(y>=geom.slotY[i] && y<geom.slotY[i+1]){ slot=i; break; } }
   const startMin = slot*15;
 
-  // If clicked inside an existing block → select that whole block
   const hitBlocks = blocksAt(dayIdx, startMin);
   if(hitBlocks.length>0){
     if(hitBlocks.length===1){
@@ -1255,10 +1205,8 @@ function onGridClick(e){
     return;
   }
 
-  // Empty area → create 1-hour draft (selection box)
   const hourStart = Math.floor(startMin/60)*60;
   spawnDraft({type:'new', dayIdx, startMin:hourStart, endMin:Math.min(hourStart+60, 1440), geom});
-  progressTutorial('created');
 }
 
 function blocksAt(dayIdx, min){
@@ -1269,28 +1217,24 @@ function blocksAt(dayIdx, min){
       if(!inScopeForDate(r, dateDay)) continue;
       const s=r.startMin|0, e=r.endMin|0;
       if(e>s){ if(min>=s && min<e) results.push({key, dayIdx, startMin:s, endMin:e}); }
-      else{ // cross-midnight into next day: show only the portion on this day
+      else{
         if(min>=s && min<1440) results.push({key, dayIdx, startMin:s, endMin:1440});
-        if(dayIdx+1<=6 && min<e && min>=0) {/* handled when clicking next day */}
       }
     }
   }
-  // If multiple tiny blocks within the same hour, results >1 – chooser will handle
   return results;
 }
 
 function openBlockChooser(blocks, geom, x, y){
   const chooser=document.getElementById('blkChooser'); if(!chooser) return;
   chooser.innerHTML='';
-  blocks.sort((a,b)=>a.startMin-b.startMin).forEach((b,idx)=>{
+  blocks.sort((a,b)=>a.startMin-b.startMin).forEach(b=>{
     const li=document.createElement('div'); li.className='listItem';
     const name=LABELS()[b.key]||b.key;
     li.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><span class="dot" style="background:${COLORS()[b.key]}"></span><strong>${name}</strong></div><span>${toHHMM(b.startMin)}–${toHHMM(b.endMin)}</span>`;
     li.onclick=()=>{ chooser.style.display='none'; selectExistingBlock(b, geom); };
     chooser.appendChild(li);
-    if(idx===0) chooser.style.maxWidth='280px';
   });
-  // Place chooser near click but keep on-screen
   const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
   const cx=Math.min(Math.max(x+gridRect.left+8, 12), window.innerWidth-300);
   const cy=Math.min(Math.max(y+gridRect.top+8, 12), window.innerHeight-260);
@@ -1301,87 +1245,60 @@ function selectExistingBlock(info, geom){
   spawnDraft({type:'existing', taskKey:info.key, dayIdx:info.dayIdx, startMin:info.startMin, endMin:info.endMin, geom});
 }
 
-/* Draft creation */
+/* Draft UI */
 function spawnDraft(opts){
   removeDraft();
 
-  draft = { ...opts, mode:'idle', spillDir:null };
+  draft = { ...opts };
   const layer=document.getElementById('blocksLayer');
   const sel=document.createElement('div'); sel.className='draftSel'; draft.el=sel;
   layer.appendChild(sel);
 
-  // full-hour handles
-  const topH=document.createElement('div'); topH.className='handle top';
-  const botH=document.createElement('div'); botH.className='handle bottom';
-  const topBadge=document.createElement('div'); topBadge.className='handleBadge'; topBadge.textContent=toHHMM(draft.startMin);
-  const botBadge=document.createElement('div'); botBadge.className='handleBadge'; botBadge.textContent=toHHMM(draft.endMin%1440);
-  topH.appendChild(topBadge); botH.appendChild(botBadge);
-  sel.appendChild(topH); sel.appendChild(botH);
+  // Triangles (non-draggable)
+  const triTop=document.createElement('div'); triTop.className='tri top';
+  const triBottom=document.createElement('div'); triBottom.className='tri bottom';
+  sel.appendChild(triTop); sel.appendChild(triBottom);
 
-  // toolbar (ordered intuitively)
+  // Editable time fields near triangles
+  const topInput=document.createElement('input'); topInput.type='time'; topInput.step='900'; topInput.className='timeField'; topInput.id='timeTop';
+  const botInput=document.createElement('input'); botInput.type='time'; botInput.step='900'; botInput.className='timeField'; botInput.id='timeBot';
+  topInput.value = toHHMM(draft.startMin);
+  botInput.value = toHHMM(draft.endMin%1440);
+  layer.appendChild(topInput); layer.appendChild(botInput);
+
+  topInput.addEventListener('change', ()=>{
+    let v=clamp15(toMin(topInput.value));
+    if(v>=draft.endMin) v=draft.endMin-15;
+    draft.startMin=v; layoutDraft(); maybeSpillAtEdges();
+  });
+  botInput.addEventListener('change', ()=>{
+    let v=clamp15(toMin(botInput.value));
+    if(v<=draft.startMin) v=draft.startMin+15;
+    draft.endMin=v; layoutDraft(); maybeSpillAtEdges();
+  });
+
+  // Toolbar: Assign, Edit, Duplicate, Delete, Undo, Redo (no +/-)
   const bar=document.createElement('div'); bar.className='ctrlBar'; draft.ctrlBar=bar;
   bar.innerHTML=`
-    <!-- TOP SIDE: plus above minus -->
-    <button title="Expand up 15m" data-act="plusTop">＋</button>
-    <button title="Shrink from top 15m" data-act="minusTop">－</button>
-    <!-- ASSIGN / EDIT / DUPLICATE / DELETE -->
-    <button title="Assign activity" data-act="assign">A</button>
-    <button title="Edit details" data-act="edit"${draft.type==='new'?' disabled':''}>✎</button>
+    <button title="Assign" data-act="assign">A</button>
+    <button title="Edit" data-act="edit"${draft.type==='new'?' disabled':''}>✎</button>
     <button title="Duplicate" data-act="dup"${draft.type==='new'?' disabled':''}>⎘</button>
-    <button title="Delete" data-act="del"${draft.type==='new'?' disabled':''}>🗑</button>
-    <!-- BOTTOM SIDE: minus above plus (so plus is below) -->
-    <button title="Shrink from bottom 15m" data-act="minusBot">－</button>
-    <button title="Expand down 15m" data-act="plusBot">＋</button>
+    <button title="Delete" class="danger" data-act="del"${draft.type==='new'?' disabled':''}>🗑</button>
+    <button title="Undo" data-act="undo">↶</button>
+    <button title="Redo" data-act="redo">↷</button>
   `;
   layer.appendChild(bar);
 
   bar.addEventListener('click',(ev)=>{
     const b=ev.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
-    if(act==='plusTop')  adjustTop(-15);
-    if(act==='minusTop') adjustTop(+15);
-    if(act==='plusBot')  adjustBottom(+15);
-    if(act==='minusBot') adjustBottom(-15);
     if(act==='assign')   showAssignDropdown();
     if(act==='edit')     openEditor({key: draft.taskKey});
     if(act==='dup')      duplicateCurrentBlock();
     if(act==='del')      deleteCurrentBlock();
+    if(act==='undo')     undo();
+    if(act==='redo')     redo();
   });
-
-  // Drag body to move whole piece (existing) or move draft
-  sel.style.pointerEvents='auto';
-  sel.addEventListener('pointerdown',(ev)=>{
-    ev.preventDefault();
-    draft.mode='moving';
-    const startY=ev.clientY, startX=ev.clientX;
-    const startStart=draft.startMin, startEnd=draft.endMin, startDay=draft.dayIdx;
-    const rect=document.getElementById('weekGrid').getBoundingClientRect();
-    const move=(mv)=>{
-      const dx=mv.clientX-startX, dy=mv.clientY-startY;
-      const g=draft.geom;
-      // vertical move
-      const totalH=g.totalH; const minDelta=Math.round((dy/totalH)*24*60/15)*15;
-      let newStart = clamp15(startStart + minDelta);
-      let newEnd   = clamp15(startEnd   + minDelta);
-      if(newEnd<=newStart){ newEnd = newStart+15; }
-      // horizontal day move
-      const colW=(g.colX[1]-g.colX[0]); const dayShift=Math.round(dx/colW);
-      let newDay = Math.min(6, Math.max(0, startDay + dayShift));
-      draft.dayIdx=newDay; draft.startMin=newStart; draft.endMin=newEnd;
-      layoutDraft();
-    };
-    const up=()=>{ draft.mode='idle'; document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); };
-    document.addEventListener('pointermove', move, {passive:true});
-    document.addEventListener('pointerup', up, {once:true});
-  });
-
-  // Handle drags
-  const moveTop=(ev)=>{ if(draft.mode!=='dragTop') return; updateFromPointer(ev,true); };
-  const moveBot=(ev)=>{ if(draft.mode!=='dragBottom') return; updateFromPointer(ev,false); };
-  const up=()=>{ draft.mode='idle'; hideSpillConfirm(); document.removeEventListener('pointermove', moveTop); document.removeEventListener('pointermove', moveBot); document.removeEventListener('pointerup', up); };
-
-  topH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragTop'; document.addEventListener('pointermove', moveTop, {passive:true}); document.addEventListener('pointerup', up, {once:true}); });
-  botH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragBottom'; document.addEventListener('pointermove', moveBot, {passive:true}); document.addEventListener('pointerup', up, {once:true}); });
 
   layoutDraft();
 }
@@ -1396,70 +1313,55 @@ function layoutDraft(){
   draft.el.style.width=Math.max(0,(draft.dayIdx===6?right-left-1:right-left))+'px';
   draft.el.style.height=(bottom-top)+'px';
 
-  // Update handle badges
-  draft.el.querySelector('.handle.top .handleBadge').textContent=toHHMM(draft.startMin);
-  draft.el.querySelector('.handle.bottom .handleBadge').textContent=toHHMM(draft.endMin%1440);
+  // position triangles
+  draft.el.querySelector('.tri.top').style.top='-1px';
+  draft.el.querySelector('.tri.bottom').style.bottom='-1px';
 
-  // Auto-position toolbar to opposite corner & keep on-screen
-  positionToolbarOpposite(draft.ctrlBar, {left, right, top, bottom});
+  // place time fields just outside selection, but clamped within chart window
+  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+  const selRect=draft.el.getBoundingClientRect();
+
+  const topField=document.getElementById('timeTop');
+  const botField=document.getElementById('timeBot');
+  if(topField){
+    topField.value = toHHMM(draft.startMin);
+    let x = selRect.left + (selRect.width/2) - 44;
+    let y = selRect.top - 36;
+    x = Math.min(Math.max(x, gridRect.left+4), gridRect.right-88);
+    y = Math.max(y, gridRect.top+4);
+    topField.style.left = x+'px'; topField.style.top = y+'px';
+  }
+  if(botField){
+    botField.value = toHHMM(draft.endMin%1440);
+    let x = selRect.left + (selRect.width/2) - 44;
+    let y = selRect.bottom + 8;
+    x = Math.min(Math.max(x, gridRect.left+4), gridRect.right-88);
+    y = Math.min(y, gridRect.bottom-40);
+    botField.style.left = x+'px'; botField.style.top = y+'px';
+  }
+
+  // toolbar: opposite side, clamped within grid
+  positionToolbarOppositeWithinGrid(draft.ctrlBar, selRect, gridRect);
 }
 
-function positionToolbarOpposite(bar, box){
-  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+function positionToolbarOppositeWithinGrid(bar, selRect, gridRect){
   const centerX=(gridRect.left+gridRect.right)/2, centerY=(gridRect.top+gridRect.bottom)/2;
-  const boxRect={left:gridRect.left+box.left, right:gridRect.left+(box.right), top:gridRect.top+box.top, bottom:gridRect.top+box.bottom};
+  const placeLeft = (selRect.right > centerX);
+  const placeTop  = (selRect.bottom > centerY);
 
-  const placeLeft = (boxRect.right > centerX);   // if editing on right, place toolbar to the left
-  const placeTop  = (boxRect.bottom > centerY);  // if editing on bottom, place toolbar above
+  let x = placeLeft ? (selRect.left - 8 - 48) : (selRect.right + 8);
+  let y = placeTop  ? (selRect.top - 8)       : (selRect.bottom + 8);
 
-  // base position near opposite corner
-  let x = placeLeft ? (boxRect.left - 8 - 48) : (boxRect.right + 8);
-  let y = placeTop  ? (boxRect.top - 8)       : (boxRect.bottom + 8);
-
-  // clamp to viewport
-  const bw = 56; // approx
-  const bh = 320; // max stack height estimate
-  x = Math.min(Math.max(x, 8), window.innerWidth - bw - 8);
-  y = Math.min(Math.max(y, 8), window.innerHeight - 8 - 56);
+  // Clamp inside chart window
+  const bw = 56, bh = 280; // rough bounds
+  x = Math.min(Math.max(x, gridRect.left+4), gridRect.right - bw - 4);
+  y = Math.min(Math.max(y, gridRect.top+4),  gridRect.bottom - 4 - 56);
 
   bar.style.left = x+'px';
   bar.style.top  = y+'px';
 }
 
-function updateFromPointer(ev, isTop){
-  const rect=document.getElementById('weekGrid').getBoundingClientRect();
-  const y=ev.clientY-rect.top;
-  const slotY=draft.geom.slotY;
-  let slot=0; for(let i=0;i<slotY.length-1;i++){ if(y>=slotY[i] && y<slotY[i+1]){ slot=i; break; } if(y>=slotY[slotY.length-1]) slot=slotY.length-1; }
-  const min=clamp15(slot*15);
-  if(isTop){
-    draft.startMin=Math.min(min, draft.endMin-15);
-  }else{
-    draft.endMin=Math.max(min, draft.startMin+15);
-  }
-  enforceBoundsOrSpill();
-  layoutDraft();
-  progressTutorial('resized');
-}
-
-function adjustTop(delta){
-  if(!draft) return;
-  draft.startMin = clamp15(draft.startMin+delta);
-  draft.startMin = Math.min(draft.startMin, draft.endMin-15);
-  enforceBoundsOrSpill();
-  layoutDraft();
-  progressTutorial('resized');
-}
-function adjustBottom(delta){
-  if(!draft) return;
-  draft.endMin = clamp15(draft.endMin+delta);
-  draft.endMin = Math.max(draft.endMin, draft.startMin+15);
-  enforceBoundsOrSpill();
-  layoutDraft();
-  progressTutorial('resized');
-}
-
-function enforceBoundsOrSpill(){
+function maybeSpillAtEdges(){
   if(!draft) return;
   if(draft.startMin<=0){
     showSpillConfirm(-1);
@@ -1471,35 +1373,24 @@ function enforceBoundsOrSpill(){
     hideSpillConfirm();
   }
 }
+
 function showSpillConfirm(dir){
   const c=document.getElementById('spillConfirm'); const t=document.getElementById('spillText');
   if(!c) return;
-  draft.spillDir=dir;
   const nxt = dir>0 ? (draft.dayIdx+1<=6? draft.dayIdx+1 : null) : (draft.dayIdx-1>=0 ? draft.dayIdx-1 : null);
   if(nxt==null){ c.style.display='none'; return; }
   t.textContent = (dir>0)? `Spill into ${DAY_NAMES[nxt]}?` : `Spill back into ${DAY_NAMES[nxt]}?`;
-  // position confirm above bottom margin
   c.style.display='flex';
-  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
-  c.style.left = (gridRect.left + (gridRect.width/2))+'px';
 }
 function hideSpillConfirm(){ const c=document.getElementById('spillConfirm'); if(c) c.style.display='none'; draft && (draft.spillDir=null); }
-function acceptSpill(){
-  if(!draft || draft.spillDir==null) return;
-  const dir=draft.spillDir;
-  if(dir>0){
-    draft.endMin=1440;
-    if(draft.dayIdx<6){ draft.dayIdx+=1; draft.startMin=0; draft.endMin=15; }
-  }else{
-    draft.startMin=0;
-    if(draft.dayIdx>0){ draft.dayIdx-=1; draft.startMin=1425; draft.endMin=1440; }
-  }
-  hideSpillConfirm();
-  layoutDraft();
-}
 document.addEventListener('click',(e)=>{
-  if(e.target.id==='spillYes') acceptSpill();
-  if(e.target.id==='spillNo') hideSpillConfirm();
+  if(e.target.id==='spillYes'){
+    // Accept spill: extend selection into next/prev day by 15m to continue
+    if(draft.endMin>=1440 && draft.dayIdx<6){ draft.dayIdx+=1; draft.startMin=0; draft.endMin=15; }
+    else if(draft.startMin<=0 && draft.dayIdx>0){ draft.dayIdx-=1; draft.startMin=1425; draft.endMin=1440; }
+    layoutDraft(); hideSpillConfirm();
+  }
+  if(e.target.id==='spillNo'){ hideSpillConfirm(); }
 }, true);
 
 /* Assign dropdown */
@@ -1509,18 +1400,17 @@ function showAssignDropdown(){
   TASKS.forEach(t=>{
     const li=document.createElement('div'); li.className='listItem';
     li.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><span class="dot" style="background:${t.color}"></span><strong>${t.label}</strong></div><span style="opacity:.7">${t.key}</span>`;
-    li.onclick=()=>{ assignDraftTo(t.key); drop.style.display='none'; progressTutorial('assigned'); };
+    li.onclick=()=>{ assignDraftTo(t.key); drop.style.display='none'; };
     drop.appendChild(li);
   });
-  // place away from editing area (opposite corner, similar logic as toolbar)
   const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
   const selRect=draft.el.getBoundingClientRect();
   const placeLeft = (selRect.right > (gridRect.left+gridRect.width/2));
   const placeTop  = (selRect.bottom > (gridRect.top+gridRect.height/2));
   let x = placeLeft ? (selRect.left-12-380) : (selRect.right+12);
   let y = placeTop  ? (selRect.top-12-240)  : (selRect.bottom+12);
-  x = Math.min(Math.max(x, 8), window.innerWidth-400-8);
-  y = Math.min(Math.max(y, 8), window.innerHeight-12-8);
+  x = Math.min(Math.max(x, gridRect.left+8), gridRect.right-8-380);
+  y = Math.min(Math.max(y, gridRect.top+8),  gridRect.bottom-8-60);
   drop.style.left=x+'px'; drop.style.top=y+'px';
   drop.style.display='block';
 }
@@ -1530,7 +1420,6 @@ function assignDraftTo(taskKey){
   pushHistory();
 
   if(draft.type==='existing'){
-    // remove original block then add new one with same taskKey (no change) – or allow reassignment by calling with new key
     removeRange(draft.taskKey, draft.dayIdx, draft.startMin, draft.endMin);
   }
 
@@ -1560,21 +1449,17 @@ function removeRange(taskKey, dayIdx, s, e){
   EXACT[taskKey][dayIdx]= (EXACT[taskKey][dayIdx]||[]).filter(r=>!(r.startMin===s && r.endMin===e));
 }
 
-/* Existing block actions */
 function deleteCurrentBlock(){
   if(!draft || draft.type!=='existing') return;
-  if(!confirm('Delete this block?')) return;
   pushHistory();
   removeRange(draft.taskKey, draft.dayIdx, draft.startMin, draft.endMin);
   saveSoon(50); removeDraft(); repaintWeek();
 }
 function duplicateCurrentBlock(){
   if(!draft) return;
-  // spawn a new movable draft same size & day
   spawnDraft({type:'new', dayIdx:draft.dayIdx, startMin:draft.startMin, endMin:draft.endMin, geom:draft.geom});
 }
 
-/* Remove draft UI */
 function removeDraft(keepAssign=false){
   if(!keepAssign){
     const drop=document.getElementById('assignDrop'); if(drop) drop.style.display='none';
@@ -1584,11 +1469,13 @@ function removeDraft(keepAssign=false){
   if(draft){
     draft.el?.remove();
     draft.ctrlBar?.remove();
+    const tF=document.getElementById('timeTop'); tF && tF.remove();
+    const bF=document.getElementById('timeBot'); bF && bF.remove();
     draft=null;
   }
 }
 
-/* ================= Day view tools (Export / Factory Reset) ============= */
+/* ---------- Day tools ---------- */
 function exportData(){
   const snap=snapshotState();
   const blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
@@ -1600,32 +1487,17 @@ function exportData(){
   document.body.appendChild(a); a.click(); a.remove();
 }
 
-async function confirmReset(resetCodeCache){
-  const typed=prompt('Delete all local data on this device.\nType RESET to confirm.\n(10s countdown will apply)');
-  if(typed!=='RESET') return;
-  const go=confirm('Proceed in 10 seconds? Press OK and wait…');
-  if(!go) return;
-  await new Promise(res=>setTimeout(res, 10000));
-
+async function immediateReset(){
   try{
     await storageSet('state', null);
     await storageSet('lastGood', null);
-    // nuke IDB
     const db = await idbOpen();
     if(db){ db.close(); await new Promise((resolve)=>{ const delReq=indexedDB.deleteDatabase(DB_NAME); delReq.onsuccess=resolve; delReq.onerror=resolve; delReq.onblocked=resolve; }); }
   }catch{}
-
-  if(resetCodeCache && 'caches' in window){
-    try{
-      const keys=await caches.keys();
-      await Promise.all(keys.filter(k=>k.startsWith('chrono-cache')).map(k=>caches.delete(k)));
-    }catch{}
-  }
-  alert('All local data deleted.');
   location.reload();
 }
 
-/* ---------- Init & render ---------- */
+/* ---------- Init ---------- */
 async function init(){
   try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
   visibleWeekFirst = weekStart(new Date());
@@ -1656,7 +1528,7 @@ function render(){
 init();
 </script>
 
-<!-- Service worker registration (no change needed; bump cache name in your SW if you want a hard refresh of code) -->
+<!-- Service worker registration -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -1669,4 +1541,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-```0
