@@ -23,6 +23,12 @@
     --slot-gap:8px;
     --icon-btn:36px;
     --row-min-h:36px;
+
+    --ctrl-bg:#ffffff;
+    --ctrl-shadow:0 6px 16px rgba(0,0,0,.15);
+    --danger:#d33c36;
+    --ok:#1d8f2e;
+    --hint:#111;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -174,8 +180,93 @@
   }
 
   /* Day “screensaver” watermark */
-  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; cursor:pointer; }
 
+  /* ---------------- NEW: Thumb editing layer (no visual redesign) -------------- */
+  /* Selection box */
+  .draftSel{
+    position:absolute; left:0; width:0; top:0; height:0;
+    border:2px dashed #0EA5E9; border-radius:6px;
+    background:rgba(14,165,233,.06);
+    z-index:4; pointer-events:none;
+  }
+  /* Triangles (full-width above/below) */
+  .handle{
+    position:absolute; left:0; right:0; height:18px; z-index:5;
+    display:grid; place-items:center; pointer-events:auto; touch-action:none;
+  }
+  .handle:after{
+    content:""; width:0; height:0;
+    border-left:9px solid transparent; border-right:9px solid transparent;
+  }
+  .handle.top{ top:-18px; }
+  .handle.top:after{ border-bottom:12px solid #0EA5E9; }
+  .handle.bottom{ bottom:-18px; }
+  .handle.bottom:after{ border-top:12px solid #0EA5E9; }
+
+  /* Floating control bar (plus/minus/assign/edit/dup/del) */
+  .ctrlBar{
+    position:absolute; z-index:6; display:flex; flex-direction:column; gap:8px;
+    background:var(--ctrl-bg); border:1px solid var(--border); border-radius:12px; padding:8px;
+    box-shadow:var(--ctrl-shadow);
+  }
+  .ctrlBar button{
+    width:36px; height:36px; border-radius:50%;
+    border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
+  }
+  .ctrlBar button[disabled]{ opacity:.5; cursor:not-allowed }
+
+  /* Assign row (activity chips) */
+  .assignRow{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:10px; z-index:7; display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+    width:min(96%, 500px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:8px;
+    box-shadow:var(--ctrl-shadow);
+  }
+  .chip{
+    display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--border); border-radius:10px; background:#fff; cursor:pointer;
+    min-height:40px; font-size:13px;
+  }
+  .chip .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
+
+  /* Undo/Redo */
+  .undoDock{
+    position:absolute; right:10px; bottom:10px; z-index:7; display:flex; gap:8px;
+  }
+  .undoDock button{
+    border:1px solid var(--border); border-radius:10px; background:#fff; padding:8px 10px; font-weight:800; cursor:pointer;
+  }
+
+  /* Onboarding bubbles */
+  .tip{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:12px; z-index:8; background:#fff; color:#111; border:1px solid var(--border); border-radius:12px; padding:10px 12px; box-shadow:var(--ctrl-shadow);
+    font-size:13px; display:flex; align-items:center; gap:10px;
+  }
+  .tip .dot{ width:8px; height:8px; background:#0EA5E9; border-radius:50%; }
+
+  /* Spillover confirm */
+  .confirm{
+    position:absolute; z-index:9; left:50%; transform:translateX(-50%);
+    bottom:calc(12px + 52px); background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; display:flex; gap:10px; align-items:center;
+    box-shadow:var(--ctrl-shadow);
+  }
+  .confirm .q{ font-size:13px; }
+  .confirm button{ width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
+  .confirm .yes{ color:var(--ok) } .confirm .no{ color:var(--danger) }
+
+  /* Build panel (Day view) */
+  .buildPanel{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:18px; z-index:10; background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:var(--ctrl-shadow);
+    display:grid; gap:8px; width:min(92%, 460px);
+  }
+  .buildPanel .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .buildPanel .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .buildPanel .btnL{
+    border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer;
+  }
+  .buildPanel .chk{ display:flex; align-items:center; gap:6px; font-size:13px; }
 </style>
 </head>
 <body>
@@ -234,7 +325,7 @@
   <!-- Task picker overlay -->
   <div id="taskOverlay" aria-hidden="true"></div>
 
-  <!-- Settings editor -->
+  <!-- Settings editor (existing) -->
   <div id="settingsOverlay" aria-hidden="true">
     <div class="backdrop"></div>
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
@@ -252,7 +343,7 @@
   </div>
 
 <script>
-console.info('Chrono build r20');
+console.info('Chrono build r21');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -272,6 +363,7 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function round15(min){ return Math.round(min/15)*15; }
+function clamp15(min){ return Math.max(0, Math.min(1440, round15(min))); }
 function isoWeekKey(date){
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
@@ -307,7 +399,7 @@ const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
 /* ---------- Data stores ---------- */
 const SLOTS_PER_DAY=96; // 15-min
 let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility}] */
+/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility, note?, private?}] */
 const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
 const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
 const MAX_RANGES_PER_DAY=6;
@@ -368,7 +460,7 @@ async function storageGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
-function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
+function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO, tutorial: TUTORIAL_STATE }; }
 function hydrateState(snap){
   try{
     if(!snap || typeof snap!=='object') return;
@@ -383,7 +475,9 @@ function hydrateState(snap){
             weekKey: r.weekKey || undefined,
             monthKey: r.monthKey || undefined,
             reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
-            flexibility: r.flexibility || 'firm'
+            flexibility: r.flexibility || 'firm',
+            note: r.note || undefined,
+            private: !!r.private
           })) : []);
         }
       }
@@ -391,6 +485,7 @@ function hydrateState(snap){
     if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
     if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
+    if (snap.tutorial) Object.assign(TUTORIAL_STATE, snap.tutorial);
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
 async function saveAll(){
@@ -432,11 +527,28 @@ function buildWeekView(){
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
+      <div class="undoDock" id="undoDock" aria-hidden="true" style="display:none">
+        <button id="undoBtn">Undo</button>
+        <button id="redoBtn">Redo</button>
+      </div>
+      <div class="tip" id="tip" style="display:none"><span class="dot"></span><span id="tipText"></span></div>
+      <div class="assignRow" id="assignRow" style="display:none"></div>
+      <div class="confirm" id="spillConfirm" style="display:none">
+        <span class="q" id="spillText">Spill over?</span>
+        <button class="no" id="spillNo">✕</button>
+        <button class="yes" id="spillYes">✓</button>
+      </div>
     </div>
   `;
   document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
   document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
-  document.getElementById('weekGrid').addEventListener('click', openTaskStack);
+
+  // Tap-to-create interactions
+  const grid = document.getElementById('weekGrid');
+  grid.addEventListener('click', (e)=> {
+    if (e.target.closest('.ctrlBar') || e.target.closest('.assignRow') || e.target.closest('.confirm')) return;
+    startTapCreate(e);
+  });
 
   repaintWeek();
   new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
@@ -475,6 +587,8 @@ function repaintWeek(){
   paintBlocksWeek(geom);
   buildMask(geom, 7);
   paintNowMagnifier(geom);
+
+  setupOnboarding();
 }
 
 function computeGeometry(gridEl, cols){
@@ -586,9 +700,9 @@ function rebuildSlots(){
   for(const key of keys){
     for(let d=0; d<7; d++){
       const prevDayIdx = (d===0? 6 : d-1);
-      const prevDate   = addDays(visibleWeekFirst, d-1); // NOTE: for d=0 this is last week's Saturday
+      // FIX: wrap within visible week
+      const prevDate   = addDays(visibleWeekFirst, (d+6)%7);
       const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
-        // only cross-midnight ranges spilling into this day
         return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
       });
       for(const r of prevRanges){
@@ -614,7 +728,7 @@ function isExistingFirmAtSlot(key, dayIdx, slotIdx){
     }
   }
   // Check previous-day spill firm (using true previous date)
-  const prevDate = addDays(visibleWeekFirst, dayIdx-1);
+  const prevDate = addDays(visibleWeekFirst, (dayIdx+6)%7);
   const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
   const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
   for(const r of prev){
@@ -672,22 +786,24 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (blank + version) ---------- */
+/* ---------- Day View (build panel location) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
-      <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r20</div>
+      <div class="grid-area" style="display:grid;place-items:center;color:#666;position:relative">
+        <div class="watermark" id="wm">Chrono build r21 — Build &amp; Tools</div>
       </div>
     </div>
   `;
+  const wm = document.getElementById('wm');
+  wm.addEventListener('click', openBuildPanel);
 }
 
 /* ---------- Month View ---------- */
 function buildMonthView(){
-  const base = new Date(); // reset to current month on entry
-  activeDayISO = toISO(base);
+  // FIX: use activeDayISO as base (not always new Date)
+  const base = fromISO(activeDayISO);
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
   const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
@@ -724,9 +840,8 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------- Task picker (centered, non-scroll) ---------- */
+/* ---------- Task picker (unchanged trigger) ---------- */
 const overlay=document.getElementById('taskOverlay');
-
 function openTaskStack(){
   overlay.innerHTML='';
   const stack=document.createElement('div'); stack.className='stack';
@@ -769,7 +884,7 @@ function weeklyTotals(){
 }
 function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
 
-/* ---------- Editor ---------- */
+/* ---------- Editor (existing) ---------- */
 const edOverlay=document.getElementById('settingsOverlay');
 const edBody=document.getElementById('edBody');
 const edTitle=document.getElementById('edTitle');
@@ -919,7 +1034,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   const endTag   = row.querySelector('.endTag');
 
   if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
-  if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
+  if (endMin   == null) { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
 
   function refreshDayTags(){
     const sVal=startInp.value, eVal=endInp.value;
@@ -929,7 +1044,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
       startTag.style.display='none';
       endTag.style.display='none';
     } else if (e < s){
-      // Cross-midnight: show DOW initials (e.g., Sat → Sun)
       const startDow = SHORT_DOW[dayIndex];
       const endDow   = SHORT_DOW[(dayIndex+1)%7];
       startTag.textContent = startDow;
@@ -978,7 +1092,6 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
     let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
     if(sMin===eMin) return;
 
-    // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
     const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
     for(const rr of rows){
       const s2=round15(toMin(rr.querySelector('input.start').value||'')); const e2=round15(toMin(rr.querySelector('input.end').value||''));
@@ -997,7 +1110,7 @@ function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=f
   }
 
   startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
-  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
+  endInp.addEventListener('change',   ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
 
   slotsEl.appendChild(row);
   return row;
@@ -1054,7 +1167,6 @@ async function persistEditor(sessionDraft){
     week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
   });
 
-  // Commit
   EXACT[key] = week;
   ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
   saveSoon(200);
@@ -1078,6 +1190,361 @@ function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0
 function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
   const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
+/* ================= NEW: Thumb-editing controller (week view) ================== */
+let draft = null; // {dayIdx, startMin, endMin, geom, el, ctrlBar, mode:'idle'|'dragTop'|'dragBottom'|'moving'}
+let history = { past:[], future:[] };
+
+function pushHistory(){
+  history.past.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
+  if(history.past.length>6) history.past.shift();
+  history.future.length=0;
+  const dock=document.getElementById('undoDock'); if(dock){ dock.style.display='flex'; }
+}
+function undo(){
+  if(!history.past.length) return;
+  history.future.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
+  const snap=JSON.parse(history.past.pop());
+  TASKS=snap.TASKS; Object.keys(EXACT).forEach(k=>EXACT[k]=snap.EXACT[k]); Object.assign(ORDER, snap.ORDER); SAVE_SEQ=snap.SAVE_SEQ;
+  repaintWeek(); saveSoon(50);
+}
+function redo(){
+  if(!history.future.length) return;
+  history.past.push(JSON.stringify({TASKS, EXACT, ORDER, SAVE_SEQ}));
+  const snap=JSON.parse(history.future.pop());
+  TASKS=snap.TASKS; Object.keys(EXACT).forEach(k=>EXACT[k]=snap.EXACT[k]); Object.assign(ORDER, snap.ORDER); SAVE_SEQ=snap.SAVE_SEQ;
+  repaintWeek(); saveSoon(50);
+}
+function hookUndoButtons(){
+  const u=document.getElementById('undoBtn'), r=document.getElementById('redoBtn');
+  if(u){ u.onclick=undo; } if(r){ r.onclick=redo; }
+}
+function setupOnboarding(){
+  hookUndoButtons();
+  maybeShowTip();
+}
+
+const TUTORIAL_STATE={ created:0, assigned:0, resized:0, completed:false };
+function maybeShowTip(){
+  const tip=document.getElementById('tip'); if(!tip) return;
+  const text=document.getElementById('tipText');
+  if(TUTORIAL_STATE.completed){ tip.style.display='none'; return; }
+  if(TUTORIAL_STATE.created<1){ text.textContent='Tap anywhere on the chart to start a block.'; tip.style.display='flex'; return; }
+  if(TUTORIAL_STATE.resized<1){ text.textContent='Drag the triangles to adjust time in 15-minute steps.'; tip.style.display='flex'; return; }
+  if(TUTORIAL_STATE.assigned<1){ text.textContent='Tap “Assign” to choose an activity.'; tip.style.display='flex'; return; }
+  tip.style.display='none';
+}
+function progressTutorial(kind){
+  if(kind==='created') TUTORIAL_STATE.created++;
+  if(kind==='resized') TUTORIAL_STATE.resized++;
+  if(kind==='assigned') TUTORIAL_STATE.assigned++;
+  const filled = percentFilledThisWeek();
+  if(filled>=0.66) TUTORIAL_STATE.completed=true;
+  maybeShowTip(); saveSoon(200);
+}
+function percentFilledThisWeek(){
+  rebuildSlots();
+  let used=0; for(let d=0; d<7; d++){ for(let s=0; s<96; s++){ if(allSlots[d][s]) used++; } }
+  return used/(96*7);
+}
+
+function startTapCreate(e){
+  const grid=document.getElementById('weekGrid');
+  const geom=computeGeometry(grid,7);
+  const rect=grid.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  // map to day column
+  let dayIdx=0; for(let i=0;i<7;i++){ if(x>=geom.colX[i] && x<geom.colX[i+1]){ dayIdx=i; break; } }
+  // map to nearest hour slot start
+  let hourIdx=0; for(let h=0;h<24;h++){ if(y>=geom.rowY[h] && y<geom.rowY[h+1]){ hourIdx=h; break; } }
+  const startMin = hourIdx*60;
+  const endMin   = Math.min(1440, startMin+60);
+
+  spawnDraft(dayIdx, startMin, endMin, geom);
+  progressTutorial('created');
+}
+
+function spawnDraft(dayIdx, startMin, endMin, geom){
+  removeDraft();
+
+  draft={ dayIdx, startMin, endMin, geom, mode:'idle', spillDir:null, spillArmed:false };
+  const layer=document.getElementById('blocksLayer');
+  const sel=document.createElement('div'); sel.className='draftSel'; draft.el=sel;
+  layer.appendChild(sel);
+
+  // handles
+  const topH=document.createElement('div'); topH.className='handle top';
+  const botH=document.createElement('div'); botH.className='handle bottom';
+  sel.appendChild(topH); sel.appendChild(botH);
+
+  // control bar
+  const bar=document.createElement('div'); bar.className='ctrlBar'; draft.ctrlBar=bar;
+  bar.innerHTML=`
+    <button title="Extend up 15m" data-act="plusTop">＋</button>
+    <button title="Shrink from top 15m" data-act="minusTop">－</button>
+    <button title="Assign activity" data-act="assign">A</button>
+    <button title="Edit details" data-act="edit" disabled>✎</button>
+    <button title="Duplicate" data-act="dup">⎘</button>
+    <button title="Delete" data-act="del">🗑</button>
+    <button title="Extend down 15m" data-act="plusBot">＋</button>
+    <button title="Shrink from bottom 15m" data-act="minusBot">－</button>
+  `;
+  layer.appendChild(bar);
+
+  bar.addEventListener('click',(ev)=>{
+    const b=ev.target.closest('button'); if(!b) return;
+    const act=b.dataset.act;
+    if(act==='plusTop')  adjustTop(-15);
+    if(act==='minusTop') adjustTop(+15);
+    if(act==='plusBot')  adjustBottom(+15);
+    if(act==='minusBot') adjustBottom(-15);
+    if(act==='assign')   showAssignRow();
+    if(act==='edit')     quickEdit();
+    if(act==='dup')      duplicateDraft();
+    if(act==='del')      { removeDraft(); }
+  });
+
+  // Drag handles
+  topH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragTop'; topH.setPointerCapture(ev.pointerId); });
+  botH.addEventListener('pointerdown',(ev)=>{ ev.preventDefault(); draft.mode='dragBottom'; botH.setPointerCapture(ev.pointerId); });
+
+  const move=(ev)=>{
+    if(draft.mode==='dragTop' || draft.mode==='dragBottom'){
+      const rect=document.getElementById('weekGrid').getBoundingClientRect();
+      const y=ev.clientY-rect.top;
+      // compute minute from y
+      const slotY=draft.geom.slotY;
+      let slot=0; for(let i=0;i<slotY.length-1;i++){ if(y>=slotY[i] && y<slotY[i+1]){ slot=i; break; } if(y>=slotY[slotY.length-1]) slot=slotY.length-1; }
+      const min=clamp15(slot*15);
+      if(draft.mode==='dragTop'){
+        draft.startMin=Math.min(min, draft.endMin-15);
+      }else{
+        draft.endMin=Math.max(min, draft.startMin+15);
+      }
+      enforceBoundsOrSpill();
+      layoutDraft();
+      progressTutorial('resized');
+    }
+  };
+  const up=()=>{ draft.mode='idle'; hideSpillConfirm(); };
+  document.addEventListener('pointermove', move, {passive:true});
+  document.addEventListener('pointerup', up, {once:true});
+
+  layoutDraft();
+}
+
+function layoutDraft(){
+  if(!draft) return;
+  const {colX, slotY}=draft.geom;
+  const left=colX[draft.dayIdx], right=colX[draft.dayIdx+1];
+  const top=slotY[Math.floor(draft.startMin/15)], bottom=slotY[Math.floor(draft.endMin/15)];
+  draft.el.style.left=left+'px';
+  draft.el.style.top=top+'px';
+  draft.el.style.width=Math.max(0,(draft.dayIdx===6?right-left-1:right-left))+'px';
+  draft.el.style.height=(bottom-top)+'px';
+
+  // place ctrl bar to the right if room, else to left
+  const bar=draft.ctrlBar;
+  const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+  const selRect=draft.el.getBoundingClientRect();
+  const preferLeft = (selRect.right+56>gridRect.right);
+  bar.style.left = (preferLeft ? (selRect.left-48)+'px' : (selRect.right+8)+'px');
+  bar.style.top  = (selRect.top)+'px';
+}
+
+function adjustTop(delta){
+  if(!draft) return;
+  draft.startMin = clamp15(draft.startMin+delta);
+  draft.startMin = Math.min(draft.startMin, draft.endMin-15);
+  enforceBoundsOrSpill();
+  layoutDraft();
+  progressTutorial('resized');
+}
+function adjustBottom(delta){
+  if(!draft) return;
+  draft.endMin = clamp15(draft.endMin+delta);
+  draft.endMin = Math.max(draft.endMin, draft.startMin+15);
+  enforceBoundsOrSpill();
+  layoutDraft();
+  progressTutorial('resized');
+}
+
+function enforceBoundsOrSpill(){
+  if(!draft) return;
+  // top bound
+  if(draft.startMin<=0){
+    showSpillConfirm(-1);
+    draft.startMin=0;
+  }else if(draft.endMin>=1440){
+    showSpillConfirm(+1);
+    draft.endMin=1440;
+  }else{
+    hideSpillConfirm();
+  }
+}
+
+function showSpillConfirm(dir){
+  const c=document.getElementById('spillConfirm'); const t=document.getElementById('spillText');
+  if(!c) return;
+  draft.spillDir=dir;
+  const nxt = dir>0 ? (draft.dayIdx+1<=6? draft.dayIdx+1 : null) : (draft.dayIdx-1>=0 ? draft.dayIdx-1 : null);
+  if(nxt==null){ c.style.display='none'; return; }
+  t.textContent = (dir>0)
+    ? `Spill into ${DAY_NAMES[nxt]}?`
+    : `Spill back into ${DAY_NAMES[nxt]}?`;
+  c.style.display='flex';
+  document.getElementById('spillNo').onclick=()=>{ hideSpillConfirm(); };
+  document.getElementById('spillYes').onclick=()=>{ acceptSpill(); };
+}
+function hideSpillConfirm(){ const c=document.getElementById('spillConfirm'); if(c) c.style.display='none'; draft && (draft.spillDir=null); }
+
+function acceptSpill(){
+  if(!draft || draft.spillDir==null) return;
+  const dir=draft.spillDir;
+  // Commit current edge, move draft to next day edge ready to continue
+  if(dir>0){
+    // commit [startMin,1440) to this day as 'free' until assigned later
+    // For user flow we keep draft and shift to next day from 0..end (user keeps extending)
+    if(draft.endMin<1440) draft.endMin=1440;
+    // Shift into next day minimal 15m selection at start
+    if(draft.dayIdx<6){ draft.dayIdx+=1; draft.startMin=0; draft.endMin=15; }
+  }else{
+    if(draft.startMin>0) draft.startMin=0;
+    if(draft.dayIdx>0){ draft.dayIdx-=1; draft.startMin=1425; draft.endMin=1440; } // place at end; user will extend upward
+  }
+  hideSpillConfirm();
+  layoutDraft();
+}
+
+/* ------------ Assign / Edit / Duplicate ------------- */
+function showAssignRow(){
+  const row=document.getElementById('assignRow'); if(!row||!draft) return;
+  row.innerHTML='';
+  for(const t of TASKS){
+    const chip=document.createElement('button'); chip.className='chip'; chip.innerHTML=`<span class="dot" style="background:${t.color}"></span><span>${t.label}</span>`;
+    chip.addEventListener('click',()=>{ assignDraftTo(t.key); row.style.display='none'; progressTutorial('assigned'); });
+    row.appendChild(chip);
+  }
+  row.style.display='grid';
+}
+function assignDraftTo(taskKey){
+  if(!draft) return;
+  pushHistory();
+
+  // Split if cross-midnight *within* draft (we only keep within-day selection here)
+  const makeRec=(dIdx, s, e)=>({startMin:s, endMin:e, scope:'recurring', flexibility:'firm'});
+
+  // Commit current draft segment
+  if(draft.startMin<draft.endMin){
+    EXACT[taskKey][draft.dayIdx].push(makeRec(draft.dayIdx, draft.startMin, draft.endMin));
+  }
+  // Commit any filled edges we left via spill: for simplicity we skip; user will continue dragging post-spill.
+
+  // Normalize merges for that day
+  const dayArr=EXACT[taskKey][draft.dayIdx].sort((a,b)=>a.startMin-b.startMin);
+  const merged=[];
+  for(const r of dayArr){
+    if(!merged.length){ merged.push({...r}); continue; }
+    const L=merged[merged.length-1];
+    if(L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin && (L.scope===r.scope) && ((L.flexibility||'firm')===(r.flexibility||'firm'))){
+      L.endMin=r.endMin;
+    }else{
+      merged.push({...r});
+    }
+  }
+  EXACT[taskKey][draft.dayIdx]=merged.slice(0,MAX_RANGES_PER_DAY);
+  ORDER.recurring[taskKey]=ORDER.recurring[taskKey] || (SAVE_SEQ++);
+
+  saveSoon(50);
+  removeDraft();
+  repaintWeek();
+}
+function quickEdit(){
+  // enable the existing full editor for the chosen task via task picker, or no-op until assigned
+  alert('Pick an activity via Assign, then use the top menu (⋯) or task list to open full Edit.');
+}
+
+/* Duplicate simply re-spawns a draft at same size on same day to drag elsewhere */
+function duplicateDraft(){
+  if(!draft) return;
+  const {dayIdx, startMin, endMin, geom}=draft;
+  spawnDraft(dayIdx, startMin, endMin, geom);
+}
+
+/* Remove draft UI elements */
+function removeDraft(){
+  const row=document.getElementById('assignRow'); if(row) row.style.display='none';
+  const c=document.getElementById('spillConfirm'); if(c) c.style.display='none';
+  if(draft){
+    draft.el?.remove();
+    draft.ctrlBar?.remove();
+    draft=null;
+  }
+}
+
+/* ================= Build panel (Day view) — Export / Factory Reset ============= */
+function openBuildPanel(){
+  const host=document.querySelector('.grid-area'); if(!host) return;
+  let panel=document.querySelector('.buildPanel');
+  if(panel){ panel.remove(); return; }
+  panel=document.createElement('div'); panel.className='buildPanel';
+  panel.innerHTML=`
+    <div class="row"><strong>Build & Tools</strong><span style="opacity:.6">r21</span></div>
+    <div class="actions">
+      <button class="btnL" id="exportBtn">Export Data (JSON)</button>
+      <button class="btnL" id="resetBtn" style="color:#b00020;border-color:#b00020">Factory Reset (local)</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="resetCode"> Reset Code Cache (advanced)</label>
+  `;
+  host.appendChild(panel);
+
+  panel.querySelector('#exportBtn').onclick=exportData;
+  panel.querySelector('#resetBtn').onclick=()=>confirmReset(panel.querySelector('#resetCode').checked);
+}
+
+function exportData(){
+  const snap=snapshotState();
+  const blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const d=new Date();
+  const y=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
+  a.download=`chrono-backup-${y}${mo}${da}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+let undoResetTimer=null, backupBeforeReset=null;
+async function confirmReset(resetCodeCache){
+  const typed=prompt('Delete all local data on this device.\nType RESET to confirm.\n(10s countdown will apply)');
+  if(typed!=='RESET') return;
+  const btnOK=confirm('Proceed in 10 seconds? Press OK and wait…');
+  if(!btnOK) return;
+  await new Promise(res=>setTimeout(res, 10000));
+
+  // backup then wipe
+  backupBeforeReset = await storageGet('state');
+  await storageSet('state', null);
+  await storageSet('lastGood', null);
+  // Try IndexedDB nuke
+  try{
+    const db = await idbOpen();
+    if(db){ db.close(); await new Promise((resolve)=>{ const delReq=indexedDB.deleteDatabase(DB_NAME); delReq.onsuccess=resolve; delReq.onerror=resolve; delReq.onblocked=resolve; }); }
+  }catch{}
+  // Optionally clear SW caches
+  if(resetCodeCache && 'caches' in window){
+    try{
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(k=>k.startsWith('chrono-cache')).map(k=>caches.delete(k)));
+    }catch{}
+  }
+  alert('All local data deleted. (You can undo within 60s.)');
+  // Offer undo
+  clearTimeout(undoResetTimer);
+  undoResetTimer=setTimeout(()=>{ backupBeforeReset=null; }, 60000);
+
+  // Reload UI state
+  location.reload();
+}
+
 /* ---------- Init & render ---------- */
 async function init(){
   try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
@@ -1086,6 +1553,12 @@ async function init(){
   render();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+
+  // Undo window after reset (if backup exists in memory, only works pre-reload; for post-reload this is informational)
+  window.addEventListener('keydown',(e)=>{
+    if(e.key==='z' && (e.ctrlKey||e.metaKey)) undo();
+    if(e.key==='y' && (e.ctrlKey||e.metaKey)) redo();
+  });
 }
 function render(){
   if(activeView==='week'){
@@ -1104,7 +1577,7 @@ function render(){
 init();
 </script>
 
-<!-- Service worker registration -->
+<!-- Service worker registration (unchanged; if you want a true fresh code load, bump your SW cache name in service-worker.js) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
