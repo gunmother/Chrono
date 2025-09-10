@@ -27,7 +27,7 @@
 
     /* Handles */
     --handle-height:44px; /* thumb-friendly */
-    --handle-border:#cfcfcf; /* subtle outline via drop-shadows */
+    --handle-stroke:#8d8d8d; /* prominent tab border */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -108,8 +108,12 @@
     border:var(--marquee-border) solid #fff;
     box-shadow: var(--marquee-shadow);
     border-radius:8px;
-    pointer-events:none;
+    pointer-events:auto;   /* allow dragging whole box */
+    cursor:grab;
+    touch-action:none;
   }
+  .marqueeRect:active{ cursor:grabbing; }
+
   .stamp{
     position:absolute;
     left:50%;
@@ -126,25 +130,25 @@
     pointer-events:none;
     z-index:2;
   }
-  /* Triangular handles: big, white, with a subtle border (via drop-shadows) */
-  .tri{
+
+  /* SVG handles (prominent border, clean shape) */
+  .handle{
     position:absolute;
     left:0;
     width:100%;
     height:var(--handle-height);
-    background:#fff; /* solid white per request */
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
-
-    /* Simulated 1px border around the triangular shape */
-    filter:
-      drop-shadow( 0  0 0 var(--handle-border))
-      drop-shadow( 0  0 0 var(--handle-border))
-      drop-shadow( 0  0 0 var(--handle-border));
+    touch-action:none;     /* prevent scroll interference */
   }
-  .tri.top   { clip-path:polygon(0 100%, 50% 0, 100% 100%); }
-  .tri.bottom{ clip-path:polygon(0 0, 50% 100%, 100% 0); }
+  .handle svg{ display:block; width:100%; height:100%; }
+  .handle polygon{
+    fill:#fff;
+    stroke:var(--handle-stroke);
+    stroke-width:2;
+    stroke-linejoin:round;
+  }
 
   /* Hint */
   .hint{
@@ -212,7 +216,7 @@
   </main>
 
 <script>
-console.info('Chrono build r24');
+console.info('Chrono build r25');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -228,12 +232,9 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-function iRound(n){ return (Number.isFinite(n)? Math.round(n) : 0); }
 function toHHMM(min){
-  const m = iRound(min) % 1440;
-  const mm = (m+1440)%1440;
-  const h = Math.floor(mm/60);
-  const r = mm % 60;
+  const mm = ((Math.round(min)|0)+1440)%1440;
+  const h = Math.floor(mm/60), r = mm%60;
   return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
 }
 
@@ -300,7 +301,8 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* ---------- Week View + Selection Marquee ---------- */
 let weekGeom=null;              // geometry
 let selState=null;              // {dayIdx,startMin,endMin}
-let dragKind=null;              // 'top' | 'bottom' | null
+let dragKind=null;              // 'top' | 'bottom' | 'move' | null
+let dragStartY=0, baseStart=0, baseEnd=0;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -338,13 +340,13 @@ function buildWeekView(){
 
   // First-open hint (once)
   try{
-    if(!localStorage.getItem('hint_week_edit_v2')){
+    if(!localStorage.getItem('hint_week_edit_v3')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v2','1');
+      localStorage.setItem('hint_week_edit_v3','1');
     }
   }catch{}
 }
@@ -492,25 +494,36 @@ function onWeekGridTap(e){
   const m=document.createElement('div');
   m.className='marquee';
   m.innerHTML=`
-    <div class="marqueeRect" id="mqRect"></div>
+    <div class="marqueeRect" id="mqRect" title="Drag to move"></div>
 
     <div class="stamp" id="mqTopStamp"></div>
-    <div class="tri top" id="mqTopTri" title="Drag to adjust start"></div>
+    <div class="handle" id="mqTopHandle" title="Drag to adjust start"></div>
 
     <div class="stamp" id="mqBotStamp"></div>
-    <div class="tri bottom" id="mqBotTri" title="Drag to adjust end"></div>
+    <div class="handle" id="mqBotHandle" title="Drag to adjust end"></div>
   `;
   host.appendChild(m);
 
-  // Attach pointer handlers to handles (vertical move only, same day)
-  m.querySelector('#mqTopTri').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
-  m.querySelector('#mqBotTri').addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
+  // Build SVG triangles with border
+  const topH = m.querySelector('#mqTopHandle');
+  const botH = m.querySelector('#mqBotHandle');
+  topH.innerHTML = `<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
+                      <polygon points="0,44 50,2 100,44"></polygon>
+                    </svg>`;
+  botH.innerHTML = `<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
+                      <polygon points="0,2 50,44 100,2"></polygon>
+                    </svg>`;
+
+  // Attach pointer handlers
+  m.querySelector('#mqTopHandle').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
+  m.querySelector('#mqBotHandle').addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
+  m.querySelector('#mqRect').addEventListener('pointerdown', ev=>startDrag(ev,'move'));
 
   updateSelectionVisual();
 }
 
 function minutesToY(min){
-  const idx = clamp(Math.round(iRound(min)/15), 0, 96);
+  const idx = clamp(Math.round(min/15), 0, 96);
   return weekGeom.slotY[idx];
 }
 function yToMinutesRaw(yPx){
@@ -518,7 +531,7 @@ function yToMinutesRaw(yPx){
   const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
   return clamp(ratio * 1440, 0, 1440);
 }
-function snap15(min){ return 15 * Math.round(iRound(min)/15); }
+function snap15(min){ return 15 * Math.round(min/15); }
 
 function updateSelectionVisual(){
   if(!selState) return;
@@ -540,7 +553,7 @@ function updateSelectionVisual(){
   const offsetLeft = rect.left - wrapRect.left + colLeft;
   const offsetTop  = rect.top  - wrapRect.top;
 
-  // Rectangle
+  // Rectangle (draggable body)
   const rEl = host.querySelector('#mqRect');
   rEl.style.left   = `${offsetLeft}px`;
   rEl.style.top    = `${offsetTop + topY}px`;
@@ -551,29 +564,31 @@ function updateSelectionVisual(){
   const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||44;
   const stampH=26;
 
-  // Top stamp + handle
+  // Top stamp
   const topStamp=host.querySelector('#mqTopStamp');
   topStamp.textContent = toHHMM(selState.startMin);
   topStamp.style.left = `${offsetLeft + colWidth/2}px`;
   topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
 
-  const topTri=host.querySelector('#mqTopTri');
-  topTri.style.left  = `${offsetLeft}px`;
-  topTri.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
-  topTri.style.width = `${colWidth}px`;
-  topTri.style.height= `${triH}px`;
+  // Top handle
+  const topHandle=host.querySelector('#mqTopHandle');
+  topHandle.style.left  = `${offsetLeft}px`;
+  topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
+  topHandle.style.width = `${colWidth}px`;
+  topHandle.style.height= `${triH}px`;
 
-  // Bottom stamp + handle
+  // Bottom stamp
   const botStamp=host.querySelector('#mqBotStamp');
   botStamp.textContent = toHHMM(selState.endMin);
   botStamp.style.left = `${offsetLeft + colWidth/2}px`;
   botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
 
-  const botTri=host.querySelector('#mqBotTri');
-  botTri.style.left  = `${offsetLeft}px`;
-  botTri.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
-  botTri.style.width = `${colWidth}px`;
-  botTri.style.height= `${triH}px`;
+  // Bottom handle
+  const botHandle=host.querySelector('#mqBotHandle');
+  botHandle.style.left  = `${offsetLeft}px`;
+  botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
+  botHandle.style.width = `${colWidth}px`;
+  botHandle.style.height= `${triH}px`;
 }
 
 function startDrag(ev, kind){
@@ -582,33 +597,54 @@ function startDrag(ev, kind){
   ev.preventDefault();
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
+  dragStartY = ev.clientY;
+  baseStart = selState.startMin;
+  baseEnd   = selState.endMin;
 
   const move=(e)=>{
-    // Only vertical movement matters; same day locked.
-    const yRel = e.clientY - weekGeom.rect.top;
-    const raw  = yToMinutesRaw(yRel); // 0..1440 float
+    const dyPx = e.clientY - dragStartY;
+    const deltaMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+
     const minGap = 15;
 
-    if(kind==='top'){
-      // Move start only; don't cross end - minGap
+    if(dragKind==='move'){
+      // Move whole box by delta; clamp to 0..1440
+      let newStart = baseStart + deltaMin;
+      let newEnd   = baseEnd   + deltaMin;
+      // clamp both while preserving duration
+      const dur = newEnd - newStart;
+      if(newStart < 0){ newEnd -= newStart; newStart = 0; }
+      if(newEnd > 1440){ const overflow = newEnd - 1440; newStart -= overflow; newEnd = 1440; }
+      // maintain at least 15 min
+      if(dur < minGap){ newEnd = newStart + minGap; }
+      selState.startMin = newStart;
+      selState.endMin   = newEnd;
+    } else if(dragKind==='top'){
+      const raw = baseStart + deltaMin;
       selState.startMin = clamp(raw, 0, selState.endMin - minGap);
-    }else{
-      // Move end only; don't cross start + minGap
+    } else if(dragKind==='bottom'){
+      const raw = baseEnd + deltaMin;
       selState.endMin = clamp(raw, selState.startMin + minGap, 1440);
     }
     updateSelectionVisual();
   };
   const up=(e)=>{
     // Snap on release
-    selState.startMin = snap15(selState.startMin);
-    selState.endMin   = snap15(selState.endMin);
-
-    // Guarantee 15 min after snapping
-    if(selState.endMin - selState.startMin < 15){
-      if(kind==='top'){
-        selState.startMin = clamp(selState.endMin - 15, 0, 1425);
-      }else{
-        selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
+    if(dragKind==='move'){
+      const dur = selState.endMin - selState.startMin;
+      selState.startMin = snap15(selState.startMin);
+      selState.endMin   = selState.startMin + snap15(dur);
+      // ensure within bounds after snapping
+      if(selState.endMin>1440){ selState.endMin=1440; selState.startMin=Math.max(0, 1440 - dur); selState.startMin=snap15(selState.startMin); }
+    }else{
+      selState.startMin = snap15(selState.startMin);
+      selState.endMin   = snap15(selState.endMin);
+      if(selState.endMin - selState.startMin < 15){
+        if(dragKind==='top'){
+          selState.startMin = clamp(selState.endMin - 15, 0, 1425);
+        }else{
+          selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
+        }
       }
     }
     updateSelectionVisual();
@@ -619,7 +655,7 @@ function startDrag(ev, kind){
     dragKind=null;
   };
 
-  window.addEventListener('pointermove', move, {passive:true});
+  window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
 }
 
@@ -668,7 +704,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r24</div>
+        <div class="watermark">Chrono build r25</div>
       </div>
     </div>
   `;
@@ -722,4 +758,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-
