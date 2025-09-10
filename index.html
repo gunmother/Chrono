@@ -23,6 +23,9 @@
     --slot-gap:8px;
     --icon-btn:36px;
     --row-min-h:36px;
+
+    --marquee-border:4px;
+    --marquee-shadow:0 0 0 3px rgba(0,0,0,.15), 0 10px 18px rgba(0,0,0,.20);
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -93,6 +96,58 @@
 
   /* Day “screensaver” watermark */
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+
+  /* ---------- Week edit marquee component ---------- */
+  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:40; }
+  .marquee{ position:absolute; pointer-events:none; }
+  .marqueeRect{
+    position:absolute;
+    box-sizing:border-box;
+    border:var(--marquee-border) solid #fff;
+    box-shadow: var(--marquee-shadow);
+    border-radius:8px;
+    pointer-events:none;
+  }
+  .stamp{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    background:#fff;
+    color:#111;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:4px 8px;
+    font-size:12px;
+    font-variant-numeric:tabular-nums;
+    font-weight:800;
+    white-space:nowrap;
+    pointer-events:none;
+    z-index:2;
+  }
+  .tri{
+    position:absolute;
+    left:0;
+    width:100%;
+    height:12px; /* handle height */
+    background:#fff; /* base color to match "solid white" */
+    /* make it a triangle via clip-path; spans full column width */
+    pointer-events:auto;
+    cursor:ns-resize;
+    z-index:3;
+  }
+  .tri.top   { clip-path:polygon(0 100%, 50% 0, 100% 100%); }
+  .tri.bottom{ clip-path:polygon(0 0, 50% 100%, 100% 0); }
+
+  /* First-open hint */
+  .hint{
+    position:absolute; left:50%; top:calc(var(--dow-h) + 8px);
+    transform:translateX(-50%);
+    background:#111; color:#fff; font-size:12px; font-weight:700;
+    padding:6px 10px; border-radius:10px; box-shadow:0 6px 16px rgba(0,0,0,.22);
+    opacity:0; transition:opacity .25s ease, transform .25s ease;
+    z-index:50; pointer-events:none;
+  }
+  .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -149,7 +204,7 @@
   </main>
 
 <script>
-console.info('Chrono build r21');
+console.info('Chrono build r22');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -159,15 +214,13 @@ let activeView = null;               // starts blank
 let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
-const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
 
 /* ---------- Width sync ---------- */
 new ResizeObserver(()=> {
@@ -253,7 +306,11 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View (UI only; no tap-to-edit, no task stack) ---------- */
+/* ---------- Week View (UI + selection marquee) ---------- */
+let weekGeom = null;    // computed geometry cache
+let selState = null;    // {dayIdx,startMin,endMin}
+let dragKind = null;    // 'top' | 'bottom' | null
+
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -265,23 +322,44 @@ function buildWeekView(){
 
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
-        <div class="grid" id="weekGrid">
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
           <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
+
+      <div class="selHost" id="selHost" aria-hidden="false"></div>
+      <div class="hint" id="weekHint">Tap anywhere to edit</div>
     </div>
   `;
+
   document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
   document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
 
+  const grid = document.getElementById('weekGrid');
+  grid.addEventListener('click', onWeekGridTap);
+
   repaintWeek();
-  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
+
+  const ro = new ResizeObserver(()=>{ repaintWeek(true); });
+  ro.observe(grid);
+
+  // First-open hint (once)
+  try{
+    if(!localStorage.getItem('hint_week_edit_v1')){
+      const hint=document.getElementById('weekHint');
+      requestAnimationFrame(()=>{
+        hint.classList.add('show');
+        setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
+      });
+      localStorage.setItem('hint_week_edit_v1','1');
+    }
+  }catch{}
 }
 
-function repaintWeek(){
+function repaintWeek(skipSelRebuild=false){
   const first=visibleWeekFirst, last=addDays(first,6);
   const m=new Intl.DateTimeFormat(undefined,{month:'short'});
   const title = (first.getFullYear()===last.getFullYear())
@@ -302,17 +380,24 @@ function repaintWeek(){
 
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const gridEl = document.getElementById('weekGrid');
-  const geom=computeGeometry(gridEl, 7);
+  weekGeom=computeGeometry(gridEl, 7);
   for(let i=0;i<24;i++){
     const el=document.createElement('div'); el.className='hour-stamp';
     el.textContent = `${String(i).padStart(2,'0')}:00`;
-    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
+    el.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
     gh.appendChild(el);
   }
 
-  // Blocks intentionally omitted (no items). Preserve mask & magnifier.
-  buildMask(geom, 7);
-  paintNowMagnifier(geom);
+  // No blocks painted (clean template). Preserve mask & magnifier.
+  buildMask(weekGeom, 7);
+  paintNowMagnifier(weekGeom);
+
+  if(!skipSelRebuild && selState){
+    // ensure selection still fits the current geometry
+    updateSelectionVisual();
+  }else if(skipSelRebuild && selState){
+    updateSelectionVisual();
+  }
 }
 
 function computeGeometry(gridEl, cols){
@@ -329,7 +414,7 @@ function computeGeometry(gridEl, cols){
     const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
     for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
   }
-  return {totalW,totalH,colW,colX,rowH,rowY,slotY};
+  return {totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
 }
 
 function buildMask(geom, cols){
@@ -391,16 +476,161 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Day View (blank + version) ---------- */
-function buildDayView(){
-  screenEl.innerHTML = `
-    <div class="wrap">
-      <div class="head"><div></div><div class="title">Day</div><div></div></div>
-      <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r21</div>
-      </div>
-    </div>
+/* ----- Selection Marquee: create & interactions ----- */
+function onWeekGridTap(e){
+  const grid = document.getElementById('weekGrid');
+  const host = document.getElementById('selHost');
+  if(!weekGeom) weekGeom = computeGeometry(grid,7);
+
+  const gridRect = weekGeom.rect;
+  const wrapRect = grid.closest('.wrap').getBoundingClientRect();
+
+  const relX = e.clientX - gridRect.left;
+  const relY = e.clientY - gridRect.top;
+
+  // Find tapped day column
+  let dayIdx = 0;
+  for(let i=0;i<7;i++){
+    if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
+  }
+
+  // Initial hour block (snap to enclosing hour)
+  const totalH = weekGeom.totalH;
+  const minuteFloat = Math.max(0, Math.min(1, relY/totalH)) * 1440;
+  const hourStart = Math.floor(minuteFloat/60)*60;
+  const startMin = hourStart;
+  const endMin = Math.min(1440, hourStart + 60);
+
+  selState = { dayIdx, startMin, endMin };
+
+  // Build marquee UI (single component)
+  host.innerHTML = '';
+  const m = document.createElement('div');
+  m.className = 'marquee';
+  m.innerHTML = `
+    <div class="marqueeRect" id="mqRect"></div>
+
+    <div class="stamp" id="mqTopStamp"></div>
+    <div class="tri top" id="mqTopTri" title="Drag to adjust start"></div>
+
+    <div class="stamp" id="mqBotStamp"></div>
+    <div class="tri bottom" id="mqBotTri" title="Drag to adjust end"></div>
   `;
+  host.appendChild(m);
+
+  // Attach drag handlers
+  const topTri = m.querySelector('#mqTopTri');
+  const botTri = m.querySelector('#mqBotTri');
+  topTri.addEventListener('pointerdown', ev=>startDrag(ev,'top'));
+  botTri.addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
+
+  updateSelectionVisual();
+}
+
+function minutesToY(min){
+  // Map minutes -> y(px) using slot grid (exact quarter-hour boundaries)
+  const idx = Math.max(0, Math.min(96, Math.round(min/15)));
+  return weekGeom.slotY[idx];
+}
+function yToMinutesClamp(yPx){
+  // Clamp to grid bounds and return minute (0..1440) using nearest slot boundary
+  const y = Math.max(0, Math.min(weekGeom.totalH, yPx));
+  // Find nearest slot index
+  let nearestIdx = 0, best=Infinity;
+  for(let i=0;i<weekGeom.slotY.length;i++){
+    const d = Math.abs(weekGeom.slotY[i] - y);
+    if(d < best){ best = d; nearestIdx = i; }
+  }
+  return nearestIdx * 15;
+}
+
+function updateSelectionVisual(){
+  if(!selState) return;
+  const grid = document.getElementById('weekGrid');
+  const host = document.getElementById('selHost');
+  if(!grid || !host) return;
+
+  const gridRect = weekGeom.rect;
+  const wrapRect = grid.closest('.wrap').getBoundingClientRect();
+
+  const colLeft = weekGeom.colX[selState.dayIdx];
+  const colRight = weekGeom.colX[selState.dayIdx+1];
+  const colWidth = (colRight - colLeft) - (selState.dayIdx===6 ? 1 : 0); // match grid right border treatment
+
+  const topY  = minutesToY(selState.startMin);
+  const botY  = minutesToY(selState.endMin);
+  const height = Math.max(1, botY - topY);
+
+  const offsetLeft = gridRect.left - wrapRect.left + colLeft;
+  const offsetTop  = gridRect.top  - wrapRect.top;
+
+  // Position rectangle
+  const rect = host.querySelector('#mqRect');
+  rect.style.left   = `${offsetLeft}px`;
+  rect.style.top    = `${offsetTop + topY}px`;
+  rect.style.width  = `${colWidth}px`;
+  rect.style.height = `${height}px`;
+
+  // Top stamp & triangle (always above border, triangles above stamps)
+  const topStamp = host.querySelector('#mqTopStamp');
+  topStamp.textContent = toHHMM(selState.startMin);
+  const topTri = host.querySelector('#mqTopTri');
+
+  const stampPad = 6;           // gap between border and stamp
+  const triH = 12;              // matches CSS height
+  const stampH = 26;            // approx. (padding + text)
+  const fullLeft = offsetLeft;
+  const triWidth = colWidth;
+
+  topStamp.style.left = `${offsetLeft + colWidth/2}px`;
+  topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
+
+  topTri.style.left = `${fullLeft}px`;
+  topTri.style.top  = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
+  topTri.style.width = `${triWidth}px`;
+
+  // Bottom stamp & triangle (always below border)
+  const botStamp = host.querySelector('#mqBotStamp');
+  botStamp.textContent = toHHMM(selState.endMin);
+  const botTri = host.querySelector('#mqBotTri');
+
+  botStamp.style.left = `${offsetLeft + colWidth/2}px`;
+  botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
+
+  botTri.style.left = `${fullLeft}px`;
+  botTri.style.top  = `${offsetTop + botY + stampPad + stampH}px`;
+  botTri.style.width = `${triWidth}px`;
+}
+
+function startDrag(ev, kind){
+  if(!selState) return;
+  dragKind = kind;
+  ev.preventDefault();
+  ev.stopPropagation();
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  const move = (e)=>{
+    const yRel = e.clientY - weekGeom.rect.top; // relative to grid
+    const min = yToMinutesClamp(yRel);
+
+    const minGap = 15; // at least 15 minutes selection
+    if(kind==='top'){
+      selState.startMin = Math.max(0, Math.min(1440 - minGap, Math.min(min, selState.endMin - minGap)));
+    }else{
+      selState.endMin = Math.min(1440, Math.max(min, selState.startMin + minGap));
+    }
+    updateSelectionVisual();
+  };
+  const up = (e)=>{
+    // Snap to nearest 15 minutes already done; ensure final update (idempotent)
+    updateSelectionVisual();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragKind=null;
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
 }
 
 /* ---------- Month View ---------- */
@@ -443,6 +673,18 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
+/* ---------- Day View (blank + version) ---------- */
+function buildDayView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head"><div></div><div class="title">Day</div><div></div></div>
+      <div class="grid-area" style="display:grid;place-items:center;color:#666">
+        <div class="watermark">Chrono build r22</div>
+      </div>
+    </div>
+  `;
+}
+
 /* ---------- Init & render ---------- */
 async function init(){
   try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
@@ -482,3 +724,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
