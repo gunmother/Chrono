@@ -26,8 +26,8 @@
     --marquee-shadow:0 0 0 3px rgba(0,0,0,.15), 0 10px 18px rgba(0,0,0,.20);
 
     /* Handles */
-    --handle-height:44px; /* thumb-friendly */
-    --handle-stroke:#8d8d8d; /* prominent tab border */
+    --handle-height:48px; /* big, thumb-friendly */
+    --handle-stroke:#6f6f6f; /* prominent tab border */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -100,7 +100,10 @@
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
   /* ---------- Selection marquee component ---------- */
-  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:40; }
+  /* NOTE: fixed overlay so stamps/handles can extend beyond the card boundaries */
+  .selHost{
+    position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000;
+  }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
     position:absolute;
@@ -131,7 +134,7 @@
     z-index:2;
   }
 
-  /* SVG handles (prominent border, clean shape) */
+  /* SVG handles with visible border */
   .handle{
     position:absolute;
     left:0;
@@ -140,13 +143,13 @@
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
-    touch-action:none;     /* prevent scroll interference */
+    touch-action:none;     /* prevent scroll while dragging */
   }
   .handle svg{ display:block; width:100%; height:100%; }
   .handle polygon{
     fill:#fff;
     stroke:var(--handle-stroke);
-    stroke-width:2;
+    stroke-width:2.25;
     stroke-linejoin:round;
   }
 
@@ -216,7 +219,7 @@
   </main>
 
 <script>
-console.info('Chrono build r25');
+console.info('Chrono build r26');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -237,6 +240,7 @@ function toHHMM(min){
   const h = Math.floor(mm/60), r = mm%60;
   return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
 }
+function snap15(n){ return 15 * Math.round((+n||0)/15); }
 
 /* Width sync */
 new ResizeObserver(()=> {
@@ -302,7 +306,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
 let weekGeom=null;              // geometry
 let selState=null;              // {dayIdx,startMin,endMin}
 let dragKind=null;              // 'top' | 'bottom' | 'move' | null
-let dragStartY=0, baseStart=0, baseEnd=0;
+let dragStartY=0, baseStart=0, baseEnd=0, baseDur15=60;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -323,6 +327,7 @@ function buildWeekView(){
         <div class="hours" id="weekHours"></div>
       </div>
 
+      <!-- fixed overlay host lives outside #screen to avoid clipping -->
       <div class="selHost" id="selHost" aria-hidden="false"></div>
       <div class="hint" id="weekHint">Tap anywhere to edit</div>
     </div>
@@ -340,13 +345,13 @@ function buildWeekView(){
 
   // First-open hint (once)
   try{
-    if(!localStorage.getItem('hint_week_edit_v3')){
+    if(!localStorage.getItem('hint_week_edit_v4')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v3','1');
+      localStorage.setItem('hint_week_edit_v4','1');
     }
   }catch{}
 }
@@ -481,15 +486,14 @@ function onWeekGridTap(e){
     if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
   }
 
-  // Start with a 60-minute selection aligned to the tapped hour
+  // Start with 60m selection aligned to nearest 15-minute grid
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  const hourStart = Math.floor(minuteFloat/60)*60;
-  const startMin = clamp(hourStart, 0, 1440);
-  const endMin   = clamp(hourStart + 60, 0, 1440);
+  const startMin = snap15(Math.floor(minuteFloat/60)*60); // start at hour (snapped)
+  const endMin   = clamp(startMin + 60, 0, 1440);
 
   selState = { dayIdx, startMin, endMin };
 
-  // Build the marquee UI
+  // Build the marquee UI (fixed overlay so nothing is clipped by #screen)
   host.innerHTML='';
   const m=document.createElement('div');
   m.className='marquee';
@@ -497,22 +501,20 @@ function onWeekGridTap(e){
     <div class="marqueeRect" id="mqRect" title="Drag to move"></div>
 
     <div class="stamp" id="mqTopStamp"></div>
-    <div class="handle" id="mqTopHandle" title="Drag to adjust start"></div>
+    <div class="handle" id="mqTopHandle" title="Drag to adjust start">
+      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+        <polygon points="1,47 50,3 99,47"></polygon>
+      </svg>
+    </div>
 
     <div class="stamp" id="mqBotStamp"></div>
-    <div class="handle" id="mqBotHandle" title="Drag to adjust end"></div>
+    <div class="handle" id="mqBotHandle" title="Drag to adjust end">
+      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+        <polygon points="1,3 50,47 99,3"></polygon>
+      </svg>
+    </div>
   `;
   host.appendChild(m);
-
-  // Build SVG triangles with border
-  const topH = m.querySelector('#mqTopHandle');
-  const botH = m.querySelector('#mqBotHandle');
-  topH.innerHTML = `<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
-                      <polygon points="0,44 50,2 100,44"></polygon>
-                    </svg>`;
-  botH.innerHTML = `<svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
-                      <polygon points="0,2 50,44 100,2"></polygon>
-                    </svg>`;
 
   // Attach pointer handlers
   m.querySelector('#mqTopHandle').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
@@ -531,7 +533,6 @@ function yToMinutesRaw(yPx){
   const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
   return clamp(ratio * 1440, 0, 1440);
 }
-function snap15(min){ return 15 * Math.round(min/15); }
 
 function updateSelectionVisual(){
   if(!selState) return;
@@ -540,7 +541,6 @@ function updateSelectionVisual(){
   if(!grid || !host) return;
 
   const rect=weekGeom.rect;
-  const wrapRect = grid.closest('.wrap').getBoundingClientRect();
 
   const colLeft = weekGeom.colX[selState.dayIdx];
   const colRight= weekGeom.colX[selState.dayIdx+1];
@@ -550,8 +550,9 @@ function updateSelectionVisual(){
   const botY  = minutesToY(selState.endMin);
   const height= Math.max(1, botY - topY);
 
-  const offsetLeft = rect.left - wrapRect.left + colLeft;
-  const offsetTop  = rect.top  - wrapRect.top;
+  /* NOTE: overlay is fixed to the viewport; positions are viewport-relative */
+  const offsetLeft = rect.left + colLeft;
+  const offsetTop  = rect.top;
 
   // Rectangle (draggable body)
   const rEl = host.querySelector('#mqRect');
@@ -561,7 +562,7 @@ function updateSelectionVisual(){
   rEl.style.height = `${height}px`;
 
   // Constants
-  const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||44;
+  const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
   const stampH=26;
 
   // Top stamp
@@ -600,51 +601,44 @@ function startDrag(ev, kind){
   dragStartY = ev.clientY;
   baseStart = selState.startMin;
   baseEnd   = selState.endMin;
+  baseDur15 = snap15(baseEnd - baseStart); // keep duration snapped for MOVE
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
-    const deltaMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+    const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
     const minGap = 15;
 
     if(dragKind==='move'){
-      // Move whole box by delta; clamp to 0..1440
-      let newStart = baseStart + deltaMin;
-      let newEnd   = baseEnd   + deltaMin;
-      // clamp both while preserving duration
-      const dur = newEnd - newStart;
-      if(newStart < 0){ newEnd -= newStart; newStart = 0; }
-      if(newEnd > 1440){ const overflow = newEnd - 1440; newStart -= overflow; newEnd = 1440; }
-      // maintain at least 15 min
-      if(dur < minGap){ newEnd = newStart + minGap; }
-      selState.startMin = newStart;
-      selState.endMin   = newEnd;
+      // Move whole box in 15-min steps; preserve 15-min duration
+      const newStart = clamp(snap15(baseStart + deltaMinRaw), 0, 1440);
+      let newEnd = newStart + baseDur15;
+      if(newEnd > 1440){ newEnd = 1440; selState.startMin = snap15(1440 - baseDur15); }
+      else selState.startMin = newStart;
+      selState.endMin = clamp(newEnd, selState.startMin + minGap, 1440);
     } else if(dragKind==='top'){
-      const raw = baseStart + deltaMin;
-      selState.startMin = clamp(raw, 0, selState.endMin - minGap);
+      const raw = baseStart + deltaMinRaw;
+      const snapped = snap15(raw);
+      selState.startMin = clamp(snapped, 0, selState.endMin - minGap);
     } else if(dragKind==='bottom'){
-      const raw = baseEnd + deltaMin;
-      selState.endMin = clamp(raw, selState.startMin + minGap, 1440);
+      const raw = baseEnd + deltaMinRaw;
+      const snapped = snap15(raw);
+      selState.endMin = clamp(snapped, selState.startMin + minGap, 1440);
     }
     updateSelectionVisual();
   };
+
   const up=(e)=>{
-    // Snap on release
-    if(dragKind==='move'){
-      const dur = selState.endMin - selState.startMin;
-      selState.startMin = snap15(selState.startMin);
-      selState.endMin   = selState.startMin + snap15(dur);
-      // ensure within bounds after snapping
-      if(selState.endMin>1440){ selState.endMin=1440; selState.startMin=Math.max(0, 1440 - dur); selState.startMin=snap15(selState.startMin); }
-    }else{
-      selState.startMin = snap15(selState.startMin);
-      selState.endMin   = snap15(selState.endMin);
-      if(selState.endMin - selState.startMin < 15){
-        if(dragKind==='top'){
-          selState.startMin = clamp(selState.endMin - 15, 0, 1425);
-        }else{
-          selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
-        }
+    // Already snapped during drag; just ensure constraints
+    selState.startMin = snap15(selState.startMin);
+    selState.endMin   = snap15(selState.endMin);
+    if(selState.endMin - selState.startMin < 15){
+      if(dragKind==='top'){
+        selState.startMin = clamp(selState.endMin - 15, 0, 1425);
+      }else if(dragKind==='bottom'){
+        selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
+      }else{
+        selState.endMin = clamp(selState.startMin + 15, 15, 1440);
       }
     }
     updateSelectionVisual();
@@ -704,7 +698,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r25</div>
+        <div class="watermark">Chrono build r26</div>
       </div>
     </div>
   `;
@@ -758,3 +752,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
