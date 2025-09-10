@@ -128,9 +128,8 @@
     position:absolute;
     left:0;
     width:100%;
-    height:12px; /* handle height */
-    background:#fff; /* base color to match "solid white" */
-    /* make it a triangle via clip-path; spans full column width */
+    height:44px; /* thumb-friendly hit area */
+    background:#fff; /* solid white handle */
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
@@ -204,7 +203,7 @@
   </main>
 
 <script>
-console.info('Chrono build r22');
+console.info('Chrono build r23');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -392,12 +391,7 @@ function repaintWeek(skipSelRebuild=false){
   buildMask(weekGeom, 7);
   paintNowMagnifier(weekGeom);
 
-  if(!skipSelRebuild && selState){
-    // ensure selection still fits the current geometry
-    updateSelectionVisual();
-  }else if(skipSelRebuild && selState){
-    updateSelectionVisual();
-  }
+  if(selState) updateSelectionVisual();
 }
 
 function computeGeometry(gridEl, cols){
@@ -494,7 +488,7 @@ function onWeekGridTap(e){
     if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
   }
 
-  // Initial hour block (snap to enclosing hour)
+  // Initial hour block (enclosing hour)
   const totalH = weekGeom.totalH;
   const minuteFloat = Math.max(0, Math.min(1, relY/totalH)) * 1440;
   const hourStart = Math.floor(minuteFloat/60)*60;
@@ -518,7 +512,7 @@ function onWeekGridTap(e){
   `;
   host.appendChild(m);
 
-  // Attach drag handlers
+  // Attach drag handlers (lock to this day; ignore horizontal motion)
   const topTri = m.querySelector('#mqTopTri');
   const botTri = m.querySelector('#mqBotTri');
   topTri.addEventListener('pointerdown', ev=>startDrag(ev,'top'));
@@ -528,20 +522,16 @@ function onWeekGridTap(e){
 }
 
 function minutesToY(min){
-  // Map minutes -> y(px) using slot grid (exact quarter-hour boundaries)
   const idx = Math.max(0, Math.min(96, Math.round(min/15)));
   return weekGeom.slotY[idx];
 }
-function yToMinutesClamp(yPx){
-  // Clamp to grid bounds and return minute (0..1440) using nearest slot boundary
+function yToMinutesRaw(yPx){
   const y = Math.max(0, Math.min(weekGeom.totalH, yPx));
-  // Find nearest slot index
-  let nearestIdx = 0, best=Infinity;
-  for(let i=0;i<weekGeom.slotY.length;i++){
-    const d = Math.abs(weekGeom.slotY[i] - y);
-    if(d < best){ best = d; nearestIdx = i; }
-  }
-  return nearestIdx * 15;
+  const ratio = (weekGeom.totalH === 0) ? 0 : (y / weekGeom.totalH);
+  return Math.max(0, Math.min(1440, ratio * 1440)); // raw (not snapped)
+}
+function snap15(min){
+  return Math.round(min / 15) * 15;
 }
 
 function updateSelectionVisual(){
@@ -555,7 +545,7 @@ function updateSelectionVisual(){
 
   const colLeft = weekGeom.colX[selState.dayIdx];
   const colRight = weekGeom.colX[selState.dayIdx+1];
-  const colWidth = (colRight - colLeft) - (selState.dayIdx===6 ? 1 : 0); // match grid right border treatment
+  const colWidth = (colRight - colLeft) - (selState.dayIdx===6 ? 1 : 0);
 
   const topY  = minutesToY(selState.startMin);
   const botY  = minutesToY(selState.endMin);
@@ -564,32 +554,32 @@ function updateSelectionVisual(){
   const offsetLeft = gridRect.left - wrapRect.left + colLeft;
   const offsetTop  = gridRect.top  - wrapRect.top;
 
-  // Position rectangle
+  // Rectangle
   const rect = host.querySelector('#mqRect');
   rect.style.left   = `${offsetLeft}px`;
   rect.style.top    = `${offsetTop + topY}px`;
   rect.style.width  = `${colWidth}px`;
   rect.style.height = `${height}px`;
 
-  // Top stamp & triangle (always above border, triangles above stamps)
+  // Spacing constants
+  const stampPad = 6;
+  const triH = 44;        // larger, thumb-friendly
+  const stampH = 26;
+
+  // Top stamp & triangle
   const topStamp = host.querySelector('#mqTopStamp');
   topStamp.textContent = toHHMM(selState.startMin);
   const topTri = host.querySelector('#mqTopTri');
 
-  const stampPad = 6;           // gap between border and stamp
-  const triH = 12;              // matches CSS height
-  const stampH = 26;            // approx. (padding + text)
-  const fullLeft = offsetLeft;
-  const triWidth = colWidth;
-
   topStamp.style.left = `${offsetLeft + colWidth/2}px`;
   topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
 
-  topTri.style.left = `${fullLeft}px`;
+  topTri.style.left = `${offsetLeft}px`;
   topTri.style.top  = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
-  topTri.style.width = `${triWidth}px`;
+  topTri.style.width = `${colWidth}px`;
+  topTri.style.height = `${triH}px`;
 
-  // Bottom stamp & triangle (always below border)
+  // Bottom stamp & triangle
   const botStamp = host.querySelector('#mqBotStamp');
   botStamp.textContent = toHHMM(selState.endMin);
   const botTri = host.querySelector('#mqBotTri');
@@ -597,9 +587,10 @@ function updateSelectionVisual(){
   botStamp.style.left = `${offsetLeft + colWidth/2}px`;
   botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
 
-  botTri.style.left = `${fullLeft}px`;
+  botTri.style.left = `${offsetLeft}px`;
   botTri.style.top  = `${offsetTop + botY + stampPad + stampH}px`;
-  botTri.style.width = `${triWidth}px`;
+  botTri.style.width = `${colWidth}px`;
+  botTri.style.height = `${triH}px`;
 }
 
 function startDrag(ev, kind){
@@ -610,20 +601,35 @@ function startDrag(ev, kind){
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
   const move = (e)=>{
-    const yRel = e.clientY - weekGeom.rect.top; // relative to grid
-    const min = yToMinutesClamp(yRel);
+    // Vertical-only drag; lock to current day
+    const yRel = e.clientY - weekGeom.rect.top;
+    const minRaw = yToMinutesRaw(yRel);
 
-    const minGap = 15; // at least 15 minutes selection
+    const minGap = 15; // minimum selection 15 minutes
     if(kind==='top'){
-      selState.startMin = Math.max(0, Math.min(1440 - minGap, Math.min(min, selState.endMin - minGap)));
+      // do not snap during drag; clamp 0..end-minGap
+      selState.startMin = Math.max(0, Math.min(selState.endMin - minGap, minRaw));
     }else{
-      selState.endMin = Math.min(1440, Math.max(min, selState.startMin + minGap));
+      // do not snap during drag; clamp start+minGap..1440
+      selState.endMin = Math.min(1440, Math.max(selState.startMin + minGap, minRaw));
     }
     updateSelectionVisual();
   };
   const up = (e)=>{
-    // Snap to nearest 15 minutes already done; ensure final update (idempotent)
+    // Snap to nearest 15 only on release
+    selState.startMin = snap15(selState.startMin);
+    selState.endMin   = snap15(selState.endMin);
+
+    // Enforce min 15 after snapping
+    if(selState.endMin - selState.startMin < 15){
+      if(kind==='top'){
+        selState.startMin = Math.max(0, selState.endMin - 15);
+      }else{
+        selState.endMin = Math.min(1440, selState.startMin + 15);
+      }
+    }
     updateSelectionVisual();
+
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -679,7 +685,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r22</div>
+        <div class="watermark">Chrono build r23</div>
       </div>
     </div>
   `;
