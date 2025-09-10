@@ -20,12 +20,14 @@
     --btn:60px;
 
     --panelW:520px;
-    --slot-gap:8px;
-    --icon-btn:36px;
-    --row-min-h:36px;
 
+    /* Marquee */
     --marquee-border:4px;
     --marquee-shadow:0 0 0 3px rgba(0,0,0,.15), 0 10px 18px rgba(0,0,0,.20);
+
+    /* Handles */
+    --handle-height:44px; /* thumb-friendly */
+    --handle-border:#cfcfcf; /* subtle outline via drop-shadows */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -94,10 +96,10 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Day “screensaver” watermark */
+  /* Day watermark */
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
-  /* ---------- Week edit marquee component ---------- */
+  /* ---------- Selection marquee component ---------- */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:40; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
@@ -124,20 +126,27 @@
     pointer-events:none;
     z-index:2;
   }
+  /* Triangular handles: big, white, with a subtle border (via drop-shadows) */
   .tri{
     position:absolute;
     left:0;
     width:100%;
-    height:44px; /* thumb-friendly hit area */
-    background:#fff; /* solid white handle */
+    height:var(--handle-height);
+    background:#fff; /* solid white per request */
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
+
+    /* Simulated 1px border around the triangular shape */
+    filter:
+      drop-shadow( 0  0 0 var(--handle-border))
+      drop-shadow( 0  0 0 var(--handle-border))
+      drop-shadow( 0  0 0 var(--handle-border));
   }
   .tri.top   { clip-path:polygon(0 100%, 50% 0, 100% 100%); }
   .tri.bottom{ clip-path:polygon(0 0, 50% 100%, 100% 0); }
 
-  /* First-open hint */
+  /* Hint */
   .hint{
     position:absolute; left:50%; top:calc(var(--dow-h) + 8px);
     transform:translateX(-50%);
@@ -203,13 +212,12 @@
   </main>
 
 <script>
-console.info('Chrono build r23');
+console.info('Chrono build r24');
 
-/* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
-let activeView = null;               // starts blank
+let activeView = null;
 let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
@@ -219,81 +227,65 @@ function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function iRound(n){ return (Number.isFinite(n)? Math.round(n) : 0); }
+function toHHMM(min){
+  const m = iRound(min) % 1440;
+  const mm = (m+1440)%1440;
+  const h = Math.floor(mm/60);
+  const r = mm % 60;
+  return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
 
-/* ---------- Width sync ---------- */
+/* Width sync */
 new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* ---------- Lightweight Storage (IndexedDB + fallback) ---------- */
-const DB_NAME = 'chronoDB';
-const DB_VERSION = 7;
-let dbPromise = null;
-let STORAGE_MODE = 'idb';
-
-function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
+/* Storage (light) */
+const DB_NAME='chronoDB', DB_VERSION=7;
+let dbPromise=null, STORAGE_MODE='idb';
+function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
-  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject)=>{
+  if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = ()=>{
       const db = req.result;
-      if (!db.objectStoreNames.contains('kv')){
-        db.createObjectStore('kv', { keyPath: 'k' });
-      }
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
     };
     req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
+    req.onerror   = ()=>reject(req.error);
   });
-  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
+  return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
 }
-async function storageSet(key, value){
-  if (STORAGE_MODE==='ls'){
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readwrite');
-    tx.objectStore('kv').put({k:key, v:value});
-    tx.oncomplete = ()=>resolve(true);
-    tx.onerror = ()=>reject(tx.error);
+async function storageSet(k,v){
+  if(STORAGE_MODE==='ls'){ localStorage.setItem(k, JSON.stringify(v)); return true; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readwrite');
+    tx.objectStore('kv').put({k,v});
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
   });
 }
-async function storageGet(key){
-  if (STORAGE_MODE==='ls'){
-    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
-  }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readonly');
-    const req = tx.objectStore('kv').get(key);
-    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
-    req.onerror = ()=>reject(req.error);
+async function storageGet(k){
+  if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readonly');
+    const req=tx.objectStore('kv').get(k);
+    req.onsuccess=()=>res(req.result? req.result.v:undefined);
+    req.onerror=()=>rej(req.error);
   });
 }
-
 function snapshotState(){ return { activeView, activeDayISO }; }
-function hydrateState(snap){
-  try{
-    if(!snap || typeof snap!=='object') return;
-    if (typeof snap.activeView === 'string' || snap.activeView===null) activeView = snap.activeView;
-    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
-  }catch(e){ console.warn('Hydrate failed:', e); }
-}
-async function saveAll(){
-  const snap = snapshotState();
-  await storageSet('state', snap);
-}
+async function saveAll(){ await storageSet('state', snapshotState()); }
 let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
+function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
-/* ---------- Controls ---------- */
+/* Controls */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
   const v=b.dataset.view;
@@ -305,10 +297,10 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View (UI + selection marquee) ---------- */
-let weekGeom = null;    // computed geometry cache
-let selState = null;    // {dayIdx,startMin,endMin}
-let dragKind = null;    // 'top' | 'bottom' | null
+/* ---------- Week View + Selection Marquee ---------- */
+let weekGeom=null;              // geometry
+let selState=null;              // {dayIdx,startMin,endMin}
+let dragKind=null;              // 'top' | 'bottom' | null
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -334,31 +326,30 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
-  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
+  document.getElementById('prevWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
 
-  const grid = document.getElementById('weekGrid');
-  grid.addEventListener('click', onWeekGridTap);
+  const grid=document.getElementById('weekGrid');
+  grid.addEventListener('click', onWeekGridTap, {passive:true});
 
   repaintWeek();
 
-  const ro = new ResizeObserver(()=>{ repaintWeek(true); });
-  ro.observe(grid);
+  new ResizeObserver(()=>{ repaintWeek(true); }).observe(grid);
 
   // First-open hint (once)
   try{
-    if(!localStorage.getItem('hint_week_edit_v1')){
+    if(!localStorage.getItem('hint_week_edit_v2')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v1','1');
+      localStorage.setItem('hint_week_edit_v2','1');
     }
   }catch{}
 }
 
-function repaintWeek(skipSelRebuild=false){
+function repaintWeek(skipSel=false){
   const first=visibleWeekFirst, last=addDays(first,6);
   const m=new Intl.DateTimeFormat(undefined,{month:'short'});
   const title = (first.getFullYear()===last.getFullYear())
@@ -366,32 +357,30 @@ function repaintWeek(skipSelRebuild=false){
         ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
         : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
     : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  document.getElementById('weekTitle').textContent = title;
+  document.getElementById('weekTitle').textContent=title;
 
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
   for(let i=0;i<7;i++){
     const d=addDays(first,i);
-    const pill=document.createElement('div');
-    pill.className='day-pill';
-    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
-    pills.appendChild(pill);
+    const el=document.createElement('div'); el.className='day-pill';
+    el.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
+    pills.appendChild(el);
   }
 
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
-  const gridEl = document.getElementById('weekGrid');
-  weekGeom=computeGeometry(gridEl, 7);
+  const gridEl=document.getElementById('weekGrid');
+  weekGeom=computeGeometry(gridEl,7);
   for(let i=0;i<24;i++){
-    const el=document.createElement('div'); el.className='hour-stamp';
-    el.textContent = `${String(i).padStart(2,'0')}:00`;
-    el.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
-    gh.appendChild(el);
+    const s=document.createElement('div'); s.className='hour-stamp';
+    s.textContent = `${String(i).padStart(2,'0')}:00`;
+    s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
+    gh.appendChild(s);
   }
 
-  // No blocks painted (clean template). Preserve mask & magnifier.
-  buildMask(weekGeom, 7);
+  buildMask(weekGeom,7);
   paintNowMagnifier(weekGeom);
 
-  if(selState) updateSelectionVisual();
+  if(selState && !skipSel) updateSelectionVisual();
 }
 
 function computeGeometry(gridEl, cols){
@@ -400,11 +389,15 @@ function computeGeometry(gridEl, cols){
   const totalH=Math.max(0, Math.round(r.height));
   const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
   const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+
+  // quarter-hour step positions
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
-    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
+    const h=rowH[hr];
+    const base=Math.floor(h/4); let rem=h-base*4;
     const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
     for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
   }
@@ -470,38 +463,35 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ----- Selection Marquee: create & interactions ----- */
+/* Tap to create marquee */
 function onWeekGridTap(e){
-  const grid = document.getElementById('weekGrid');
-  const host = document.getElementById('selHost');
+  const grid=document.getElementById('weekGrid');
+  const host=document.getElementById('selHost');
   if(!weekGeom) weekGeom = computeGeometry(grid,7);
 
-  const gridRect = weekGeom.rect;
-  const wrapRect = grid.closest('.wrap').getBoundingClientRect();
+  const rect=weekGeom.rect;
+  const relX=e.clientX - rect.left;
+  const relY=e.clientY - rect.top;
 
-  const relX = e.clientX - gridRect.left;
-  const relY = e.clientY - gridRect.top;
-
-  // Find tapped day column
-  let dayIdx = 0;
+  // Find tapped day column and lock it
+  let dayIdx=0;
   for(let i=0;i<7;i++){
     if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
   }
 
-  // Initial hour block (enclosing hour)
-  const totalH = weekGeom.totalH;
-  const minuteFloat = Math.max(0, Math.min(1, relY/totalH)) * 1440;
+  // Start with a 60-minute selection aligned to the tapped hour
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
   const hourStart = Math.floor(minuteFloat/60)*60;
-  const startMin = hourStart;
-  const endMin = Math.min(1440, hourStart + 60);
+  const startMin = clamp(hourStart, 0, 1440);
+  const endMin   = clamp(hourStart + 60, 0, 1440);
 
   selState = { dayIdx, startMin, endMin };
 
-  // Build marquee UI (single component)
-  host.innerHTML = '';
-  const m = document.createElement('div');
-  m.className = 'marquee';
-  m.innerHTML = `
+  // Build the marquee UI
+  host.innerHTML='';
+  const m=document.createElement('div');
+  m.className='marquee';
+  m.innerHTML=`
     <div class="marqueeRect" id="mqRect"></div>
 
     <div class="stamp" id="mqTopStamp"></div>
@@ -512,85 +502,78 @@ function onWeekGridTap(e){
   `;
   host.appendChild(m);
 
-  // Attach drag handlers (lock to this day; ignore horizontal motion)
-  const topTri = m.querySelector('#mqTopTri');
-  const botTri = m.querySelector('#mqBotTri');
-  topTri.addEventListener('pointerdown', ev=>startDrag(ev,'top'));
-  botTri.addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
+  // Attach pointer handlers to handles (vertical move only, same day)
+  m.querySelector('#mqTopTri').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
+  m.querySelector('#mqBotTri').addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
 
   updateSelectionVisual();
 }
 
 function minutesToY(min){
-  const idx = Math.max(0, Math.min(96, Math.round(min/15)));
+  const idx = clamp(Math.round(iRound(min)/15), 0, 96);
   return weekGeom.slotY[idx];
 }
 function yToMinutesRaw(yPx){
-  const y = Math.max(0, Math.min(weekGeom.totalH, yPx));
-  const ratio = (weekGeom.totalH === 0) ? 0 : (y / weekGeom.totalH);
-  return Math.max(0, Math.min(1440, ratio * 1440)); // raw (not snapped)
+  const y = clamp(yPx, 0, weekGeom.totalH);
+  const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
+  return clamp(ratio * 1440, 0, 1440);
 }
-function snap15(min){
-  return Math.round(min / 15) * 15;
-}
+function snap15(min){ return 15 * Math.round(iRound(min)/15); }
 
 function updateSelectionVisual(){
   if(!selState) return;
-  const grid = document.getElementById('weekGrid');
-  const host = document.getElementById('selHost');
+  const grid=document.getElementById('weekGrid');
+  const host=document.getElementById('selHost');
   if(!grid || !host) return;
 
-  const gridRect = weekGeom.rect;
+  const rect=weekGeom.rect;
   const wrapRect = grid.closest('.wrap').getBoundingClientRect();
 
   const colLeft = weekGeom.colX[selState.dayIdx];
-  const colRight = weekGeom.colX[selState.dayIdx+1];
-  const colWidth = (colRight - colLeft) - (selState.dayIdx===6 ? 1 : 0);
+  const colRight= weekGeom.colX[selState.dayIdx+1];
+  const colWidth= (colRight - colLeft) - (selState.dayIdx===6?1:0);
 
   const topY  = minutesToY(selState.startMin);
   const botY  = minutesToY(selState.endMin);
-  const height = Math.max(1, botY - topY);
+  const height= Math.max(1, botY - topY);
 
-  const offsetLeft = gridRect.left - wrapRect.left + colLeft;
-  const offsetTop  = gridRect.top  - wrapRect.top;
+  const offsetLeft = rect.left - wrapRect.left + colLeft;
+  const offsetTop  = rect.top  - wrapRect.top;
 
   // Rectangle
-  const rect = host.querySelector('#mqRect');
-  rect.style.left   = `${offsetLeft}px`;
-  rect.style.top    = `${offsetTop + topY}px`;
-  rect.style.width  = `${colWidth}px`;
-  rect.style.height = `${height}px`;
+  const rEl = host.querySelector('#mqRect');
+  rEl.style.left   = `${offsetLeft}px`;
+  rEl.style.top    = `${offsetTop + topY}px`;
+  rEl.style.width  = `${colWidth}px`;
+  rEl.style.height = `${height}px`;
 
-  // Spacing constants
-  const stampPad = 6;
-  const triH = 44;        // larger, thumb-friendly
-  const stampH = 26;
+  // Constants
+  const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||44;
+  const stampH=26;
 
-  // Top stamp & triangle
-  const topStamp = host.querySelector('#mqTopStamp');
+  // Top stamp + handle
+  const topStamp=host.querySelector('#mqTopStamp');
   topStamp.textContent = toHHMM(selState.startMin);
-  const topTri = host.querySelector('#mqTopTri');
-
   topStamp.style.left = `${offsetLeft + colWidth/2}px`;
   topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
 
-  topTri.style.left = `${offsetLeft}px`;
-  topTri.style.top  = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
+  const topTri=host.querySelector('#mqTopTri');
+  topTri.style.left  = `${offsetLeft}px`;
+  topTri.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
   topTri.style.width = `${colWidth}px`;
-  topTri.style.height = `${triH}px`;
+  topTri.style.height= `${triH}px`;
 
-  // Bottom stamp & triangle
-  const botStamp = host.querySelector('#mqBotStamp');
+  // Bottom stamp + handle
+  const botStamp=host.querySelector('#mqBotStamp');
   botStamp.textContent = toHHMM(selState.endMin);
-  const botTri = host.querySelector('#mqBotTri');
-
   botStamp.style.left = `${offsetLeft + colWidth/2}px`;
   botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
 
-  botTri.style.left = `${offsetLeft}px`;
-  botTri.style.top  = `${offsetTop + botY + stampPad + stampH}px`;
+  const botTri=host.querySelector('#mqBotTri');
+  botTri.style.left  = `${offsetLeft}px`;
+  botTri.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
   botTri.style.width = `${colWidth}px`;
-  botTri.style.height = `${triH}px`;
+  botTri.style.height= `${triH}px`;
 }
 
 function startDrag(ev, kind){
@@ -600,32 +583,32 @@ function startDrag(ev, kind){
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
-  const move = (e)=>{
-    // Vertical-only drag; lock to current day
+  const move=(e)=>{
+    // Only vertical movement matters; same day locked.
     const yRel = e.clientY - weekGeom.rect.top;
-    const minRaw = yToMinutesRaw(yRel);
+    const raw  = yToMinutesRaw(yRel); // 0..1440 float
+    const minGap = 15;
 
-    const minGap = 15; // minimum selection 15 minutes
     if(kind==='top'){
-      // do not snap during drag; clamp 0..end-minGap
-      selState.startMin = Math.max(0, Math.min(selState.endMin - minGap, minRaw));
+      // Move start only; don't cross end - minGap
+      selState.startMin = clamp(raw, 0, selState.endMin - minGap);
     }else{
-      // do not snap during drag; clamp start+minGap..1440
-      selState.endMin = Math.min(1440, Math.max(selState.startMin + minGap, minRaw));
+      // Move end only; don't cross start + minGap
+      selState.endMin = clamp(raw, selState.startMin + minGap, 1440);
     }
     updateSelectionVisual();
   };
-  const up = (e)=>{
-    // Snap to nearest 15 only on release
+  const up=(e)=>{
+    // Snap on release
     selState.startMin = snap15(selState.startMin);
     selState.endMin   = snap15(selState.endMin);
 
-    // Enforce min 15 after snapping
+    // Guarantee 15 min after snapping
     if(selState.endMin - selState.startMin < 15){
       if(kind==='top'){
-        selState.startMin = Math.max(0, selState.endMin - 15);
+        selState.startMin = clamp(selState.endMin - 15, 0, 1425);
       }else{
-        selState.endMin = Math.min(1440, selState.startMin + 15);
+        selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
       }
     }
     updateSelectionVisual();
@@ -635,13 +618,14 @@ function startDrag(ev, kind){
     window.removeEventListener('pointerup', up);
     dragKind=null;
   };
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
+
+  window.addEventListener('pointermove', move, {passive:true});
+  window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* ---------- Month View ---------- */
+/* ---------- Month & Day Views (unchanged UI) ---------- */
 function buildMonthView(){
-  const base = new Date(); // reset to current month on entry
+  const base = new Date();
   activeDayISO = toISO(base);
 
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -679,13 +663,12 @@ function buildMonthView(){
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------- Day View (blank + version) ---------- */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r23</div>
+        <div class="watermark">Chrono build r24</div>
       </div>
     </div>
   `;
@@ -693,22 +676,31 @@ function buildDayView(){
 
 /* ---------- Init & render ---------- */
 async function init(){
-  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
+  try{
+    const snap = await storageGet('state');
+    if(snap && typeof snap==='object'){
+      if('activeView' in snap) activeView = snap.activeView;
+      if('activeDayISO' in snap) activeDayISO = snap.activeDayISO;
+    }
+  }catch{}
+
   visibleWeekFirst = weekStart(new Date());
   activeDayISO = toISO(new Date());
   render();
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 }
+
 function render(){
   if(activeView==='week'){
-    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
+    visibleWeekFirst = weekStart(new Date());
     buildWeekView();
   } else if(activeView==='day'){
-    activeDayISO = toISO(new Date());          // sync to today
+    activeDayISO = toISO(new Date());
     buildDayView();
   } else if(activeView==='month'){
-    activeDayISO = toISO(new Date());          // reset to current month on entry
+    activeDayISO = toISO(new Date());
     buildMonthView();
   } else {
     screenEl.innerHTML='';
