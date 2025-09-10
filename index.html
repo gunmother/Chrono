@@ -91,91 +91,8 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Task stack overlay */
-  #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
-  #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
-  #taskOverlay .stack{
-    position:fixed; left:50%; transform:translateX(-50%);
-    width:min(96vw, var(--panelW));
-    display:grid; grid-auto-rows:var(--row-min-h); grid-template-columns:1fr;
-    gap:8px; padding:0; pointer-events:auto; overflow:hidden; background:transparent;
-  }
-  .taskRow{
-    border:1px solid var(--border); border-radius:12px; background:#ffffff;
-    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 10px;
-    min-height:var(--row-min-h); cursor:pointer;
-  }
-  .taskRow .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
-  .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
-  .taskRow .dur{ font-variant-numeric:tabular-nums; }
-
-  /* Settings editor */
-  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
-  #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
-  .card{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(96vw, var(--panelW)); max-height:min(92vh, 760px);
-    background:#fff; border:1px solid var(--border); border-radius:14px;
-    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
-  }
-  .ed-head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line) }
-  .ed-title{ font-weight:900; white-space:nowrap }
-  .in{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; font:inherit; width:100% }
-  .ed-body{ padding:10px; overflow:auto; display:grid; gap:10px; min-width:0 }
-  .dayRow{ border:1px solid var(--grid-line); border-radius:10px; padding:10px; display:grid; gap:10px; min-width:0 }
-  .dayHead{ display:flex; justify-content:space-between; align-items:center; background:#fff;
-    border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
-  .slots{ display:grid; gap:10px; min-width:0 }
-
-  .slot{
-    display:grid; gap: var(--slot-gap);
-    grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
-    grid-template-areas:
-      "start end mic del"
-      "selrow selrow selrow selrow";
-    align-items:center; width:100%;
-  }
-  .slot .start{ grid-area:start; position:relative }
-  .slot .end{ grid-area:end; position:relative }
-  .slot .mic{ grid-area:mic }
-  .slot .trash{ grid-area:del }
-
-  .slot .selrow{
-    grid-area:selrow;
-    display:grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap:6px;
-    align-items:center;
-  }
-  .select{
-    -webkit-appearance:none; appearance:none;
-    padding:6px 8px;
-    border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit;
-    font-size:13px; line-height:1.2; width:100%;
-    white-space:nowrap; overflow:visible; text-overflow:clip;
-  }
-
-  .iconBtn{
-    width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center;
-    border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1
-  }
-
-  .addRow{ display:flex; }
-  .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer; font-weight:700 }
-
-  .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
-  .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
-
-  /* Day initials badges next to inputs (only for cross-midnight) */
-  .dayTag{
-    position:absolute; right:6px; top:50%; transform:translateY(-50%);
-    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6;
-    pointer-events:none;
-  }
-
   /* Day “screensaver” watermark */
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
-
 </style>
 </head>
 <body>
@@ -231,28 +148,8 @@
     </nav>
   </main>
 
-  <!-- Task picker overlay -->
-  <div id="taskOverlay" aria-hidden="true"></div>
-
-  <!-- Settings editor -->
-  <div id="settingsOverlay" aria-hidden="true">
-    <div class="backdrop"></div>
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
-      <div class="ed-head">
-        <div class="ed-title" id="edTitle">Edit</div>
-        <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14"/>
-        <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
-      </div>
-      <div class="ed-body" id="edBody"></div>
-      <div class="ed-foot">
-        <button id="edCancel" class="btnText">Cancel</button>
-        <button id="edSave" class="btnText">Save</button>
-      </div>
-    </div>
-  </div>
-
 <script>
-console.info('Chrono build r20');
+console.info('Chrono build r21');
 
 /* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
@@ -271,46 +168,6 @@ function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function round15(min){ return Math.round(min/15)*15; }
-function isoWeekKey(date){
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
-}
-function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
-function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
-
-/* ---------- Tasks ---------- */
-let TASKS = [
-  {key:'work',      label:'Work',        color:'#d33c36', hard:false},
-  {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
-  {key:'chores',    label:'Chores',      color:'#3b41c5', hard:false},
-  {key:'errands',   label:'Errands',     color:'#1d8f2e', hard:false},
-  {key:'meals',     label:'Meal Time',   color:'#e0b21b', hard:false},
-  {key:'hygiene',   label:'Hygiene',     color:'#0ea5e9', hard:false},
-  {key:'selfcare',  label:'Self Care',   color:'#888888', hard:false},
-  {key:'exercise',  label:'Exercise',    color:'#1db954', hard:false},
-  {key:'family',    label:'Family Time', color:'#e3326b', hard:false},
-  {key:'hobbies',   label:'Hobbies',     color:'#f39c12', hard:false},
-  {key:'projects',  label:'Projects',    color:'#6a5acd', hard:false},
-  {key:'school',    label:'School',      color:'#3269e6', hard:true},
-  {key:'relax',     label:'Relaxation',  color:'#24c3d6', hard:false},
-  {key:'free',      label:'Free Time',   color:'#a4a4a4', hard:false},
-  {key:'childcare', label:'Child Care',  color:'#7a5c2e', hard:false},
-  {key:'sleep',     label:'Sleep',       color:'#6aa6ff', hard:false}
-];
-const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
-const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
-
-/* ---------- Data stores ---------- */
-const SLOTS_PER_DAY=96; // 15-min
-let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility}] */
-const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
-const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
-const MAX_RANGES_PER_DAY=6;
 
 /* ---------- Width sync ---------- */
 new ResizeObserver(()=> {
@@ -318,9 +175,9 @@ new ResizeObserver(()=> {
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* ---------- Storage (IndexedDB + fallback) ---------- */
+/* ---------- Lightweight Storage (IndexedDB + fallback) ---------- */
 const DB_NAME = 'chronoDB';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 let dbPromise = null;
 let STORAGE_MODE = 'idb';
 
@@ -368,34 +225,17 @@ async function storageGet(key){
     req.onerror = ()=>reject(req.error);
   });
 }
-function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
+
+function snapshotState(){ return { activeView, activeDayISO }; }
 function hydrateState(snap){
   try{
     if(!snap || typeof snap!=='object') return;
-    if (Array.isArray(snap.TASKS)) TASKS = snap.TASKS.map(t=>({key:String(t.key), label:String(t.label), color:String(t.color), hard:!!t.hard}));
-    if (snap.EXACT){
-      for (const k of Object.keys(EXACT)){
-        if (snap.EXACT[k] && Array.isArray(snap.EXACT[k]) && snap.EXACT[k].length===7){
-          EXACT[k] = snap.EXACT[k].map(dayArr => Array.isArray(dayArr) ? dayArr.map(r => ({
-            startMin: Number(r.startMin)||0,
-            endMin: Number(r.endMin)||0,
-            scope: r.scope || 'recurring',
-            weekKey: r.weekKey || undefined,
-            monthKey: r.monthKey || undefined,
-            reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
-            flexibility: r.flexibility || 'firm'
-          })) : []);
-        }
-      }
-    }
-    if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
-    if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
+    if (typeof snap.activeView === 'string' || snap.activeView===null) activeView = snap.activeView;
     if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
   }catch(e){ console.warn('Hydrate failed:', e); }
 }
 async function saveAll(){
   const snap = snapshotState();
-  await storageSet('lastGood', snap);
   await storageSet('state', snap);
 }
 let saveTimer=null;
@@ -413,7 +253,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View ---------- */
+/* ---------- Week View (UI only; no tap-to-edit, no task stack) ---------- */
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -436,7 +276,6 @@ function buildWeekView(){
   `;
   document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
   document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
-  document.getElementById('weekGrid').addEventListener('click', openTaskStack);
 
   repaintWeek();
   new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
@@ -471,8 +310,7 @@ function repaintWeek(){
     gh.appendChild(el);
   }
 
-  rebuildSlots();
-  paintBlocksWeek(geom);
+  // Blocks intentionally omitted (no items). Preserve mask & magnifier.
   buildMask(geom, 7);
   paintNowMagnifier(geom);
 }
@@ -495,7 +333,7 @@ function computeGeometry(gridEl, cols){
 }
 
 function buildMask(geom, cols){
-  const svg=document.getElementById(activeView==='day'?'dayMask':'maskSVG'); svg.innerHTML='';
+  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
   const { totalW, totalH, colX, rowY } = geom;
   if(totalW<=0 || totalH<=0) return;
   svg.setAttribute('width', totalW);
@@ -533,125 +371,6 @@ function buildMask(geom, cols){
   }
 }
 
-/* Scope filter */
-function inScopeForDate(r, date){
-  const sc = r.scope || 'recurring';
-  if (sc === 'recurring') return true;
-  if (sc === 'week')     return r.weekKey === isoWeekKey(date);
-  if (sc === 'month')    return r.monthKey === monthKey(date);
-  return false;
-}
-
-/* ---------- Slots (carryover both directions per visible week) ---------- */
-function rebuildSlots(){
-  allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-  const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
-
-  const clampFill = (dayIdx, startSlot, endSlot, key, isFirm) => {
-    const a = Math.max(0, Math.min(96, startSlot));
-    const b = Math.max(0, Math.min(96, endSlot));
-    for(let s=a; s<b; s++){
-      const existing = allSlots[dayIdx][s];
-      if(!existing){ allSlots[dayIdx][s] = key; continue; }
-      const existingFirm = isExistingFirmAtSlot(existing, dayIdx, s);
-      if(isFirm && !existingFirm) allSlots[dayIdx][s] = key;
-    }
-  };
-
-  // Fill from current day ranges
-  for(const key of keys){
-    for(let d=0; d<7; d++){
-      const dateDay = addDays(visibleWeekFirst, d);
-      const ranges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
-      for(const r of ranges){
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const s = (r.startMin|0), e = (r.endMin|0);
-        const endAbs = (e <= s ? e + 1440 : e);
-
-        const todayStart = s;
-        const todayEnd   = Math.min(endAbs, 1440);
-        if(todayEnd > todayStart){
-          clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
-        }
-
-        const spill = endAbs - 1440;
-        if(spill > 0 && d+1 <= 6){
-          clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
-        }
-      }
-    }
-  }
-
-  // ALSO: pull in previous-day spillovers (so Sunday can show Saturday→Sunday)
-  for(const key of keys){
-    for(let d=0; d<7; d++){
-      const prevDayIdx = (d===0? 6 : d-1);
-      const prevDate   = addDays(visibleWeekFirst, d-1); // NOTE: for d=0 this is last week's Saturday
-      const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
-        // only cross-midnight ranges spilling into this day
-        return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
-      });
-      for(const r of prevRanges){
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const spillEnd = Math.min(r.endMin|0, 1440);
-        if (spillEnd > 0){
-          clampFill(d, 0, Math.floor(spillEnd/15), key, isFirm);
-        }
-      }
-    }
-  }
-}
-
-function isExistingFirmAtSlot(key, dayIdx, slotIdx){
-  // Check same-day firm
-  const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
-  for(const r of owned){
-    if((r.flexibility||'firm')==='firm'){
-      const a=Math.floor((r.startMin|0)/15), b=Math.floor((r.endMin|0)/15);
-      if((r.endMin|0) > (r.startMin|0)){ if(slotIdx>=a && slotIdx<b) return true; }
-      else{ if(slotIdx>=a && slotIdx<96) return true; }
-    }
-  }
-  // Check previous-day spill firm (using true previous date)
-  const prevDate = addDays(visibleWeekFirst, dayIdx-1);
-  const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
-  const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
-  for(const r of prev){
-    if((r.flexibility||'firm')==='firm'){
-      const b=Math.floor((r.endMin|0)/15);
-      if(slotIdx>=0 && slotIdx<b) return true;
-    }
-  }
-  return false;
-}
-
-/* ---------- Paint week ---------- */
-function paintBlocksWeek(geom){
-  const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
-  const colors=COLORS();
-  const {colX, slotY} = geom;
-
-  for(let d=0; d<7; d++){
-    let s=0;
-    while(s<SLOTS_PER_DAY){
-      const key=allSlots[d][s];
-      if(!key){ s++; continue; }
-      let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
-      const left=colX[d], right=colX[d+1];
-      const top=slotY[s], bottom=slotY[e];
-      const div=document.createElement('div'); div.className='blk';
-      div.style.left=left+'px'; div.style.top=top+'px';
-      div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
-      div.style.height=(bottom-top)+'px';
-      div.style.background = colors[key] || '#ddd';
-      div.title = LABELS()[key];
-      layer.appendChild(div);
-      s=e;
-    }
-  }
-}
-
 function paintNowMagnifier(geom){
   const nowEl=document.getElementById('nowMagnify');
   const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
@@ -678,7 +397,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r20</div>
+        <div class="watermark">Chrono build r21</div>
       </div>
     </div>
   `;
@@ -723,360 +442,6 @@ function buildMonthView(){
   const rem = (Math.ceil(used/7)*7) - used;
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
-
-/* ---------- Task picker (centered, non-scroll) ---------- */
-const overlay=document.getElementById('taskOverlay');
-
-function openTaskStack(){
-  overlay.innerHTML='';
-  const stack=document.createElement('div'); stack.className='stack';
-
-  const grid = document.getElementById('weekGrid');
-  const r = grid.getBoundingClientRect();
-
-  const N = 16;
-  const G = 8;
-  const margin = 6;
-  const avail = Math.max(120, r.height - margin*2);
-  const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
-  const used = N*rowH + (N-1)*G;
-  const topPad = Math.max(margin, Math.floor((r.height - used)/2));
-
-  document.documentElement.style.setProperty('--row-min-h', rowH+'px');
-
-  stack.style.top    = (r.top + topPad) + 'px';
-  stack.style.height = used + 'px';
-
-  const totals = weeklyTotals();
-  for(const t of TASKS){
-    const row=document.createElement('button'); row.className='taskRow'; row.dataset.key=t.key;
-    row.innerHTML = `<span class="dot" style="background:${t.color}"></span>
-                     <span class="name">${t.label}</span>
-                     <span class="dur">${formatDecimalHours(totals[t.key]||0)}</span>`;
-    row.addEventListener('click', ()=>openEditor(t));
-    stack.appendChild(row);
-  }
-  overlay.appendChild(stack);
-  overlay.style.display='block';
-}
-overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
-
-function weeklyTotals(){
-  rebuildSlots();
-  const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
-  for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
-  return out;
-}
-function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
-
-/* ---------- Editor ---------- */
-const edOverlay=document.getElementById('settingsOverlay');
-const edBody=document.getElementById('edBody');
-const edTitle=document.getElementById('edTitle');
-const edName=document.getElementById('edName');
-const edColor=document.getElementById('edColor');
-
-document.getElementById('edCancel').addEventListener('click', ()=>{
-  const sure = confirm('Discard edits?');
-  if(!sure) return;
-  edOverlay.style.display='none';
-});
-
-function openEditor(task){
-  overlay.style.display='none';
-
-  const saveBtn = document.getElementById('edSave');
-  saveBtn.onclick = null;
-
-  const t = TASKS.find(x=>x.key===task.key);
-  const sessionDraft = {
-    key: t.key, label: t.label, color: toHex(t.color),
-    week: EXACT[t.key].map(dayArr => dayArr.map(r => ({
-      startMin:r.startMin, endMin:r.endMin,
-      scope: r.scope || 'recurring',
-      weekKey: r.weekKey, monthKey: r.monthKey,
-      reminderOffsetMin: r.reminderOffsetMin ?? undefined,
-      flexibility: r.flexibility || 'firm'
-    })))
-  };
-  edTitle.textContent = `Edit: ${t.label}`;
-  edName.value = t.label; edColor.value = toHex(t.color);
-  buildEditorDays(sessionDraft);
-  edOverlay.style.display='block';
-
-  saveBtn.onclick = async () => {
-    try {
-      await persistEditor(sessionDraft);
-      edOverlay.style.display='none';
-      if(activeView==='week') repaintWeek();
-      if(activeView==='day')  buildDayView();
-      await saveAll();
-    } catch (err) {
-      console.error('Save failed:', err);
-      alert('Save failed: ' + (err && err.message ? err.message : String(err)));
-    }
-  };
-}
-
-function buildEditorDays(sessionDraft){
-  edBody.innerHTML='';
-  const first=visibleWeekFirst;
-
-  for(let d=0; d<7; d++){
-    const theDate = addDays(first, d);
-    const dayLabel = `${DAY_NAMES[d]}, ${theDate.toLocaleDateString(undefined,{month:'long'})} ${ORD(theDate.getDate())}`;
-
-    const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
-
-    const head=document.createElement('div'); head.className='dayHead';
-    head.innerHTML = `<span>${dayLabel}</span><span></span>`;
-    wrap.appendChild(head);
-
-    const slots=document.createElement('div'); slots.className='slots'; wrap.appendChild(slots);
-
-    const addRow=document.createElement('div'); addRow.className='addRow';
-    const addBtn=document.createElement('button'); addBtn.className='addBtn'; addBtn.type='button'; addBtn.textContent='Create new';
-    addBtn.addEventListener('click', ()=>{
-      if(slots.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return;
-      const row = addSlotRow(slots, d, null, null, false, null, sessionDraft);
-      if(row){ row.querySelector('.start').focus(); }
-      updateAddButtonState(slots, addBtn);
-    });
-    addRow.appendChild(addBtn); wrap.appendChild(addRow);
-
-    (sessionDraft.week[d]||[]).forEach(r=>{
-      addSlotRow(slots, d, r.startMin, r.endMin, true, r, sessionDraft);
-    });
-
-    updateAddButtonState(slots, addBtn);
-    edBody.appendChild(wrap);
-  }
-}
-function updateAddButtonState(slotsEl, btnEl){
-  const count = slotsEl.querySelectorAll('.slot').length;
-  btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
-}
-
-function offsetToOpt(min){ const map = {5:'5m',10:'10m',15:'15m',30:'30m',60:'1h',1440:'24h'}; return map[min] || 'off'; }
-function optToOffset(val){
-  if(val==='5m') return 5; if(val==='10m') return 10; if(val==='15m') return 15;
-  if(val==='30m') return 30; if(val==='1h') return 60; if(val==='24h') return 1440;
-  return undefined;
-}
-
-function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
-  if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
-
-  const defaultStart = 12*60; // 12:00
-  const defaultEnd   = 0;     // 00:00 (interpreted as next-day when start > end)
-
-  const row=document.createElement('div'); row.className='slot';
-  if (!preexisting) row.dataset.pristine = '1';
-
-  const scopeVal  = existingMeta?.scope || 'recurring';
-  const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
-  const flexVal   = existingMeta?.flexibility || 'firm'; // default Firm
-
-  row.innerHTML = `
-    <div class="start">
-      <input type="time" class="in start" step="900" autocomplete="off" inputmode="numeric">
-      <span class="dayTag startTag" style="display:none"></span>
-    </div>
-    <div class="end">
-      <input type="time" class="in end"   step="900" autocomplete="off" inputmode="numeric">
-      <span class="dayTag endTag" style="display:none"></span>
-    </div>
-    <button class="iconBtn mic"   title="Speak time" aria-label="Microphone">🎤</button>
-    <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
-
-    <div class="selrow">
-      <select class="select scope" title="Scope">
-        <option value="recurring"${scopeVal==='recurring'?' selected':''}>Recurring</option>
-        <option value="week"${scopeVal==='week'?' selected':''}>This week</option>
-        <option value="month"${scopeVal==='month'?' selected':''}>This month</option>
-      </select>
-
-      <select class="select remind" title="Set reminder">
-        <option value="off"${remindVal==='off'?' selected':''}>Set reminder</option>
-        <option value="5m"${remindVal==='5m'?' selected':''}>5 minutes</option>
-        <option value="10m"${remindVal==='10m'?' selected':''}>10 minutes</option>
-        <option value="15m"${remindVal==='15m'?' selected':''}>15 minutes</option>
-        <option value="30m"${remindVal==='30m'?' selected':''}>30 minutes</option>
-        <option value="1h"${remindVal==='1h'?' selected':''}>1 hour</option>
-        <option value="24h"${remindVal==='24h'?' selected':''}>24 hours</option>
-      </select>
-
-      <select class="select flex" title="Flexibility">
-        <option value="firm"${flexVal==='firm'?' selected':''}>Firm</option>
-        <option value="flexible"${flexVal==='flexible'?' selected':''}>Flexible</option>
-      </select>
-    </div>
-  `;
-
-  const startInp = row.querySelector('input.start');
-  const endInp   = row.querySelector('input.end');
-  const startTag = row.querySelector('.startTag');
-  const endTag   = row.querySelector('.endTag');
-
-  if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
-  if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
-
-  function refreshDayTags(){
-    const sVal=startInp.value, eVal=endInp.value;
-    if(!sVal || !eVal){ startTag.style.display='none'; endTag.style.display='none'; return; }
-    const s=toMin(sVal), e=toMin(eVal);
-    if (e > s){
-      startTag.style.display='none';
-      endTag.style.display='none';
-    } else if (e < s){
-      // Cross-midnight: show DOW initials (e.g., Sat → Sun)
-      const startDow = SHORT_DOW[dayIndex];
-      const endDow   = SHORT_DOW[(dayIndex+1)%7];
-      startTag.textContent = startDow;
-      endTag.textContent   = endDow;
-      startTag.style.display='inline-block';
-      endTag.style.display  ='inline-block';
-    }
-  }
-  refreshDayTags();
-
-  row.querySelector('.mic').addEventListener('click', async ()=>{
-    const sample = 'Say: "9:00 AM to 5:00 PM"';
-    let text = '';
-    if('webkitSpeechRecognition' in window){
-      try{
-        const rec = new webkitSpeechRecognition(); rec.lang='en-US'; rec.interimResults=false; rec.continuous=false;
-        alert(sample);
-        text = await new Promise((resolve,reject)=>{
-          rec.onresult = e=>resolve(e.results[0][0].transcript);
-          rec.onerror = e=>reject(e.error);
-          rec.onend = ()=>{};
-          rec.start(); setTimeout(()=>{ try{rec.stop();}catch{} }, 4500);
-        });
-      }catch{ text = prompt(sample) || ''; }
-    }else{ text = prompt(sample) || ''; }
-    const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
-  });
-
-  row.querySelector('.trash').addEventListener('click', ()=>{
-    row.remove();
-    const btn = row.closest('.dayRow').querySelector('.addBtn');
-    updateAddButtonState(slotsEl, btn);
-  });
-
-  function isRowComplete(r){
-    const s=r.querySelector('input.start').value;
-    const e=r.querySelector('input.end').value;
-    return !!(s && e);
-  }
-
-  function validateImmediate(){
-    if (row.dataset.pristine==='1' || !isRowComplete(row)) return;
-
-    const sVal=startInp.value, eVal=endInp.value;
-    let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
-    if(sMin===eMin) return;
-
-    // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
-    const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
-    for(const rr of rows){
-      const s2=round15(toMin(rr.querySelector('input.start').value||'')); const e2=round15(toMin(rr.querySelector('input.end').value||''));
-      if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
-
-      const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
-      const b1=s2,   b2=(e2>s2)?e2:24*60;
-
-      if (a1 < b2 && b1 < a2){
-        alert('Double booking not allowed for the same activity on this day.');
-        startInp.value=''; endInp.value=''; row.dataset.pristine='1';
-        refreshDayTags();
-        return;
-      }
-    }
-  }
-
-  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
-  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
-
-  slotsEl.appendChild(row);
-  return row;
-}
-
-async function persistEditor(sessionDraft){
-  const key = sessionDraft.key;
-  const t = TASKS.find(x=>x.key===key);
-  t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
-  t.color = document.getElementById('edColor').value || t.color;
-
-  const week = Array.from({length:7},()=>[]);
-  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
-    const dayDate = addDays(visibleWeekFirst, d);
-    const rows=[...wrap.querySelectorAll('.slot')].slice(0,MAX_RANGES_PER_DAY);
-
-    const tmp=[];
-    for(const row of rows){
-      const sVal=row.querySelector('input.start').value;
-      const eVal=row.querySelector('input.end').value;
-      if(!sVal || !eVal) continue;
-
-      let sMin = round15(toMin(sVal));
-      let eMin = round15(toMin(eVal));
-      if (sMin === eMin) continue;
-
-      const scope = row.querySelector('.scope').value;
-      const remindVal = row.querySelector('.remind').value;
-      const reminderOffsetMin = optToOffset(remindVal);
-      const flexibility = row.querySelector('.flex').value || 'firm';
-
-      const rec = { startMin: sMin, endMin: eMin, scope, flexibility };
-      if(scope==='week')  rec.weekKey  = isoWeekKey(dayDate);
-      if(scope==='month') rec.monthKey = monthKey(dayDate);
-      if(reminderOffsetMin!=null) rec.reminderOffsetMin = reminderOffsetMin;
-
-      tmp.push(rec);
-    }
-
-    tmp.sort((A,B)=>A.startMin-B.startMin);
-    const merged=[];
-    for(const r of tmp){
-      if(!merged.length){ merged.push({...r}); continue; }
-      const L=merged[merged.length-1];
-      const sameMeta = (L.scope===r.scope) && (L.weekKey===r.weekKey) && (L.monthKey===r.monthKey) &&
-                       ((L.flexibility||'firm')===(r.flexibility||'firm')) &&
-                       ((L.reminderOffsetMin??null)===(r.reminderOffsetMin??null));
-      if(sameMeta && L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin){
-        L.endMin=r.endMin;
-      }else{
-        merged.push({...r});
-      }
-    }
-    week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
-  });
-
-  // Commit
-  EXACT[key] = week;
-  ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
-  saveSoon(200);
-}
-
-/* ---------- Speech parse & utils ---------- */
-function parseSpokenRange(s){
-  if(!s) return null;
-  const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if(!m) return null;
-  const sH=Number(m[1]), sM=Number(m[2]||0), sA=(m[3]||'').toLowerCase();
-  const eH=Number(m[4]), eM=Number(m[5]||0), eA=(m[6]||'').toLowerCase();
-  const to24=(h,m,ap)=>{ let H=h%12; if(ap==='pm') H+=12; if(ap==='' && h===12) H=12; return H*60+m; };
-  const sMin = to24(sH,sM,sA);
-  const eMin = to24(eH,eM,eA);
-  return {s:sMin, e:eMin};
-}
-
-function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
-function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
-function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
-  const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
 
 /* ---------- Init & render ---------- */
 async function init(){
