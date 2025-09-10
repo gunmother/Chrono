@@ -3,1117 +3,426 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Chrono</title>
-
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#000000">
-
+<title>Betterly — Tilt Glass UI</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#ffffff" />
 <style>
   :root{
-    --r-lg:12px; --r-pill:999px;
-    --border:#bdbdbd; --grid-line:#e1e1e1;
-    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
+    /* ← BG now white to match the center screen */
+    --bg:#ffffff;
+    --pane:#ffffff;
 
-    --hour-col:56px;
-    --dow-h:32px;
-    --label-size:12px;
-    --btn:60px;
+    /* shadow vectors (animated by JS — preserved physics w/ smoothing) */
+    --sx: 0px;
+    --sy: 12px;
+    --sblur: 14px;
 
-    --panelW:520px;
-    --slot-gap:8px;
-    --icon-btn:36px;
-    --row-min-h:36px;
+    /* bevel hotspot (animated) */
+    --hx: 50%;
+    --hy: 22%;
+
+    --app-w: clamp(320px, 92vw, 420px);
+    --gap: clamp(18px, 2.6vh, 24px);
+    --barH: clamp(34px, 5.2vh, 46px); /* shorter top bar, width unchanged */
+
+    --coin: clamp(52px, 7.6vh, 62px);
+
+    --r-lg: 24px;
+    --r-pill: 999px;
+
+    --led:#eaffff;
+    --led-glow: rgba(234,255,255,.98);
+
+    --blue-1:#38bdff;
+    --blue-2:#0e56ba;
+
+    /* darker, uniform groove */
+    --ring-track:#9aaac3;
+    --ring-led: var(--led);
+    --ring-thickness: 4.5;
+    --ring-thickness-px: 4.5px;
+    --ring-gap: 10px;
+
+    --ink:#92a0b3;
+    --ink-active:var(--led);
   }
 
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
-    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
-  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;overscroll-behavior:none}
+  body{
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+    padding: max(16px, env(safe-area-inset-top))
+             max(16px, env(safe-area-inset-right))
+             max(20px, env(safe-area-inset-bottom))
+             max(16px, env(safe-area-inset-left));
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
 
   .app{
-    width:clamp(320px, 96vw, 520px);
-    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
-    margin: max(16px, env(safe-area-inset-top)) auto;
-    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
+    width:var(--app-w);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+    margin:0 auto; display:grid; grid-template-rows: var(--barH) 1fr auto; gap:var(--gap);
+    position:relative;
   }
 
-  #screen{
-    border:1px solid var(--border);
-    border-radius:var(--r-lg);
-    background:#fff;
-    position:relative; overflow:hidden; min-height:420px;
+  /* ===== shared “glass” panel look */
+  .glass{
+    background: var(--pane);
+    border-radius: var(--r-lg);
+    position:relative;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.22),
+      calc(var(--sx)*.5) calc(var(--sy)*.5) calc(var(--sblur)*.6) rgba(0,0,0,.12);
+  }
+  .glass::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
   }
 
-  .controls{ display:flex; justify-content:space-between; align-items:center; }
-  .btn{
-    width:var(--btn); height:var(--btn); border-radius:50%;
-    border:1px solid var(--border); background:#fff; color:#000;
-    display:grid; place-items:center; cursor:pointer; padding:0;
+  /* ===== top bar wrapper with a *separate* shadow layer under everything */
+  .topwrap{ position:relative; z-index:3; }
+  .topbar{
+    height:var(--barH); border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center; gap:10px;
+    background:#f7f9fd; position:relative;
+    box-shadow:none; /* NO direct shadow here */
   }
-  .btn[aria-pressed="true"]{ background:#e6e6e6; }
-
-  .icon{ width:60%; height:60% }
-  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
-
-  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
-  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
-  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-
-  .grid-area{ position:relative; overflow:hidden }
-  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
-  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
-
-  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
-  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
-  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
-
-  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
-
-  .grid{
-    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
-    background:var(--chart-bg);
-    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
-    z-index:0;
+  .topwrap .shadow{
+    position:absolute; inset:0; border-radius:var(--r-pill); z-index:0; pointer-events:none;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.22),
+      calc(var(--sx)*.5) calc(var(--sy)*.5) calc(var(--sblur)*.6) rgba(0,0,0,.12);
   }
-  .blocks{ position:absolute; inset:0; z-index:1 }
-  .blk{ position:absolute; border:1px solid var(--border) }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
-
-  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
-  .chev:disabled{ opacity:.5; cursor:not-allowed }
-
-  /* Month */
-  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
-  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
-  .month-dow span{ text-align:center }
-  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
-  .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
-  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
-  .mcell.muted{ color:#9c9c9c }
-
-  /* Task stack overlay */
-  #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
-  #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
-  #taskOverlay .stack{
-    position:fixed; left:50%; transform:translateX(-50%);
-    width:min(96vw, var(--panelW));
-    display:grid; grid-auto-rows:var(--row-min-h); grid-template-columns:1fr;
-    gap:8px; padding:0; pointer-events:auto; overflow:hidden; background:transparent;
+  .topbar::before{ /* subtle sheen */
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(140% 120% at var(--hx) var(--hy),
+                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
+    opacity:.9; mix-blend-mode:screen;
   }
-  .taskRow{
-    border:1px solid var(--border); border-radius:12px; background:#ffffff;
-    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 10px;
-    min-height:var(--row-min-h); cursor:pointer;
-  }
-  .taskRow .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
-  .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
-  .taskRow .dur{ font-variant-numeric:tabular-nums; }
+  .dot{width:8px;height:8px;border-radius:50%; background:#cfd8e6; box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.06)}
 
-  /* Settings editor */
-  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
-  #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
-  .card{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(96vw, var(--panelW)); max-height:min(92vh, 760px);
-    background:#fff; border:1px solid var(--border); border-radius:14px;
-    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
-  }
-  .ed-head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line) }
-  .ed-title{ font-weight:900; white-space:nowrap }
-  .in{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; font:inherit; width:100% }
-  .ed-body{ padding:10px; overflow:auto; display:grid; gap:10px; min-width:0 }
-  .dayRow{ border:1px solid var(--grid-line); border-radius:10px; padding:10px; display:grid; gap:10px; min-width:0 }
-  .dayHead{ display:flex; justify-content:space-between; align-items:center; background:#fff;
-    border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
-  .slots{ display:grid; gap:10px; min-width:0 }
+  /* ===== center screen sits ABOVE top bar shadow */
+  .stage{ position:relative; z-index:4; }
+  .stage .glass{ background:#fff; width:100%; height:100%; }
 
-  .slot{
-    display:grid; gap: var(--slot-gap);
-    grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
-    grid-template-areas:
-      "start end mic del"
-      "selrow selrow selrow selrow";
-    align-items:center; width:100%;
-  }
-  .slot .start{ grid-area:start; position:relative }
-  .slot .end{ grid-area:end; position:relative }
-  .slot .mic{ grid-area:mic }
-  .slot .trash{ grid-area:del }
-
-  .slot .selrow{
-    grid-area:selrow;
-    display:grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap:6px;
-    align-items:center;
-  }
-  .select{
-    -webkit-appearance:none; appearance:none;
-    padding:6px 8px;
-    border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit;
-    font-size:13px; line-height:1.2; width:100%;
-    white-space:nowrap; overflow:visible; text-overflow:clip;
+  /* ===== coins row sits above stage; extra margin so they don't touch */
+  .coins{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:22px; align-items:end;
+    padding-bottom: 2px;
+    position:relative; z-index:5;
+    margin-top: 10px;
   }
 
-  .iconBtn{
-    width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center;
-    border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1
+  /* ===== coins (NO placeholder under flips; only a static shadow) */
+  .coin{
+    width:var(--coin); height:var(--coin); margin:0 auto; border-radius:50%;
+    border:0; outline:0; position:relative; cursor:pointer; background:transparent;
+    isolation:isolate; overflow:visible;
+  }
+  .coin::after{
+    content:""; position:absolute; inset:0; border-radius:50%;
+    z-index:0; pointer-events:none; background:transparent;
+    box-shadow:
+      var(--sx) var(--sy) var(--sblur) rgba(0,0,0,.30),
+      calc(var(--sx)*.6) calc(var(--sy)*.6) calc(var(--sblur)*.5) rgba(0,0,0,.16);
   }
 
-  .addRow{ display:flex; }
-  .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer; font-weight:700 }
-
-  .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
-  .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
-
-  /* Day initials badges next to inputs (only for cross-midnight) */
-  .dayTag{
-    position:absolute; right:6px; top:50%; transform:translateY(-50%);
-    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6;
-    pointer-events:none;
+  .ring{
+    position:absolute;
+    inset: calc(-1 * (var(--ring-gap) + var(--ring-thickness-px)));
+    z-index:2; pointer-events:none; overflow:visible;
+  }
+  .ring svg{ width:100%; height:100%; display:block; overflow:visible }
+  .ring .track{
+    fill:none; stroke: var(--ring-track); stroke-width: var(--ring-thickness); stroke-linecap:round;
+    filter: url(#grooveFilter);
+  }
+  .ring .arc{
+    fill:none; stroke: var(--ring-led); stroke-width: var(--ring-thickness); stroke-linecap:round;
+    transform: rotate(-90deg); transform-origin:50% 50%;
+    filter: url(#ledGlow);
   }
 
-  /* Day “screensaver” watermark */
-  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+  .flip{
+    position:absolute; inset:0; border-radius:50%;
+    transform-style: preserve-3d;
+    transition: transform 340ms cubic-bezier(.2,.7,.2,1);
+    z-index:1; /* under ring, above shadow */
+    background:transparent; /* ensure NO placeholder */
+  }
+  .face{
+    position:absolute; inset:0; border-radius:50%;
+    display:grid; place-items:center;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background:transparent; /* faces only paint their own backgrounds below */
+  }
 
+  /* inactive face = slightly gray, spherical */
+  .front{
+    background:
+      radial-gradient(160% 160% at 22% 18%, #ffffff 0%, #f3f7fd 22%, #e8eff9 48%, #e4edf8 68%, #e0eaf7 100%);
+  }
+  .back{
+    transform: rotate3d(1,1,0,180deg);
+    background: radial-gradient(120% 120% at 30% 30%, var(--blue-1), var(--blue-2) 70%);
+  }
+
+  /* icons — slightly larger; clean + symmetric */
+  .icon{ width:68%; height:68%; overflow:visible }
+  .icon *{ vector-effect: non-scaling-stroke; }
+  .front .icon{ fill:none; stroke: var(--ink); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .back  .icon{ fill:none; stroke: var(--ink-active); stroke-width:2.0; stroke-linecap:round; stroke-linejoin:round; filter:url(#ledGlow); }
+
+  .coin.active .flip{ transform: rotate3d(1,1,0,180deg); }
+  .coin:focus-visible{ outline:2px solid #8ecbff; outline-offset:2px; border-radius:50%; }
+
+  @media (max-height: 600px){
+    :root{ --gap:14px; --coin:48px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .flip{ transition:none }
+  }
 </style>
 </head>
 <body>
+  <!-- global filters -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <filter id="ledGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="g"/>
+        <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="grooveFilter" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="0.7" dy="0.7" stdDeviation="0.7" flood-color="#b8c3d6" flood-opacity=".65"/>
+        <feDropShadow dx="-0.7" dy="-0.7" stdDeviation="0.7" flood-color="#ffffff" flood-opacity=".9"/>
+      </filter>
+    </defs>
+  </svg>
+
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area"></section>
+    <!-- TOP BAR with separate shadow under everything -->
+    <div class="topwrap">
+      <div class="shadow" aria-hidden="true"></div>
+      <div class="topbar" aria-label="Menu handle">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+    </div>
 
-    <nav class="controls" role="group" aria-label="Primary views">
-      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="4"/>
-          <line x1="12" y1="2"  x2="12" y2="5"/>
-          <line x1="12" y1="19" x2="12" y2="22"/>
-          <line x1="2"  y1="12" x2="5"  y2="12"/>
-          <line x1="19" y1="12" x2="22" y2="12"/>
-          <line x1="17" y1="7"  x2="19" y2="5"/>
-          <line x1="7"  y1="17" x2="5"  y2="19"/>
-          <line x1="7"  y1="7"  x2="5"  y2="5"/>
-          <line x1="17" y1="17" x2="19" y2="19"/>
-        </svg>
+    <!-- CENTER SCREEN (white) -->
+    <section class="stage">
+      <div class="glass" aria-label="Center screen"></div>
+    </section>
+
+    <!-- BUTTONS -->
+    <div class="coins" role="group" aria-label="Primary views">
+      <!-- Day — 8 identical rays (match sample) -->
+      <button class="coin" aria-label="Day view" aria-pressed="false" data-name="day" data-progress="0.42">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><g>
+              <line x1="12" y1="2.2"  x2="12" y2="4.2"/>
+              <line x1="19.8" y1="12"  x2="21.8" y2="12"/>
+              <line x1="12" y1="19.8" x2="12" y2="21.8"/>
+              <line x1="2.2" y1="12"  x2="4.2" y2="12"/>
+              <line x1="17.3" y1="6.7" x2="18.7" y2="5.3"/>
+              <line x1="17.3" y1="17.3" x2="18.7" y2="18.7"/>
+              <line x1="6.7"  y1="17.3" x2="5.3"  y2="18.7"/>
+              <line x1="6.7"  y1="6.7"  x2="5.3"  y2="5.3"/>
+            </g></svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" filter="url(#ledGlow)"><circle cx="12" cy="12" r="4.6"/><g>
+              <line x1="12" y1="2.2"  x2="12" y2="4.2"/>
+              <line x1="19.8" y1="12"  x2="21.8" y2="12"/>
+              <line x1="12" y1="19.8" x2="12" y2="21.8"/>
+              <line x1="2.2" y1="12"  x2="4.2" y2="12"/>
+              <line x1="17.3" y1="6.7" x2="18.7" y2="5.3"/>
+              <line x1="17.3" y1="17.3" x2="18.7" y2="18.7"/>
+              <line x1="6.7"  y1="17.3" x2="5.3"  y2="18.7"/>
+              <line x1="6.7"  y1="6.7"  x2="5.3"  y2="5.3"/>
+            </g></svg>
+          </div>
+        </div>
       </button>
 
-      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y2="8"/>
-          <line x1="6" y1="10" x2="6" y2="18"/>
-          <line x1="8" y1="10" x2="8" y2="18"/>
-          <line x1="10" y1="10" x2="10" y2="18"/>
-          <line x1="12" y1="10" x2="12" y2="18"/>
-          <line x1="14" y1="10" x2="14" y2="18"/>
-          <line x1="16" y1="10" x2="16" y2="18"/>
-          <line x1="18" y1="10" x2="18" y2="18"/>
-        </svg>
+      <!-- Week — 7 vertical bars (match sample) -->
+      <button class="coin" aria-label="Week view" aria-pressed="false" data-name="week" data-progress="0.18">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g><line x1="6" y1="10" x2="6" y2="19.5"/><line x1="8" y1="10" x2="8" y2="19.5"/><line x1="10" y1="10" x2="10" y2="19.5"/><line x1="12" y1="10" x2="12" y2="19.5"/><line x1="14" y1="10" x2="14" y2="19.5"/><line x1="16" y1="10" x2="16" y2="19.5"/><line x1="18" y1="10" x2="18" y2="19.5"/></g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" filter="url(#ledGlow)">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g><line x1="6" y1="10" x2="6" y2="19.5"/><line x1="8" y1="10" x2="8" y2="19.5"/><line x1="10" y1="10" x2="10" y2="19.5"/><line x1="12" y1="10" x2="12" y2="19.5"/><line x1="14" y1="10" x2="14" y2="19.5"/><line x1="16" y1="10" x2="16" y2="19.5"/><line x1="18" y1="10" x2="18" y2="19.5"/></g>
+            </svg>
+          </div>
+        </div>
       </button>
 
-      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y2="8"/>
-          <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
-          <circle cx="7"  cy="14" r="0.7"/><circle cx="11" cy="14" r="0.7"/><circle cx="15" cy="14" r="0.7"/><circle cx="19" cy="14" r="0.7"/>
-          <circle cx="7"  cy="17" r="0.7"/><circle cx="11" cy="17" r="0.7"/><circle cx="15" cy="17" r="0.7"/><circle cx="19" cy="17" r="0.7"/>
-        </svg>
+      <!-- Month — dense grid (match sample) -->
+      <button class="coin" aria-label="Month view" aria-pressed="false" data-name="month" data-progress="0.63">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <!-- 5x5 dots, centered comfortably -->
+              <g>
+                <circle cx="6.2" cy="11" r=".8"/><circle cx="8.9" cy="11" r=".8"/><circle cx="11.6" cy="11" r=".8"/><circle cx="14.3" cy="11" r=".8"/><circle cx="17.0" cy="11" r=".8"/>
+                <circle cx="6.2" cy="12.9" r=".8"/><circle cx="8.9" cy="12.9" r=".8"/><circle cx="11.6" cy="12.9" r=".8"/><circle cx="14.3" cy="12.9" r=".8"/><circle cx="17.0" cy="12.9" r=".8"/>
+                <circle cx="6.2" cy="14.8" r=".8"/><circle cx="8.9" cy="14.8" r=".8"/><circle cx="11.6" cy="14.8" r=".8"/><circle cx="14.3" cy="14.8" r=".8"/><circle cx="17.0" cy="14.8" r=".8"/>
+                <circle cx="6.2" cy="16.7" r=".8"/><circle cx="8.9" cy="16.7" r=".8"/><circle cx="11.6" cy="16.7" r=".8"/><circle cx="14.3" cy="16.7" r=".8"/><circle cx="17.0" cy="16.7" r=".8"/>
+                <circle cx="6.2" cy="18.6" r=".8"/><circle cx="8.9" cy="18.6" r=".8"/><circle cx="11.6" cy="18.6" r=".8"/><circle cx="14.3" cy="18.6" r=".8"/><circle cx="17.0" cy="18.6" r=".8"/>
+              </g>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" filter="url(#ledGlow)">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <g>
+                <circle cx="6.2" cy="11" r=".8"/><circle cx="8.9" cy="11" r=".8"/><circle cx="11.6" cy="11" r=".8"/><circle cx="14.3" cy="11" r=".8"/><circle cx="17.0" cy="11" r=".8"/>
+                <circle cx="6.2" cy="12.9" r=".8"/><circle cx="8.9" cy="12.9" r=".8"/><circle cx="11.6" cy="12.9" r=".8"/><circle cx="14.3" cy="12.9" r=".8"/><circle cx="17.0" cy="12.9" r=".8"/>
+                <circle cx="6.2" cy="14.8" r=".8"/><circle cx="8.9" cy="14.8" r=".8"/><circle cx="11.6" cy="14.8" r=".8"/><circle cx="14.3" cy="14.8" r=".8"/><circle cx="17.0" cy="14.8" r=".8"/>
+                <circle cx="6.2" cy="16.7" r=".8"/><circle cx="8.9" cy="16.7" r=".8"/><circle cx="11.6" cy="16.7" r=".8"/><circle cx="14.3" cy="16.7" r=".8"/><circle cx="17.0" cy="16.7" r=".8"/>
+                <circle cx="6.2" cy="18.6" r=".8"/><circle cx="8.9" cy="18.6" r=".8"/><circle cx="11.6" cy="18.6" r=".8"/><circle cx="14.3" cy="18.6" r=".8"/><circle cx="17.0" cy="18.6" r=".8"/>
+              </g>
+            </svg>
+          </div>
+        </div>
       </button>
 
-      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y2="8"/>
-          <polyline points="7,14 10,17 17,10"/>
-        </svg>
+      <!-- To-Do — large check inside frame (match sample) -->
+      <button class="coin" aria-label="To-Do list" aria-pressed="false" data-name="todo" data-progress="0.05">
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>
+        </div>
+        <div class="flip">
+          <div class="face front">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <polyline points="6.5,14 10,17.5 17.5,10"/>
+            </svg>
+          </div>
+          <div class="face back">
+            <svg class="icon" viewBox="0 0 24 24" filter="url(#ledGlow)">
+              <rect x="4" y="5" width="16" height="14" rx="2" ry="2"/><line x1="4" y1="8" x2="20" y2="8"/>
+              <polyline points="6.5,14 10,17.5 17.5,10"/>
+            </svg>
+          </div>
+        </div>
       </button>
-    </nav>
+    </div>
+
+    <button id="enable" hidden>Enable motion</button>
   </main>
 
-  <!-- Task picker overlay -->
-  <div id="taskOverlay" aria-hidden="true"></div>
-
-  <!-- Settings editor -->
-  <div id="settingsOverlay" aria-hidden="true">
-    <div class="backdrop"></div>
-    <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
-      <div class="ed-head">
-        <div class="ed-title" id="edTitle">Edit</div>
-        <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14"/>
-        <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
-      </div>
-      <div class="ed-body" id="edBody"></div>
-      <div class="ed-foot">
-        <button id="edCancel" class="btnText">Cancel</button>
-        <button id="edSave" class="btnText">Save</button>
-      </div>
-    </div>
-  </div>
-
 <script>
-console.info('Chrono build r20');
-
-/* ---------- Core / State ---------- */
-const screenEl = document.getElementById('screen');
-const buttons = [...document.querySelectorAll('.btn')];
-
-let activeView = null;               // starts blank
-let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());
-
-const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
-
-function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
-function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
-function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function round15(min){ return Math.round(min/15)*15; }
-function isoWeekKey(date){
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
-}
-function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
-function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
-
-/* ---------- Tasks ---------- */
-let TASKS = [
-  {key:'work',      label:'Work',        color:'#d33c36', hard:false},
-  {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
-  {key:'chores',    label:'Chores',      color:'#3b41c5', hard:false},
-  {key:'errands',   label:'Errands',     color:'#1d8f2e', hard:false},
-  {key:'meals',     label:'Meal Time',   color:'#e0b21b', hard:false},
-  {key:'hygiene',   label:'Hygiene',     color:'#0ea5e9', hard:false},
-  {key:'selfcare',  label:'Self Care',   color:'#888888', hard:false},
-  {key:'exercise',  label:'Exercise',    color:'#1db954', hard:false},
-  {key:'family',    label:'Family Time', color:'#e3326b', hard:false},
-  {key:'hobbies',   label:'Hobbies',     color:'#f39c12', hard:false},
-  {key:'projects',  label:'Projects',    color:'#6a5acd', hard:false},
-  {key:'school',    label:'School',      color:'#3269e6', hard:true},
-  {key:'relax',     label:'Relaxation',  color:'#24c3d6', hard:false},
-  {key:'free',      label:'Free Time',   color:'#a4a4a4', hard:false},
-  {key:'childcare', label:'Child Care',  color:'#7a5c2e', hard:false},
-  {key:'sleep',     label:'Sleep',       color:'#6aa6ff', hard:false}
-];
-const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
-const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
-
-/* ---------- Data stores ---------- */
-const SLOTS_PER_DAY=96; // 15-min
-let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility}] */
-const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
-const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
-const MAX_RANGES_PER_DAY=6;
-
-/* ---------- Width sync ---------- */
-new ResizeObserver(()=> {
-  const w = screenEl.getBoundingClientRect().width;
-  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-}).observe(screenEl);
-
-/* ---------- Storage (IndexedDB + fallback) ---------- */
-const DB_NAME = 'chronoDB';
-const DB_VERSION = 6;
-let dbPromise = null;
-let STORAGE_MODE = 'idb';
-
-function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
-function idbOpen(){
-  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject)=>{
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = ()=>{
-      const db = req.result;
-      if (!db.objectStoreNames.contains('kv')){
-        db.createObjectStore('kv', { keyPath: 'k' });
-      }
-    };
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
+  /* stop page jerk outside coins */
+  ['pointerdown','click','touchstart'].forEach(ev=>{
+    document.body.addEventListener(ev, e=>{
+      if(!e.target.closest('.coin')) e.preventDefault();
+    }, {passive:false});
   });
-  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
-}
-async function storageSet(key, value){
-  if (STORAGE_MODE==='ls'){
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
+
+  /* progress rings */
+  const coins=[...document.querySelectorAll('.coin')];
+  function updateRing(el){
+    const p = Math.max(0, Math.min(1, parseFloat(el.dataset.progress ?? '0')));
+    const arc = el.querySelector('.arc');
+    arc.setAttribute('stroke-dasharray','100');
+    arc.setAttribute('stroke-dashoffset', (100 - p*100).toFixed(2));
   }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readwrite');
-    tx.objectStore('kv').put({k:key, v:value});
-    tx.oncomplete = ()=>resolve(true);
-    tx.onerror = ()=>reject(tx.error);
-  });
-}
-async function storageGet(key){
-  if (STORAGE_MODE==='ls'){
-    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
-  }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readonly');
-    const req = tx.objectStore('kv').get(key);
-    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
-function hydrateState(snap){
-  try{
-    if(!snap || typeof snap!=='object') return;
-    if (Array.isArray(snap.TASKS)) TASKS = snap.TASKS.map(t=>({key:String(t.key), label:String(t.label), color:String(t.color), hard:!!t.hard}));
-    if (snap.EXACT){
-      for (const k of Object.keys(EXACT)){
-        if (snap.EXACT[k] && Array.isArray(snap.EXACT[k]) && snap.EXACT[k].length===7){
-          EXACT[k] = snap.EXACT[k].map(dayArr => Array.isArray(dayArr) ? dayArr.map(r => ({
-            startMin: Number(r.startMin)||0,
-            endMin: Number(r.endMin)||0,
-            scope: r.scope || 'recurring',
-            weekKey: r.weekKey || undefined,
-            monthKey: r.monthKey || undefined,
-            reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
-            flexibility: r.flexibility || 'firm'
-          })) : []);
-        }
-      }
-    }
-    if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
-    if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
-    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
-  }catch(e){ console.warn('Hydrate failed:', e); }
-}
-async function saveAll(){
-  const snap = snapshotState();
-  await storageSet('lastGood', snap);
-  await storageSet('state', snap);
-}
-let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
+  coins.forEach(updateRing);
 
-/* ---------- Controls ---------- */
-document.querySelector('.controls').addEventListener('click', e=>{
-  const b=e.target.closest('.btn'); if(!b) return;
-  const v=b.dataset.view;
-  if(activeView===v){
-    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
-  }else{
-    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
-  }
-  saveSoon(200);
-});
-
-/* ---------- Week View ---------- */
-function buildWeekView(){
-  screenEl.innerHTML = `
-    <div class="wrap">
-      <div class="head">
-        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
-        <div class="title" id="weekTitle"></div>
-        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
-      </div>
-
-      <div class="grid-area">
-        <div class="top-row week" id="dowPills"></div>
-        <div class="grid" id="weekGrid">
-          <div class="blocks" id="blocksLayer"></div>
-          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="now" id="nowMagnify" aria-hidden="true"></div>
-        </div>
-        <div class="hours" id="weekHours"></div>
-      </div>
-    </div>
-  `;
-  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
-  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
-  document.getElementById('weekGrid').addEventListener('click', openTaskStack);
-
-  repaintWeek();
-  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
-}
-
-function repaintWeek(){
-  const first=visibleWeekFirst, last=addDays(first,6);
-  const m=new Intl.DateTimeFormat(undefined,{month:'short'});
-  const title = (first.getFullYear()===last.getFullYear())
-    ? (first.getMonth()===last.getMonth()
-        ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
-        : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
-    : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  document.getElementById('weekTitle').textContent = title;
-
-  const pills=document.getElementById('dowPills'); pills.innerHTML='';
-  for(let i=0;i<7;i++){
-    const d=addDays(first,i);
-    const pill=document.createElement('div');
-    pill.className='day-pill';
-    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
-    pills.appendChild(pill);
-  }
-
-  const gh=document.getElementById('weekHours'); gh.innerHTML='';
-  const gridEl = document.getElementById('weekGrid');
-  const geom=computeGeometry(gridEl, 7);
-  for(let i=0;i<24;i++){
-    const el=document.createElement('div'); el.className='hour-stamp';
-    el.textContent = `${String(i).padStart(2,'0')}:00`;
-    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
-    gh.appendChild(el);
-  }
-
-  rebuildSlots();
-  paintBlocksWeek(geom);
-  buildMask(geom, 7);
-  paintNowMagnifier(geom);
-}
-
-function computeGeometry(gridEl, cols){
-  const r=gridEl.getBoundingClientRect();
-  const totalW=Math.max(0, Math.round(r.width));
-  const totalH=Math.max(0, Math.round(r.height));
-  const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
-  const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
-  const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
-  const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
-  const slotY=[0];
-  for(let hr=0;hr<24;hr++){
-    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
-    const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
-    for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
-  }
-  return {totalW,totalH,colW,colX,rowH,rowY,slotY};
-}
-
-function buildMask(geom, cols){
-  const svg=document.getElementById(activeView==='day'?'dayMask':'maskSVG'); svg.innerHTML='';
-  const { totalW, totalH, colX, rowY } = geom;
-  if(totalW<=0 || totalH<=0) return;
-  svg.setAttribute('width', totalW);
-  svg.setAttribute('height', totalH);
-  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
-  svg.setAttribute('preserveAspectRatio','none');
-
-  const NS='http://www.w3.org/2000/svg';
-  const defs=document.createElementNS(NS,'defs');
-  const sym=document.createElementNS(NS,'symbol');
-  sym.setAttribute('id','tile900x300');
-  sym.setAttribute('viewBox','0 0 900 300');
-  sym.setAttribute('preserveAspectRatio','none');
-
-  const surface='rgba(255,255,255,0.55)';
-  const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
-  const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
-
-  sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
-  sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
-  sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
-  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
-
-  defs.appendChild(sym); svg.appendChild(defs);
-
-  for(let rI=0;rI<24;rI++){
-    for(let cI=0;cI<cols;cI++){
-      const use=document.createElementNS(NS,'use');
-      use.setAttribute('href','#tile900x300');
-      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
-      use.setAttribute('width',colX[cI+1]-colX[cI]);
-      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
-      svg.appendChild(use);
-    }
-  }
-}
-
-/* Scope filter */
-function inScopeForDate(r, date){
-  const sc = r.scope || 'recurring';
-  if (sc === 'recurring') return true;
-  if (sc === 'week')     return r.weekKey === isoWeekKey(date);
-  if (sc === 'month')    return r.monthKey === monthKey(date);
-  return false;
-}
-
-/* ---------- Slots (carryover both directions per visible week) ---------- */
-function rebuildSlots(){
-  allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-  const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
-
-  const clampFill = (dayIdx, startSlot, endSlot, key, isFirm) => {
-    const a = Math.max(0, Math.min(96, startSlot));
-    const b = Math.max(0, Math.min(96, endSlot));
-    for(let s=a; s<b; s++){
-      const existing = allSlots[dayIdx][s];
-      if(!existing){ allSlots[dayIdx][s] = key; continue; }
-      const existingFirm = isExistingFirmAtSlot(existing, dayIdx, s);
-      if(isFirm && !existingFirm) allSlots[dayIdx][s] = key;
-    }
-  };
-
-  // Fill from current day ranges
-  for(const key of keys){
-    for(let d=0; d<7; d++){
-      const dateDay = addDays(visibleWeekFirst, d);
-      const ranges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
-      for(const r of ranges){
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const s = (r.startMin|0), e = (r.endMin|0);
-        const endAbs = (e <= s ? e + 1440 : e);
-
-        const todayStart = s;
-        const todayEnd   = Math.min(endAbs, 1440);
-        if(todayEnd > todayStart){
-          clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
-        }
-
-        const spill = endAbs - 1440;
-        if(spill > 0 && d+1 <= 6){
-          clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
-        }
-      }
-    }
-  }
-
-  // ALSO: pull in previous-day spillovers (so Sunday can show Saturday→Sunday)
-  for(const key of keys){
-    for(let d=0; d<7; d++){
-      const prevDayIdx = (d===0? 6 : d-1);
-      const prevDate   = addDays(visibleWeekFirst, d-1); // NOTE: for d=0 this is last week's Saturday
-      const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
-        // only cross-midnight ranges spilling into this day
-        return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
-      });
-      for(const r of prevRanges){
-        const isFirm = (r.flexibility||'firm')==='firm';
-        const spillEnd = Math.min(r.endMin|0, 1440);
-        if (spillEnd > 0){
-          clampFill(d, 0, Math.floor(spillEnd/15), key, isFirm);
-        }
-      }
-    }
-  }
-}
-
-function isExistingFirmAtSlot(key, dayIdx, slotIdx){
-  // Check same-day firm
-  const dateDay  = addDays(visibleWeekFirst, dayIdx);
-  const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
-  for(const r of owned){
-    if((r.flexibility||'firm')==='firm'){
-      const a=Math.floor((r.startMin|0)/15), b=Math.floor((r.endMin|0)/15);
-      if((r.endMin|0) > (r.startMin|0)){ if(slotIdx>=a && slotIdx<b) return true; }
-      else{ if(slotIdx>=a && slotIdx<96) return true; }
-    }
-  }
-  // Check previous-day spill firm (using true previous date)
-  const prevDate = addDays(visibleWeekFirst, dayIdx-1);
-  const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
-  const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
-  for(const r of prev){
-    if((r.flexibility||'firm')==='firm'){
-      const b=Math.floor((r.endMin|0)/15);
-      if(slotIdx>=0 && slotIdx<b) return true;
-    }
-  }
-  return false;
-}
-
-/* ---------- Paint week ---------- */
-function paintBlocksWeek(geom){
-  const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
-  const colors=COLORS();
-  const {colX, slotY} = geom;
-
-  for(let d=0; d<7; d++){
-    let s=0;
-    while(s<SLOTS_PER_DAY){
-      const key=allSlots[d][s];
-      if(!key){ s++; continue; }
-      let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
-      const left=colX[d], right=colX[d+1];
-      const top=slotY[s], bottom=slotY[e];
-      const div=document.createElement('div'); div.className='blk';
-      div.style.left=left+'px'; div.style.top=top+'px';
-      div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
-      div.style.height=(bottom-top)+'px';
-      div.style.background = colors[key] || '#ddd';
-      div.title = LABELS()[key];
-      layer.appendChild(div);
-      s=e;
-    }
-  }
-}
-
-function paintNowMagnifier(geom){
-  const nowEl=document.getElementById('nowMagnify');
-  const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
-  if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){
-    nowEl.style.display='none'; return;
-  }
-  const {colX,rowY} = geom;
-  const dow=today.getDay(); const mins=today.getHours()*60 + today.getMinutes();
-  const hour=Math.floor(mins/60);
-  const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
-  const extra=Math.min(10, Math.floor(hourH*0.25));
-  const top=Math.max(0, hourTop - Math.floor(extra/2));
-  const height=Math.max(2, hourH + extra);
-  nowEl.style.left=colX[dow]+'px';
-  nowEl.style.top=top+'px';
-  nowEl.style.width=(colX[dow+1]-colX[dow] - (dow===6?1:0))+'px';
-  nowEl.style.height=height+'px';
-  nowEl.style.display='block';
-}
-
-/* ---------- Day View (blank + version) ---------- */
-function buildDayView(){
-  screenEl.innerHTML = `
-    <div class="wrap">
-      <div class="head"><div></div><div class="title">Day</div><div></div></div>
-      <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r20</div>
-      </div>
-    </div>
-  `;
-}
-
-/* ---------- Month View ---------- */
-function buildMonthView(){
-  const base = new Date(); // reset to current month on entry
-  activeDayISO = toISO(base);
-
-  const first = new Date(base.getFullYear(), base.getMonth(), 1);
-  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
-  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-
-  screenEl.innerHTML = `
-    <div class="month-wrap">
-      <div class="head">
-        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
-        <div class="title">${label}</div>
-        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
-      </div>
-      <div class="month-dow" aria-hidden="false">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-      </div>
-      <div class="month-grid" id="monthGrid"></div>
-    </div>
-  `;
-  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); saveSoon(200); };
-  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
-
-  const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay();
-  const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
-  for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
-  for(let day=1; day<=last.getDate(); day++){
-    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
-    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
-    if(iso===toISO(new Date())) tile.classList.add('today');
-    g.appendChild(tile);
-  }
-  const used = firstWeekday + last.getDate();
-  const rem = (Math.ceil(used/7)*7) - used;
-  for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
-}
-
-/* ---------- Task picker (centered, non-scroll) ---------- */
-const overlay=document.getElementById('taskOverlay');
-
-function openTaskStack(){
-  overlay.innerHTML='';
-  const stack=document.createElement('div'); stack.className='stack';
-
-  const grid = document.getElementById('weekGrid');
-  const r = grid.getBoundingClientRect();
-
-  const N = 16;
-  const G = 8;
-  const margin = 6;
-  const avail = Math.max(120, r.height - margin*2);
-  const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
-  const used = N*rowH + (N-1)*G;
-  const topPad = Math.max(margin, Math.floor((r.height - used)/2));
-
-  document.documentElement.style.setProperty('--row-min-h', rowH+'px');
-
-  stack.style.top    = (r.top + topPad) + 'px';
-  stack.style.height = used + 'px';
-
-  const totals = weeklyTotals();
-  for(const t of TASKS){
-    const row=document.createElement('button'); row.className='taskRow'; row.dataset.key=t.key;
-    row.innerHTML = `<span class="dot" style="background:${t.color}"></span>
-                     <span class="name">${t.label}</span>
-                     <span class="dur">${formatDecimalHours(totals[t.key]||0)}</span>`;
-    row.addEventListener('click', ()=>openEditor(t));
-    stack.appendChild(row);
-  }
-  overlay.appendChild(stack);
-  overlay.style.display='block';
-}
-overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
-
-function weeklyTotals(){
-  rebuildSlots();
-  const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
-  for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
-  return out;
-}
-function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
-
-/* ---------- Editor ---------- */
-const edOverlay=document.getElementById('settingsOverlay');
-const edBody=document.getElementById('edBody');
-const edTitle=document.getElementById('edTitle');
-const edName=document.getElementById('edName');
-const edColor=document.getElementById('edColor');
-
-document.getElementById('edCancel').addEventListener('click', ()=>{
-  const sure = confirm('Discard edits?');
-  if(!sure) return;
-  edOverlay.style.display='none';
-});
-
-function openEditor(task){
-  overlay.style.display='none';
-
-  const saveBtn = document.getElementById('edSave');
-  saveBtn.onclick = null;
-
-  const t = TASKS.find(x=>x.key===task.key);
-  const sessionDraft = {
-    key: t.key, label: t.label, color: toHex(t.color),
-    week: EXACT[t.key].map(dayArr => dayArr.map(r => ({
-      startMin:r.startMin, endMin:r.endMin,
-      scope: r.scope || 'recurring',
-      weekKey: r.weekKey, monthKey: r.monthKey,
-      reminderOffsetMin: r.reminderOffsetMin ?? undefined,
-      flexibility: r.flexibility || 'firm'
-    })))
-  };
-  edTitle.textContent = `Edit: ${t.label}`;
-  edName.value = t.label; edColor.value = toHex(t.color);
-  buildEditorDays(sessionDraft);
-  edOverlay.style.display='block';
-
-  saveBtn.onclick = async () => {
-    try {
-      await persistEditor(sessionDraft);
-      edOverlay.style.display='none';
-      if(activeView==='week') repaintWeek();
-      if(activeView==='day')  buildDayView();
-      await saveAll();
-    } catch (err) {
-      console.error('Save failed:', err);
-      alert('Save failed: ' + (err && err.message ? err.message : String(err)));
-    }
-  };
-}
-
-function buildEditorDays(sessionDraft){
-  edBody.innerHTML='';
-  const first=visibleWeekFirst;
-
-  for(let d=0; d<7; d++){
-    const theDate = addDays(first, d);
-    const dayLabel = `${DAY_NAMES[d]}, ${theDate.toLocaleDateString(undefined,{month:'long'})} ${ORD(theDate.getDate())}`;
-
-    const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
-
-    const head=document.createElement('div'); head.className='dayHead';
-    head.innerHTML = `<span>${dayLabel}</span><span></span>`;
-    wrap.appendChild(head);
-
-    const slots=document.createElement('div'); slots.className='slots'; wrap.appendChild(slots);
-
-    const addRow=document.createElement('div'); addRow.className='addRow';
-    const addBtn=document.createElement('button'); addBtn.className='addBtn'; addBtn.type='button'; addBtn.textContent='Create new';
-    addBtn.addEventListener('click', ()=>{
-      if(slots.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return;
-      const row = addSlotRow(slots, d, null, null, false, null, sessionDraft);
-      if(row){ row.querySelector('.start').focus(); }
-      updateAddButtonState(slots, addBtn);
+  /* flip toggle + mutual exclusivity (second tap deactivates) */
+  function setActive(target){
+    const already = target.classList.contains('active');
+    coins.forEach(btn=>{
+      const on = !already && btn===target;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
     });
-    addRow.appendChild(addBtn); wrap.appendChild(addRow);
+  }
+  document.querySelector('.coins').addEventListener('click', e=>{
+    const c=e.target.closest('.coin'); if(!c) return;
+    setActive(c);
+  });
 
-    (sessionDraft.week[d]||[]).forEach(r=>{
-      addSlotRow(slots, d, r.startMin, r.endMin, true, r, sessionDraft);
+  /* preserved shadow physics + smoothing (fix jump near vertical) */
+  const root=document.documentElement;
+  let beta=18, gamma=0, sx=0, sy=12;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+
+  function animate(){
+    const max=34;
+    const tx=clamp((gamma||0)/45, -1, 1)*max;
+    const ty=clamp((beta ||0)/45, -1, 1)*max;
+
+    sx = lerp(sx, tx, 0.12);
+    sy = lerp(sy, ty+8, 0.12);
+
+    const mag=Math.hypot(sx,sy);
+    root.style.setProperty('--sx',  sx.toFixed(1)+'px');
+    root.style.setProperty('--sy',  sy.toFixed(1)+'px');
+    root.style.setProperty('--sblur', (12 + mag*0.45).toFixed(1)+'px');
+
+    root.style.setProperty('--hx',  (50 - sx*1.1/max*45)+'%');
+    root.style.setProperty('--hy',  (22 - sy*0.7/max*45)+'%');
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  function startMotion(){
+    window.addEventListener('deviceorientation', e=>{
+      if(e.beta==null||e.gamma==null) return;
+      const dz=2.0;
+      beta = Math.abs(e.beta)  < dz ? 0 : e.beta;
+      gamma= Math.abs(e.gamma) < dz ? 0 : e.gamma;
+    }, true);
+  }
+  (async()=>{
+    const btn=document.getElementById('enable');
+    try{
+      if (typeof DeviceOrientationEvent!=='undefined' &&
+          typeof DeviceOrientationEvent.requestPermission==='function'){
+        btn.hidden=false;
+        btn.onclick=async ()=>{
+          try{
+            const res=await DeviceOrientationEvent.requestPermission();
+            if(res==='granted'){ btn.hidden=true; startMotion(); }
+          }catch{}
+        };
+      }else{ startMotion(); }
+    }catch{ startMotion(); }
+  })();
+
+  if(!('ontouchstart' in window)){
+    window.addEventListener('mousemove', e=>{
+      const w=innerWidth, h=innerHeight;
+      gamma=(e.clientX/w - 0.5)*90;
+      beta =(0.5 - e.clientY/h)*90;
     });
-
-    updateAddButtonState(slots, addBtn);
-    edBody.appendChild(wrap);
-  }
-}
-function updateAddButtonState(slotsEl, btnEl){
-  const count = slotsEl.querySelectorAll('.slot').length;
-  btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
-}
-
-function offsetToOpt(min){ const map = {5:'5m',10:'10m',15:'15m',30:'30m',60:'1h',1440:'24h'}; return map[min] || 'off'; }
-function optToOffset(val){
-  if(val==='5m') return 5; if(val==='10m') return 10; if(val==='15m') return 15;
-  if(val==='30m') return 30; if(val==='1h') return 60; if(val==='24h') return 1440;
-  return undefined;
-}
-
-function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
-  if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
-
-  const defaultStart = 12*60; // 12:00
-  const defaultEnd   = 0;     // 00:00 (interpreted as next-day when start > end)
-
-  const row=document.createElement('div'); row.className='slot';
-  if (!preexisting) row.dataset.pristine = '1';
-
-  const scopeVal  = existingMeta?.scope || 'recurring';
-  const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
-  const flexVal   = existingMeta?.flexibility || 'firm'; // default Firm
-
-  row.innerHTML = `
-    <div class="start">
-      <input type="time" class="in start" step="900" autocomplete="off" inputmode="numeric">
-      <span class="dayTag startTag" style="display:none"></span>
-    </div>
-    <div class="end">
-      <input type="time" class="in end"   step="900" autocomplete="off" inputmode="numeric">
-      <span class="dayTag endTag" style="display:none"></span>
-    </div>
-    <button class="iconBtn mic"   title="Speak time" aria-label="Microphone">🎤</button>
-    <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
-
-    <div class="selrow">
-      <select class="select scope" title="Scope">
-        <option value="recurring"${scopeVal==='recurring'?' selected':''}>Recurring</option>
-        <option value="week"${scopeVal==='week'?' selected':''}>This week</option>
-        <option value="month"${scopeVal==='month'?' selected':''}>This month</option>
-      </select>
-
-      <select class="select remind" title="Set reminder">
-        <option value="off"${remindVal==='off'?' selected':''}>Set reminder</option>
-        <option value="5m"${remindVal==='5m'?' selected':''}>5 minutes</option>
-        <option value="10m"${remindVal==='10m'?' selected':''}>10 minutes</option>
-        <option value="15m"${remindVal==='15m'?' selected':''}>15 minutes</option>
-        <option value="30m"${remindVal==='30m'?' selected':''}>30 minutes</option>
-        <option value="1h"${remindVal==='1h'?' selected':''}>1 hour</option>
-        <option value="24h"${remindVal==='24h'?' selected':''}>24 hours</option>
-      </select>
-
-      <select class="select flex" title="Flexibility">
-        <option value="firm"${flexVal==='firm'?' selected':''}>Firm</option>
-        <option value="flexible"${flexVal==='flexible'?' selected':''}>Flexible</option>
-      </select>
-    </div>
-  `;
-
-  const startInp = row.querySelector('input.start');
-  const endInp   = row.querySelector('input.end');
-  const startTag = row.querySelector('.startTag');
-  const endTag   = row.querySelector('.endTag');
-
-  if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
-  if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
-
-  function refreshDayTags(){
-    const sVal=startInp.value, eVal=endInp.value;
-    if(!sVal || !eVal){ startTag.style.display='none'; endTag.style.display='none'; return; }
-    const s=toMin(sVal), e=toMin(eVal);
-    if (e > s){
-      startTag.style.display='none';
-      endTag.style.display='none';
-    } else if (e < s){
-      // Cross-midnight: show DOW initials (e.g., Sat → Sun)
-      const startDow = SHORT_DOW[dayIndex];
-      const endDow   = SHORT_DOW[(dayIndex+1)%7];
-      startTag.textContent = startDow;
-      endTag.textContent   = endDow;
-      startTag.style.display='inline-block';
-      endTag.style.display  ='inline-block';
-    }
-  }
-  refreshDayTags();
-
-  row.querySelector('.mic').addEventListener('click', async ()=>{
-    const sample = 'Say: "9:00 AM to 5:00 PM"';
-    let text = '';
-    if('webkitSpeechRecognition' in window){
-      try{
-        const rec = new webkitSpeechRecognition(); rec.lang='en-US'; rec.interimResults=false; rec.continuous=false;
-        alert(sample);
-        text = await new Promise((resolve,reject)=>{
-          rec.onresult = e=>resolve(e.results[0][0].transcript);
-          rec.onerror = e=>reject(e.error);
-          rec.onend = ()=>{};
-          rec.start(); setTimeout(()=>{ try{rec.stop();}catch{} }, 4500);
-        });
-      }catch{ text = prompt(sample) || ''; }
-    }else{ text = prompt(sample) || ''; }
-    const parsed=parseSpokenRange(text);
-    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
-  });
-
-  row.querySelector('.trash').addEventListener('click', ()=>{
-    row.remove();
-    const btn = row.closest('.dayRow').querySelector('.addBtn');
-    updateAddButtonState(slotsEl, btn);
-  });
-
-  function isRowComplete(r){
-    const s=r.querySelector('input.start').value;
-    const e=r.querySelector('input.end').value;
-    return !!(s && e);
   }
 
-  function validateImmediate(){
-    if (row.dataset.pristine==='1' || !isRowComplete(row)) return;
-
-    const sVal=startInp.value, eVal=endInp.value;
-    let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
-    if(sMin===eMin) return;
-
-    // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
-    const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
-    for(const rr of rows){
-      const s2=round15(toMin(rr.querySelector('input.start').value||'')); const e2=round15(toMin(rr.querySelector('input.end').value||''));
-      if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
-
-      const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
-      const b1=s2,   b2=(e2>s2)?e2:24*60;
-
-      if (a1 < b2 && b1 < a2){
-        alert('Double booking not allowed for the same activity on this day.');
-        startInp.value=''; endInp.value=''; row.dataset.pristine='1';
-        refreshDayTags();
-        return;
-      }
-    }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
   }
-
-  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
-  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
-
-  slotsEl.appendChild(row);
-  return row;
-}
-
-async function persistEditor(sessionDraft){
-  const key = sessionDraft.key;
-  const t = TASKS.find(x=>x.key===key);
-  t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
-  t.color = document.getElementById('edColor').value || t.color;
-
-  const week = Array.from({length:7},()=>[]);
-  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
-    const dayDate = addDays(visibleWeekFirst, d);
-    const rows=[...wrap.querySelectorAll('.slot')].slice(0,MAX_RANGES_PER_DAY);
-
-    const tmp=[];
-    for(const row of rows){
-      const sVal=row.querySelector('input.start').value;
-      const eVal=row.querySelector('input.end').value;
-      if(!sVal || !eVal) continue;
-
-      let sMin = round15(toMin(sVal));
-      let eMin = round15(toMin(eVal));
-      if (sMin === eMin) continue;
-
-      const scope = row.querySelector('.scope').value;
-      const remindVal = row.querySelector('.remind').value;
-      const reminderOffsetMin = optToOffset(remindVal);
-      const flexibility = row.querySelector('.flex').value || 'firm';
-
-      const rec = { startMin: sMin, endMin: eMin, scope, flexibility };
-      if(scope==='week')  rec.weekKey  = isoWeekKey(dayDate);
-      if(scope==='month') rec.monthKey = monthKey(dayDate);
-      if(reminderOffsetMin!=null) rec.reminderOffsetMin = reminderOffsetMin;
-
-      tmp.push(rec);
-    }
-
-    tmp.sort((A,B)=>A.startMin-B.startMin);
-    const merged=[];
-    for(const r of tmp){
-      if(!merged.length){ merged.push({...r}); continue; }
-      const L=merged[merged.length-1];
-      const sameMeta = (L.scope===r.scope) && (L.weekKey===r.weekKey) && (L.monthKey===r.monthKey) &&
-                       ((L.flexibility||'firm')===(r.flexibility||'firm')) &&
-                       ((L.reminderOffsetMin??null)===(r.reminderOffsetMin??null));
-      if(sameMeta && L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin){
-        L.endMin=r.endMin;
-      }else{
-        merged.push({...r});
-      }
-    }
-    week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
-  });
-
-  // Commit
-  EXACT[key] = week;
-  ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
-  saveSoon(200);
-}
-
-/* ---------- Speech parse & utils ---------- */
-function parseSpokenRange(s){
-  if(!s) return null;
-  const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if(!m) return null;
-  const sH=Number(m[1]), sM=Number(m[2]||0), sA=(m[3]||'').toLowerCase();
-  const eH=Number(m[4]), eM=Number(m[5]||0), eA=(m[6]||'').toLowerCase();
-  const to24=(h,m,ap)=>{ let H=h%12; if(ap==='pm') H+=12; if(ap==='' && h===12) H=12; return H*60+m; };
-  const sMin = to24(sH,sM,sA);
-  const eMin = to24(eH,eM,eA);
-  return {s:sMin, e:eMin};
-}
-
-function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
-function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
-function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
-  const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
-
-/* ---------- Init & render ---------- */
-async function init(){
-  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
-  visibleWeekFirst = weekStart(new Date());
-  activeDayISO = toISO(new Date());
-  render();
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
-  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
-}
-function render(){
-  if(activeView==='week'){
-    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
-    buildWeekView();
-  } else if(activeView==='day'){
-    activeDayISO = toISO(new Date());          // sync to today
-    buildDayView();
-  } else if(activeView==='month'){
-    activeDayISO = toISO(new Date());          // reset to current month on entry
-    buildMonthView();
-  } else {
-    screenEl.innerHTML='';
-  }
-}
-init();
 </script>
-
-<!-- Service worker registration -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => console.log('SW registered', reg.scope))
-      .catch(err => console.error('SW registration failed', err));
-  });
-}
-</script>
-
 </body>
 </html>
