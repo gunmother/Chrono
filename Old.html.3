@@ -3,204 +3,482 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Betterly — Tilt Glass UI</title>
-<link rel="manifest" href="manifest.webmanifest" />
-<meta name="theme-color" content="#e9eef5" />
+<title>Chrono</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+
 <style>
   :root{
-    /* One material + pane tint (not transparent) */
-    --bg:#e9eef5;          /* page */
-    --pane:#f7f9fd;        /* glass-like surface */
+    --r-lg:12px; --r-pill:999px;
+    --border:#bdbdbd; --grid-line:#e1e1e1;
+    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
 
-    /* dynamic shadow offsets (updated by JS) */
-    --sx: 0px;             /* shadow X */
-    --sy: 12px;            /* shadow Y */
-    --blur: 36px;
+    --hour-col:56px;
+    --dow-h:32px;
+    --label-size:12px;
+    --btn:60px;
 
-    /* highlight hotspot for bevel (updated by JS) */
-    --hx: 50%;
-    --hy: 22%;
-
-    --app-w: clamp(320px, 92vw, 420px);
-    --gap: clamp(12px, 2vh, 18px);
-    --barH: clamp(42px, 6vh, 56px);
-    --coin: clamp(62px, 9vh, 78px);
-    --r-lg: 24px;
-    --r-pill: 999px;
+    --panelW:520px;
+    --slot-gap:8px;
+    --icon-btn:36px;
+    --row-min-h:36px;
   }
 
-  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden}
-  body{
-    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial;
-    padding: max(16px, env(safe-area-inset-top))
-             max(16px, env(safe-area-inset-right))
-             max(20px, env(safe-area-inset-bottom))
-             max(16px, env(safe-area-inset-left));
-  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
+  *{box-sizing:border-box}
 
   .app{
-    width:var(--app-w);
-    height:calc(100dvh - max(16px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
-    margin:0 auto; display:grid; grid-template-rows: var(--barH) 1fr auto; gap:var(--gap);
-    position:relative;
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: max(16px, env(safe-area-inset-top)) auto;
+    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
   }
 
-  /* ===== Raised “glass” primitives (no borders, beveled via light) ===== */
-  .glass{
-    background: var(--pane);
-    border-radius: var(--r-lg);
-    position:relative;
-    box-shadow: var(--sx) var(--sy) var(--blur) rgba(0,0,0,.20), 0 6px 16px rgba(0,0,0,.10);
-    will-change: transform, box-shadow;
-  }
-  /* subtle beveled sheen — not a rim */
-  .glass::before{
-    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-    background: radial-gradient(140% 120% at var(--hx) var(--hy),
-                 rgba(255,255,255,.55), rgba(255,255,255,0) 58%);
-    opacity:.9; mix-blend-mode:screen;
+  #screen{
+    border:1px solid var(--border);
+    border-radius:var(--r-lg);
+    background:#fff;
+    position:relative; overflow:hidden; min-height:420px;
   }
 
-  /* Top handle (floating, pill) */
-  .topbar{
-    height:var(--barH); border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center; gap:10px;
+  .controls{ display:flex; justify-content:space-between; align-items:center; }
+  .btn{
+    width:var(--btn); height:var(--btn); border-radius:50%;
+    border:1px solid var(--border); background:#fff; color:#000;
+    display:grid; place-items:center; cursor:pointer; padding:0;
   }
-  .dot{width:8px;height:8px;border-radius:50%; background:#cfd8e6; box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.06)}
+  .btn[aria-pressed="true"]{ background:#e6e6e6; }
 
-  /* Center screen pane (raised sheet of “glass”) */
-  .stage{ position:relative; }
-  .stage .glass{ width:100%; height:100%; }
+  .icon{ width:60%; height:60% }
+  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
 
-  /* Four floating coins (no dock) */
-  .coins{
-    display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; align-items:end;
-    padding-bottom: 2px;
-  }
-  .coin{
-    width:var(--coin); height:var(--coin); margin:0 auto; border-radius:var(--r-pill);
-    background: var(--pane); border:0; outline:0; position:relative;
-    box-shadow: var(--sx) var(--sy) var(--blur) rgba(0,0,0,.22), 0 6px 16px rgba(0,0,0,.10);
-    will-change: transform, box-shadow;
-  }
-  .coin::before{
-    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-    background: radial-gradient(140% 110% at var(--hx) var(--hy),
-                 rgba(255,255,255,.60), rgba(255,255,255,0) 60%);
-    opacity:.95; mix-blend-mode:screen;
-  }
-  /* pressed coin = inverse (soft inner bevel) */
-  .coin.pressed{
-    transform: translateY(1px);
-    box-shadow:
-      inset calc(var(--sx) * -0.25) calc(var(--sy) * -0.25) 28px rgba(0,0,0,.22),
-      inset 0 -16px 30px rgba(255,255,255,.92);
-  }
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
-  /* motion permission button (iOS) */
-  #enable{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    padding:10px 14px; border-radius:999px; border:0; background:#ffffff;
-    box-shadow:0 8px 22px rgba(0,0,0,.12); z-index:20;
-  }
+  .grid-area{ position:relative; overflow:hidden }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
+  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
 
-  @media (max-height: 600px){
-    :root{ --gap:10px; --coin:64px; }
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
+  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
+
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
+
+  .grid{
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+    z-index:0;
   }
-  @media (prefers-reduced-motion: reduce){
-    .glass,.coin{ transition:none }
-  }
+  .blocks{ position:absolute; inset:0; z-index:1 }
+  .blk{ position:absolute; border:1px solid var(--border) }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
+
+  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
+  .chev:disabled{ opacity:.5; cursor:not-allowed }
+
+  /* Month */
+  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
+  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
+  .month-dow span{ text-align:center }
+  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
+  .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
+  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
+  .mcell.muted{ color:#9c9c9c }
+
+  /* Day “screensaver” watermark */
+  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 </style>
 </head>
 <body>
   <main class="app">
-    <div class="topbar glass" aria-label="Menu handle">
-      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-    </div>
+    <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
-    <section class="stage">
-      <div class="glass" aria-label="Center screen"></div>
-    </section>
+    <nav class="controls" role="group" aria-label="Primary views">
+      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
 
-    <div class="coins">
-      <button class="coin" aria-label="Button 1"></button>
-      <button class="coin" aria-label="Button 2"></button>
-      <button class="coin" aria-label="Button 3"></button>
-      <button class="coin" aria-label="Button 4"></button>
-    </div>
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18"/>
+          <line x1="8" y1="10" x2="8" y2="18"/>
+          <line x1="10" y1="10" x2="10" y2="18"/>
+          <line x1="12" y1="10" x2="12" y2="18"/>
+          <line x1="14" y1="10" x2="14" y2="18"/>
+          <line x1="16" y1="10" x2="16" y2="18"/>
+          <line x1="18" y1="10" x2="18" y2="18"/>
+        </svg>
+      </button>
 
-    <button id="enable" hidden>Enable motion</button>
+      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
+          <circle cx="7"  cy="14" r="0.7"/><circle cx="11" cy="14" r="0.7"/><circle cx="15" cy="14" r="0.7"/><circle cx="19" cy="14" r="0.7"/>
+          <circle cx="7"  cy="17" r="0.7"/><circle cx="11" cy="17" r="0.7"/><circle cx="15" cy="17" r="0.7"/><circle cx="19" cy="17" r="0.7"/>
+        </svg>
+      </button>
+
+      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
   </main>
 
 <script>
-  /* Mutually-exclusive coin press */
-  const coins=[...document.querySelectorAll('.coin')];
-  document.querySelector('.coins').addEventListener('click',e=>{
-    const c=e.target.closest('.coin'); if(!c) return;
-    coins.forEach(x=>x.classList.toggle('pressed', x===c));
-  });
+console.info('Chrono build r21');
 
-  /* Tilt engine: updates CSS vars for shadow + highlight + subtle parallax */
-  const root=document.documentElement;
-  const movers=document.querySelectorAll('.topbar.glass, .stage .glass, .coin');
+/* ---------- Core / State ---------- */
+const screenEl = document.getElementById('screen');
+const buttons = [...document.querySelectorAll('.btn')];
 
-  let beta=18, gamma=0; // default gentle tilt
-  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+let activeView = null;               // starts blank
+let activeDayISO = toISO(new Date());
+let visibleWeekFirst = weekStart(new Date());
 
-  function animate(){
-    const max=18;                           // px max offset
-    const x=clamp((gamma||0)/45, -1, 1)*max;
-    const y=clamp((beta ||0)/45, -1, 1)*max;
+const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
 
-    root.style.setProperty('--sx',  x.toFixed(1)+'px');
-    root.style.setProperty('--sy',  (y+10).toFixed(1)+'px');
-    root.style.setProperty('--hx',  (50 - x*1.2)+'%');   // highlight opposes shadow
-    root.style.setProperty('--hy',  (22 - y*0.8)+'%');
+function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 
-    // subtle parallax so movement is obvious but not goofy
-    const px=(-x*0.18).toFixed(1), py=(-y*0.18).toFixed(1);
-    movers.forEach(el=>{ el.style.transform = `translate3d(${px}px, ${py}px, 0)`; });
+/* ---------- Width sync ---------- */
+new ResizeObserver(()=> {
+  const w = screenEl.getBoundingClientRect().width;
+  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
+}).observe(screenEl);
 
-    requestAnimationFrame(animate);
-  }
-  requestAnimationFrame(animate);
+/* ---------- Lightweight Storage (IndexedDB + fallback) ---------- */
+const DB_NAME = 'chronoDB';
+const DB_VERSION = 7;
+let dbPromise = null;
+let STORAGE_MODE = 'idb';
 
-  function startMotion(){
-    window.addEventListener('deviceorientation', e=>{
-      if(e.beta==null||e.gamma==null) return;
-      beta=e.beta; gamma=e.gamma;
-    }, true);
-  }
-
-  // iOS permission gate
-  (async()=>{
-    const btn=document.getElementById('enable');
-    try{
-      if (typeof DeviceOrientationEvent!=='undefined' &&
-          typeof DeviceOrientationEvent.requestPermission==='function'){
-        btn.hidden=false;
-        btn.onclick=async ()=>{
-          try{
-            const res=await DeviceOrientationEvent.requestPermission();
-            if(res==='granted'){ btn.hidden=true; startMotion(); }
-          }catch{}
-        };
-      }else{
-        startMotion();
+function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
+function idbOpen(){
+  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if (!db.objectStoreNames.contains('kv')){
+        db.createObjectStore('kv', { keyPath: 'k' });
       }
-    }catch{ startMotion(); }
-  })();
-
-  // Desktop / blocked-sensor fallback: mouse move simulates tilt
-  window.addEventListener('mousemove', e=>{
-    const w=innerWidth, h=innerHeight;
-    gamma=(e.clientX/w - 0.5)*90;
-    beta =(0.5 - e.clientY/h)*90;
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
   });
-
-  // Keep your existing service worker
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('service-worker.js');
+  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
+}
+async function storageSet(key, value){
+  if (STORAGE_MODE==='ls'){
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
   }
+  const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readwrite');
+    tx.objectStore('kv').put({k:key, v:value});
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function storageGet(key){
+  if (STORAGE_MODE==='ls'){
+    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
+  }
+  const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readonly');
+    const req = tx.objectStore('kv').get(key);
+    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+function snapshotState(){ return { activeView, activeDayISO }; }
+function hydrateState(snap){
+  try{
+    if(!snap || typeof snap!=='object') return;
+    if (typeof snap.activeView === 'string' || snap.activeView===null) activeView = snap.activeView;
+    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
+  }catch(e){ console.warn('Hydrate failed:', e); }
+}
+async function saveAll(){
+  const snap = snapshotState();
+  await storageSet('state', snap);
+}
+let saveTimer=null;
+function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
+
+/* ---------- Controls ---------- */
+document.querySelector('.controls').addEventListener('click', e=>{
+  const b=e.target.closest('.btn'); if(!b) return;
+  const v=b.dataset.view;
+  if(activeView===v){
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+  }else{
+    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
+  }
+  saveSoon(200);
+});
+
+/* ---------- Week View (UI only; no tap-to-edit, no task stack) ---------- */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
+      </div>
+
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
+        <div class="grid" id="weekGrid">
+          <div class="blocks" id="blocksLayer"></div>
+          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="now" id="nowMagnify" aria-hidden="true"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
+
+  repaintWeek();
+  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
+}
+
+function repaintWeek(){
+  const first=visibleWeekFirst, last=addDays(first,6);
+  const m=new Intl.DateTimeFormat(undefined,{month:'short'});
+  const title = (first.getFullYear()===last.getFullYear())
+    ? (first.getMonth()===last.getMonth()
+        ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
+        : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
+    : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
+  document.getElementById('weekTitle').textContent = title;
+
+  const pills=document.getElementById('dowPills'); pills.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=addDays(first,i);
+    const pill=document.createElement('div');
+    pill.className='day-pill';
+    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
+    pills.appendChild(pill);
+  }
+
+  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  const gridEl = document.getElementById('weekGrid');
+  const geom=computeGeometry(gridEl, 7);
+  for(let i=0;i<24;i++){
+    const el=document.createElement('div'); el.className='hour-stamp';
+    el.textContent = `${String(i).padStart(2,'0')}:00`;
+    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
+    gh.appendChild(el);
+  }
+
+  // Blocks intentionally omitted (no items). Preserve mask & magnifier.
+  buildMask(geom, 7);
+  paintNowMagnifier(geom);
+}
+
+function computeGeometry(gridEl, cols){
+  const r=gridEl.getBoundingClientRect();
+  const totalW=Math.max(0, Math.round(r.width));
+  const totalH=Math.max(0, Math.round(r.height));
+  const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
+  const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+  const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
+  const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+  const slotY=[0];
+  for(let hr=0;hr<24;hr++){
+    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
+    const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
+    for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
+  }
+  return {totalW,totalH,colW,colX,rowH,rowY,slotY};
+}
+
+function buildMask(geom, cols){
+  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
+  const { totalW, totalH, colX, rowY } = geom;
+  if(totalW<=0 || totalH<=0) return;
+  svg.setAttribute('width', totalW);
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.setAttribute('preserveAspectRatio','none');
+
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs');
+  const sym=document.createElementNS(NS,'symbol');
+  sym.setAttribute('id','tile900x300');
+  sym.setAttribute('viewBox','0 0 900 300');
+  sym.setAttribute('preserveAspectRatio','none');
+
+  const surface='rgba(255,255,255,0.55)';
+  const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
+  const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
+
+  sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
+  sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
+  sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
+  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
+
+  defs.appendChild(sym); svg.appendChild(defs);
+
+  for(let rI=0;rI<24;rI++){
+    for(let cI=0;cI<cols;cI++){
+      const use=document.createElementNS(NS,'use');
+      use.setAttribute('href','#tile900x300');
+      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
+      use.setAttribute('width',colX[cI+1]-colX[cI]);
+      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
+      svg.appendChild(use);
+    }
+  }
+}
+
+function paintNowMagnifier(geom){
+  const nowEl=document.getElementById('nowMagnify');
+  const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
+  if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){
+    nowEl.style.display='none'; return;
+  }
+  const {colX,rowY} = geom;
+  const dow=today.getDay(); const mins=today.getHours()*60 + today.getMinutes();
+  const hour=Math.floor(mins/60);
+  const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
+  const extra=Math.min(10, Math.floor(hourH*0.25));
+  const top=Math.max(0, hourTop - Math.floor(extra/2));
+  const height=Math.max(2, hourH + extra);
+  nowEl.style.left=colX[dow]+'px';
+  nowEl.style.top=top+'px';
+  nowEl.style.width=(colX[dow+1]-colX[dow] - (dow===6?1:0))+'px';
+  nowEl.style.height=height+'px';
+  nowEl.style.display='block';
+}
+
+/* ---------- Day View (blank + version) ---------- */
+function buildDayView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head"><div></div><div class="title">Day</div><div></div></div>
+      <div class="grid-area" style="display:grid;place-items:center;color:#666">
+        <div class="watermark">Chrono build r21</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- Month View ---------- */
+function buildMonthView(){
+  const base = new Date(); // reset to current month on entry
+  activeDayISO = toISO(base);
+
+  const first = new Date(base.getFullYear(), base.getMonth(), 1);
+  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
+  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+
+  screenEl.innerHTML = `
+    <div class="month-wrap">
+      <div class="head">
+        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
+        <div class="title">${label}</div>
+        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
+      </div>
+      <div class="month-dow" aria-hidden="false">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="month-grid" id="monthGrid"></div>
+    </div>
+  `;
+  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); saveSoon(200); };
+  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
+
+  const g=document.getElementById('monthGrid'); g.innerHTML='';
+  const firstWeekday = first.getDay();
+  const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
+  for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
+  for(let day=1; day<=last.getDate(); day++){
+    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
+    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
+    if(iso===toISO(new Date())) tile.classList.add('today');
+    g.appendChild(tile);
+  }
+  const used = firstWeekday + last.getDate();
+  const rem = (Math.ceil(used/7)*7) - used;
+  for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
+}
+
+/* ---------- Init & render ---------- */
+async function init(){
+  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
+  visibleWeekFirst = weekStart(new Date());
+  activeDayISO = toISO(new Date());
+  render();
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+}
+function render(){
+  if(activeView==='week'){
+    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
+    buildWeekView();
+  } else if(activeView==='day'){
+    activeDayISO = toISO(new Date());          // sync to today
+    buildDayView();
+  } else if(activeView==='month'){
+    activeDayISO = toISO(new Date());          // reset to current month on entry
+    buildMonthView();
+  } else {
+    screenEl.innerHTML='';
+  }
+}
+init();
 </script>
+
+<!-- Service worker registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('SW registered', reg.scope))
+      .catch(err => console.error('SW registration failed', err));
+  });
+}
+</script>
+
 </body>
 </html>
