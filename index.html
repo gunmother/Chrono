@@ -111,7 +111,7 @@
     border:var(--marquee-border) solid #fff;
     box-shadow: var(--marquee-shadow);
     border-radius:8px;
-    pointer-events:auto;   /* allow dragging whole box */
+    pointer-events:auto;  /* allow dragging whole box */
     cursor:grab;
     touch-action:none;
   }
@@ -143,7 +143,7 @@
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
-    touch-action:none;     /* prevent scroll while dragging */
+    touch-action:none; /* prevent scroll while dragging */
   }
   .handle svg{ display:block; width:100%; height:100%; }
   .handle polygon{
@@ -163,6 +163,31 @@
     z-index:50; pointer-events:none;
   }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Vertical Toolbar (overlay) ---------- */
+  .toolbar{
+    position:absolute; /* positioned inside .selHost using viewport coords */
+    display:flex; flex-direction:column; gap:6px;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:8px;
+    box-shadow:0 10px 18px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.04);
+    pointer-events:auto; /* interactive */
+    z-index:1100; /* above marquee */
+    touch-action:none;
+  }
+  .tbtn{
+    width:40px; height:40px;
+    display:grid; place-items:center;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  .tbtn:active{ background:#f3f3f3; }
+  .ticon{ width:22px; height:22px; }
+  .ticon *{ fill:none; stroke:#111; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
 </style>
 </head>
 <body>
@@ -219,7 +244,7 @@
   </main>
 
 <script>
-console.info('Chrono build r26');
+console.info('Chrono build r27');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -302,11 +327,15 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View + Selection Marquee ---------- */
+/* ---------- Week View + Selection Marquee + Toolbar ---------- */
 let weekGeom=null;              // geometry
 let selState=null;              // {dayIdx,startMin,endMin}
 let dragKind=null;              // 'top' | 'bottom' | 'move' | null
 let dragStartY=0, baseStart=0, baseEnd=0, baseDur15=60;
+
+/* Toolbar placement state */
+let toolbarCorner=null;         // 'TL'|'TR'|'BL'|'BR'
+let toolbarEl=null;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -341,7 +370,7 @@ function buildWeekView(){
 
   repaintWeek();
 
-  new ResizeObserver(()=>{ repaintWeek(true); }).observe(grid);
+  new ResizeObserver(()=>{ repaintWeek(true); positionToolbar(toolbarCorner); }).observe(grid);
 
   // First-open hint (once)
   try{
@@ -434,7 +463,8 @@ function buildMask(geom, cols){
   sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
   sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
   sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
-  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
+  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61'));
+  sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
 
   defs.appendChild(sym); svg.appendChild(defs);
 
@@ -522,6 +552,15 @@ function onWeekGridTap(e){
   m.querySelector('#mqRect').addEventListener('pointerdown', ev=>startDrag(ev,'move'));
 
   updateSelectionVisual();
+
+  /* --------- Toolbar logic: decide opposite corner & render --------- */
+  // Map days to halves: Mon(1)-Thu(4) = LEFT, Fri(5)-Sun(0) = RIGHT
+  const isLeftHalf = (dayIdx>=1 && dayIdx<=4);
+  const isTopHalf  = (startMin < 12*60);
+  const tapCorner = (isTopHalf ? 'T' : 'B') + (isLeftHalf ? 'L' : 'R'); // 'TL'|'TR'|'BL'|'BR'
+  toolbarCorner = oppositeCorner(tapCorner);
+  buildToolbar(toolbarCorner);
+  positionToolbar(toolbarCorner);
 }
 
 function minutesToY(min){
@@ -653,6 +692,95 @@ function startDrag(ev, kind){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
+/* ---------- Toolbar helpers ---------- */
+function oppositeCorner(c){ // 'TL'|'TR'|'BL'|'BR'
+  if(c==='TL') return 'BR';
+  if(c==='TR') return 'BL';
+  if(c==='BL') return 'TR';
+  return 'TL';
+}
+
+function buildToolbar(corner){
+  const host = document.getElementById('selHost');
+  // remove existing toolbar if any
+  if(toolbarEl && toolbarEl.parentNode) toolbarEl.parentNode.removeChild(toolbarEl);
+
+  const el = document.createElement('div');
+  el.className = 'toolbar';
+  el.setAttribute('role','toolbar');
+  el.setAttribute('aria-label','Selection tools');
+
+  // Button factory (SVG icons kept simple)
+  const mk = (label, svgPath)=>{
+    const b=document.createElement('button');
+    b.className='tbtn';
+    b.type='button';
+    b.title=label;
+    b.setAttribute('aria-label',label);
+    b.innerHTML = `
+      <svg class="ticon" viewBox="0 0 24 24" aria-hidden="true">
+        ${svgPath}
+      </svg>
+    `;
+    return b;
+  };
+
+  const plusSVG = `<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`;
+  const minusSVG= `<line x1="5" y1="12" x2="19" y2="12"/>`;
+  const assignSVG=`<rect x="3" y="6" width="8" height="12" rx="2"/><polyline points="12,12 21,12"/><polyline points="18,9 21,12 18,15"/>`;
+  const editSVG  =`<path d="M4 20l4-1 9-9-3-3-9 9-1 4z"/><path d="M13 7l3 3"/>`;
+  const dupSVG   =`<rect x="7" y="7" width="11" height="11" rx="2"/><rect x="3" y="3" width="11" height="11" rx="2"/>`;
+  const undoSVG  =`<path d="M9 14H5v-4"/><path d="M5 10a7 7 0 1 1 2.05 4.95"/>`;
+  const redoSVG  =`<path d="M15 14h4v-4"/><path d="M19 10a7 7 0 1 0-2.05 4.95"/>`;
+  const saveSVG  =`<path d="M5 5h11l3 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M7 5v6h10V8"/><rect x="7" y="15" width="10" height="4" rx="1"/>`;
+  const trashSVG =`<polyline points="3,7 21,7"/><path d="M8 7v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7"/><path d="M10 7V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/>`;
+
+  const order = [
+    ['Plus', plusSVG],
+    ['Minus', minusSVG],
+    ['Assign', assignSVG],
+    ['Edit', editSVG],
+    ['Duplicate', dupSVG],
+    ['Undo', undoSVG],
+    ['Redo', redoSVG],
+    ['Save', saveSVG],
+    ['Discard', trashSVG],
+    ['Minus', minusSVG],
+    ['Plus', plusSVG],
+  ];
+  for(const [label,svg] of order){ el.appendChild(mk(label, svg)); }
+
+  host.appendChild(el);
+  toolbarEl = el;
+}
+
+function positionToolbar(corner){
+  if(!toolbarEl || !weekGeom || !corner) return;
+  const rect = weekGeom.rect;
+  const pad = 8; // inset from chart edges
+
+  // First, place offscreen to get size
+  toolbarEl.style.left = '-9999px';
+  toolbarEl.style.top  = '-9999px';
+  const w = toolbarEl.offsetWidth;
+  const h = toolbarEl.offsetHeight;
+
+  let left, top;
+  if(corner==='TL'){ left = rect.left + pad; top = rect.top + pad; }
+  else if(corner==='TR'){ left = rect.right - w - pad; top = rect.top + pad; }
+  else if(corner==='BL'){ left = rect.left + pad; top = rect.bottom - h - pad; }
+  else { /* BR */ left = rect.right - w - pad; top = rect.bottom - h - pad; }
+
+  // Clamp within viewport just in case
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  left = clamp(left, 0, Math.max(0, vw - w));
+  top  = clamp(top , 0, Math.max(0, vh - h));
+
+  toolbarEl.style.left = `${left}px`;
+  toolbarEl.style.top  = `${top}px`;
+}
+
 /* ---------- Month & Day Views (unchanged UI) ---------- */
 function buildMonthView(){
   const base = new Date();
@@ -698,7 +826,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r26</div>
+        <div class="watermark">Chrono build r27</div>
       </div>
     </div>
   `;
@@ -720,6 +848,8 @@ async function init(){
 
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+
+  window.addEventListener('resize', ()=>positionToolbar(toolbarCorner));
 }
 
 function render(){
@@ -736,6 +866,7 @@ function render(){
     screenEl.innerHTML='';
   }
 }
+
 init();
 </script>
 
