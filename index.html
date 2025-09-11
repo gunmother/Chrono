@@ -244,7 +244,7 @@
   </main>
 
 <script>
-console.info('Chrono build r27');
+console.info('Chrono build r28');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -554,9 +554,11 @@ function onWeekGridTap(e){
   updateSelectionVisual();
 
   /* --------- Toolbar logic: decide opposite corner & render --------- */
-  // Map days to halves: Mon(1)-Thu(4) = LEFT, Fri(5)-Sun(0) = RIGHT
-  const isLeftHalf = (dayIdx>=1 && dayIdx<=4);
-  const isTopHalf  = (startMin < 12*60);
+  // SPEC SPLIT: Mon–Thu = left (1–4); Fri–Sun = right (5–6,0). Fixes Sunday overlap.
+  const isRightHalf = (dayIdx === 0 || dayIdx >= 5);
+  const isLeftHalf  = !isRightHalf;
+  const isTopHalf   = (startMin < 12*60);
+
   const tapCorner = (isTopHalf ? 'T' : 'B') + (isLeftHalf ? 'L' : 'R'); // 'TL'|'TR'|'BL'|'BR'
   toolbarCorner = oppositeCorner(tapCorner);
   buildToolbar(toolbarCorner);
@@ -826,7 +828,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r27</div>
+        <div class="watermark">Chrono build r28</div>
       </div>
     </div>
   `;
@@ -883,4 +885,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-
