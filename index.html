@@ -100,7 +100,6 @@
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
   /* ---------- Selection marquee component ---------- */
-  /* NOTE: fixed overlay so stamps/handles can extend beyond the card boundaries */
   .selHost{
     position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000;
   }
@@ -111,11 +110,9 @@
     border:var(--marquee-border) solid #fff;
     box-shadow: var(--marquee-shadow);
     border-radius:8px;
-    pointer-events:auto;  /* allow dragging whole box */
-    cursor:grab;
+    /* pointer-events:auto;  (no move-drag in r29) */
     touch-action:none;
   }
-  .marqueeRect:active{ cursor:grabbing; }
 
   .stamp{
     position:absolute;
@@ -134,7 +131,6 @@
     z-index:2;
   }
 
-  /* SVG handles with visible border */
   .handle{
     position:absolute;
     left:0;
@@ -143,7 +139,7 @@
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
-    touch-action:none; /* prevent scroll while dragging */
+    touch-action:none;
   }
   .handle svg{ display:block; width:100%; height:100%; }
   .handle polygon{
@@ -166,7 +162,7 @@
 
   /* ---------- Vertical Toolbar (overlay) ---------- */
   .toolbar{
-    position:absolute; /* positioned inside .selHost using viewport coords */
+    position:absolute;
     display:flex; flex-direction:column; gap:6px;
     background:#fff;
     border:1px solid var(--border);
@@ -174,7 +170,7 @@
     padding:8px;
     box-shadow:0 10px 18px rgba(0,0,0,.20), 0 0 0 1px rgba(0,0,0,.04);
     pointer-events:auto; /* interactive */
-    z-index:1100; /* above marquee */
+    z-index:1100;
     touch-action:none;
   }
   .tbtn{
@@ -244,7 +240,7 @@
   </main>
 
 <script>
-console.info('Chrono build r28');
+console.info('Chrono build r29');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -330,12 +326,12 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* ---------- Week View + Selection Marquee + Toolbar ---------- */
 let weekGeom=null;              // geometry
 let selState=null;              // {dayIdx,startMin,endMin}
-let dragKind=null;              // 'top' | 'bottom' | 'move' | null
-let dragStartY=0, baseStart=0, baseEnd=0, baseDur15=60;
+let dragKind=null;              // 'top' | 'bottom' | null
+let dragStartY=0, baseStart=0, baseEnd=0;
 
-/* Toolbar placement state */
 let toolbarCorner=null;         // 'TL'|'TR'|'BL'|'BR'
 let toolbarEl=null;
+let suppressNextGridTap=false;  // for tap-away close timing
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -348,15 +344,10 @@ function buildWeekView(){
 
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
-        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
-          <div class="blocks" id="blocksLayer"></div>
-          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="now" id="nowMagnify" aria-hidden="true"></div>
-        </div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid"></div>
         <div class="hours" id="weekHours"></div>
       </div>
 
-      <!-- fixed overlay host lives outside #screen to avoid clipping -->
       <div class="selHost" id="selHost" aria-hidden="false"></div>
       <div class="hint" id="weekHint">Tap anywhere to edit</div>
     </div>
@@ -372,7 +363,9 @@ function buildWeekView(){
 
   new ResizeObserver(()=>{ repaintWeek(true); positionToolbar(toolbarCorner); }).observe(grid);
 
-  // First-open hint (once)
+  // Tap-away close (anywhere outside selector & toolbar)
+  document.addEventListener('click', tapAwayClose, true);
+
   try{
     if(!localStorage.getItem('hint_week_edit_v4')){
       const hint=document.getElementById('weekHint');
@@ -414,8 +407,6 @@ function repaintWeek(skipSel=false){
   }
 
   buildMask(weekGeom,7);
-  paintNowMagnifier(weekGeom);
-
   if(selState && !skipSel) updateSelectionVisual();
 }
 
@@ -429,7 +420,6 @@ function computeGeometry(gridEl, cols){
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
 
-  // quarter-hour step positions
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
     const h=rowH[hr];
@@ -441,67 +431,20 @@ function computeGeometry(gridEl, cols){
 }
 
 function buildMask(geom, cols){
-  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
-  const { totalW, totalH, colX, rowY } = geom;
-  if(totalW<=0 || totalH<=0) return;
-  svg.setAttribute('width', totalW);
-  svg.setAttribute('height', totalH);
-  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
-  svg.setAttribute('preserveAspectRatio','none');
-
-  const NS='http://www.w3.org/2000/svg';
-  const defs=document.createElementNS(NS,'defs');
-  const sym=document.createElementNS(NS,'symbol');
-  sym.setAttribute('id','tile900x300');
-  sym.setAttribute('viewBox','0 0 900 300');
-  sym.setAttribute('preserveAspectRatio','none');
-
-  const surface='rgba(255,255,255,0.55)';
-  const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
-  const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
-
-  sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
-  sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
-  sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
-  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61'));
-  sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
-
-  defs.appendChild(sym); svg.appendChild(defs);
-
-  for(let rI=0;rI<24;rI++){
-    for(let cI=0;cI<cols;cI++){
-      const use=document.createElementNS(NS,'use');
-      use.setAttribute('href','#tile900x300');
-      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
-      use.setAttribute('width',colX[cI+1]-colX[cI]);
-      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
-      svg.appendChild(use);
-    }
-  }
+  const host=document.getElementById('weekGrid');
+  host.innerHTML='';
+  const mask=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  mask.classList.add('mask');
+  mask.setAttribute('width',geom.totalW);
+  mask.setAttribute('height',geom.totalH);
+  mask.setAttribute('viewBox',`0 0 ${geom.totalW} ${geom.totalH}`);
+  mask.setAttribute('preserveAspectRatio','none');
+  host.appendChild(mask);
 }
 
-function paintNowMagnifier(geom){
-  const nowEl=document.getElementById('nowMagnify');
-  const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
-  if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){
-    nowEl.style.display='none'; return;
-  }
-  const {colX,rowY} = geom;
-  const dow=today.getDay(); const mins=today.getHours()*60 + today.getMinutes();
-  const hour=Math.floor(mins/60);
-  const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
-  const extra=Math.min(10, Math.floor(hourH*0.25));
-  const top=Math.max(0, hourTop - Math.floor(extra/2));
-  const height=Math.max(2, hourH + extra);
-  nowEl.style.left=colX[dow]+'px';
-  nowEl.style.top=top+'px';
-  nowEl.style.width=(colX[dow+1]-colX[dow] - (dow===6?1:0))+'px';
-  nowEl.style.height=height+'px';
-  nowEl.style.display='block';
-}
-
-/* Tap to create marquee */
 function onWeekGridTap(e){
+  if(suppressNextGridTap){ suppressNextGridTap=false; return; }
+
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
   if(!weekGeom) weekGeom = computeGeometry(grid,7);
@@ -510,25 +453,30 @@ function onWeekGridTap(e){
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
 
-  // Find tapped day column and lock it
+  // If a selector is active, a tap on the grid closes it (no creation on same tap)
+  if(selState){
+    clearSelection();
+    suppressNextGridTap=true; // block creation on this event cycle
+    return;
+  }
+
+  // Find tapped day index
   let dayIdx=0;
   for(let i=0;i<7;i++){
     if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
   }
 
-  // Start with 60m selection aligned to nearest 15-minute grid
+  // New selection: 60 min starting at the hour top nearest to tap (floor to hour)
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  const startMin = snap15(Math.floor(minuteFloat/60)*60); // start at hour (snapped)
+  const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
-
   selState = { dayIdx, startMin, endMin };
 
-  // Build the marquee UI (fixed overlay so nothing is clipped by #screen)
   host.innerHTML='';
   const m=document.createElement('div');
   m.className='marquee';
   m.innerHTML=`
-    <div class="marqueeRect" id="mqRect" title="Drag to move"></div>
+    <div class="marqueeRect" id="mqRect"></div>
 
     <div class="stamp" id="mqTopStamp"></div>
     <div class="handle" id="mqTopHandle" title="Drag to adjust start">
@@ -546,20 +494,17 @@ function onWeekGridTap(e){
   `;
   host.appendChild(m);
 
-  // Attach pointer handlers
+  // Triangle-only resizing
   m.querySelector('#mqTopHandle').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
   m.querySelector('#mqBotHandle').addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
-  m.querySelector('#mqRect').addEventListener('pointerdown', ev=>startDrag(ev,'move'));
 
   updateSelectionVisual();
 
-  /* --------- Toolbar logic: decide opposite corner & render --------- */
-  // SPEC SPLIT: Mon–Thu = left (1–4); Fri–Sun = right (5–6,0). Fixes Sunday overlap.
-  const isRightHalf = (dayIdx === 0 || dayIdx >= 5);
+  // Toolbar
+  const isRightHalf = (dayIdx === 0 || dayIdx >= 5); // Fri–Sun incl. Sun(0)
   const isLeftHalf  = !isRightHalf;
   const isTopHalf   = (startMin < 12*60);
-
-  const tapCorner = (isTopHalf ? 'T' : 'B') + (isLeftHalf ? 'L' : 'R'); // 'TL'|'TR'|'BL'|'BR'
+  const tapCorner = (isTopHalf ? 'T' : 'B') + (isLeftHalf ? 'L' : 'R');
   toolbarCorner = oppositeCorner(tapCorner);
   buildToolbar(toolbarCorner);
   positionToolbar(toolbarCorner);
@@ -569,18 +514,10 @@ function minutesToY(min){
   const idx = clamp(Math.round(min/15), 0, 96);
   return weekGeom.slotY[idx];
 }
-function yToMinutesRaw(yPx){
-  const y = clamp(yPx, 0, weekGeom.totalH);
-  const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
-  return clamp(ratio * 1440, 0, 1440);
-}
 
 function updateSelectionVisual(){
   if(!selState) return;
-  const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
-  if(!grid || !host) return;
-
   const rect=weekGeom.rect;
 
   const colLeft = weekGeom.colX[selState.dayIdx];
@@ -591,41 +528,34 @@ function updateSelectionVisual(){
   const botY  = minutesToY(selState.endMin);
   const height= Math.max(1, botY - topY);
 
-  /* NOTE: overlay is fixed to the viewport; positions are viewport-relative */
   const offsetLeft = rect.left + colLeft;
   const offsetTop  = rect.top;
 
-  // Rectangle (draggable body)
   const rEl = host.querySelector('#mqRect');
   rEl.style.left   = `${offsetLeft}px`;
   rEl.style.top    = `${offsetTop + topY}px`;
   rEl.style.width  = `${colWidth}px`;
   rEl.style.height = `${height}px`;
 
-  // Constants
   const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
   const stampH=26;
 
-  // Top stamp
   const topStamp=host.querySelector('#mqTopStamp');
   topStamp.textContent = toHHMM(selState.startMin);
   topStamp.style.left = `${offsetLeft + colWidth/2}px`;
   topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
 
-  // Top handle
   const topHandle=host.querySelector('#mqTopHandle');
   topHandle.style.left  = `${offsetLeft}px`;
   topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
   topHandle.style.width = `${colWidth}px`;
   topHandle.style.height= `${triH}px`;
 
-  // Bottom stamp
   const botStamp=host.querySelector('#mqBotStamp');
   botStamp.textContent = toHHMM(selState.endMin);
   botStamp.style.left = `${offsetLeft + colWidth/2}px`;
   botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
 
-  // Bottom handle
   const botHandle=host.querySelector('#mqBotHandle');
   botHandle.style.left  = `${offsetLeft}px`;
   botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
@@ -642,48 +572,22 @@ function startDrag(ev, kind){
   dragStartY = ev.clientY;
   baseStart = selState.startMin;
   baseEnd   = selState.endMin;
-  baseDur15 = snap15(baseEnd - baseStart); // keep duration snapped for MOVE
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
-
-    const minGap = 15;
-
-    if(dragKind==='move'){
-      // Move whole box in 15-min steps; preserve 15-min duration
-      const newStart = clamp(snap15(baseStart + deltaMinRaw), 0, 1440);
-      let newEnd = newStart + baseDur15;
-      if(newEnd > 1440){ newEnd = 1440; selState.startMin = snap15(1440 - baseDur15); }
-      else selState.startMin = newStart;
-      selState.endMin = clamp(newEnd, selState.startMin + minGap, 1440);
-    } else if(dragKind==='top'){
-      const raw = baseStart + deltaMinRaw;
-      const snapped = snap15(raw);
-      selState.startMin = clamp(snapped, 0, selState.endMin - minGap);
+    const snapped = snap15(deltaMinRaw);
+    if(dragKind==='top'){
+      const newStart = clamp(snap15(baseStart + snapped), 0, snap15(selState.endMin - 15));
+      selState.startMin = newStart;
     } else if(dragKind==='bottom'){
-      const raw = baseEnd + deltaMinRaw;
-      const snapped = snap15(raw);
-      selState.endMin = clamp(snapped, selState.startMin + minGap, 1440);
+      const newEnd = clamp(snap15(baseEnd + snapped), snap15(selState.startMin + 15), 1440);
+      selState.endMin = newEnd;
     }
     updateSelectionVisual();
   };
 
   const up=(e)=>{
-    // Already snapped during drag; just ensure constraints
-    selState.startMin = snap15(selState.startMin);
-    selState.endMin   = snap15(selState.endMin);
-    if(selState.endMin - selState.startMin < 15){
-      if(dragKind==='top'){
-        selState.startMin = clamp(selState.endMin - 15, 0, 1425);
-      }else if(dragKind==='bottom'){
-        selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
-      }else{
-        selState.endMin = clamp(selState.startMin + 15, 15, 1440);
-      }
-    }
-    updateSelectionVisual();
-
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -694,8 +598,29 @@ function startDrag(ev, kind){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* ---------- Toolbar helpers ---------- */
-function oppositeCorner(c){ // 'TL'|'TR'|'BL'|'BR'
+/* ---------- Tap-away close ---------- */
+function tapAwayClose(e){
+  if(!selState) return;
+  const host=document.getElementById('selHost');
+  if(!host) return;
+
+  const mqRect = host.querySelector('#mqRect');
+  const topH   = host.querySelector('#mqTopHandle');
+  const botH   = host.querySelector('#mqBotHandle');
+
+  // Protected areas: toolbar + handles + marquee body
+  if(toolbarEl && toolbarEl.contains(e.target)) return;
+  if(mqRect && mqRect.contains(e.target)) return;
+  if(topH && topH.contains(e.target)) return;
+  if(botH && botH.contains(e.target)) return;
+
+  // Close and suppress grid creation for this same tap
+  clearSelection();
+  suppressNextGridTap = true;
+}
+
+/* ---------- Toolbar ---------- */
+function oppositeCorner(c){
   if(c==='TL') return 'BR';
   if(c==='TR') return 'BL';
   if(c==='BL') return 'TR';
@@ -704,7 +629,6 @@ function oppositeCorner(c){ // 'TL'|'TR'|'BL'|'BR'
 
 function buildToolbar(corner){
   const host = document.getElementById('selHost');
-  // remove existing toolbar if any
   if(toolbarEl && toolbarEl.parentNode) toolbarEl.parentNode.removeChild(toolbarEl);
 
   const el = document.createElement('div');
@@ -712,18 +636,14 @@ function buildToolbar(corner){
   el.setAttribute('role','toolbar');
   el.setAttribute('aria-label','Selection tools');
 
-  // Button factory (SVG icons kept simple)
-  const mk = (label, svgPath)=>{
+  const mk = (label, svgPath, action)=>{
     const b=document.createElement('button');
     b.className='tbtn';
     b.type='button';
     b.title=label;
     b.setAttribute('aria-label',label);
-    b.innerHTML = `
-      <svg class="ticon" viewBox="0 0 24 24" aria-hidden="true">
-        ${svgPath}
-      </svg>
-    `;
+    if(action) b.dataset.action = action;
+    b.innerHTML = `<svg class="ticon" viewBox="0 0 24 24" aria-hidden="true">${svgPath}</svg>`;
     return b;
   };
 
@@ -738,30 +658,58 @@ function buildToolbar(corner){
   const trashSVG =`<polyline points="3,7 21,7"/><path d="M8 7v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7"/><path d="M10 7V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/>`;
 
   const order = [
-    ['Plus', plusSVG],
-    ['Minus', minusSVG],
-    ['Assign', assignSVG],
-    ['Edit', editSVG],
-    ['Duplicate', dupSVG],
-    ['Undo', undoSVG],
-    ['Redo', redoSVG],
-    ['Save', saveSVG],
-    ['Discard', trashSVG],
-    ['Minus', minusSVG],
-    ['Plus', plusSVG],
+    mk('Top Plus', plusSVG,  'top-plus'),
+    mk('Top Minus', minusSVG,'top-minus'),
+    mk('Assign', assignSVG,  ''),
+    mk('Edit', editSVG,      ''),
+    mk('Duplicate', dupSVG,  ''),
+    mk('Undo', undoSVG,      ''),
+    mk('Redo', redoSVG,      ''),
+    mk('Save', saveSVG,      ''),
+    mk('Discard', trashSVG,  ''),
+    mk('Bottom Minus', minusSVG,'bottom-minus'),
+    mk('Bottom Plus', plusSVG, 'bottom-plus'),
   ];
-  for(const [label,svg] of order){ el.appendChild(mk(label, svg)); }
+  order.forEach(btn=>el.appendChild(btn));
 
+  el.addEventListener('click', onToolbarClick);
   host.appendChild(el);
   toolbarEl = el;
+}
+
+function onToolbarClick(e){
+  const b = e.target.closest('.tbtn');
+  if(!b || !selState) return;
+  const act = b.dataset.action || '';
+  if(!act) return;
+
+  const step = 15;
+  if(act==='top-plus'){
+    // extend upward earlier by 15
+    const ns = clamp(snap15(selState.startMin - step), 0, snap15(selState.endMin - 15));
+    selState.startMin = ns;
+    updateSelectionVisual();
+  }else if(act==='top-minus'){
+    const ns = clamp(snap15(selState.startMin + step), 0, snap15(selState.endMin - 15));
+    selState.startMin = ns;
+    updateSelectionVisual();
+  }else if(act==='bottom-plus'){
+    const ne = clamp(snap15(selState.endMin + step), snap15(selState.startMin + 15), 1440);
+    selState.endMin = ne;
+    updateSelectionVisual();
+  }else if(act==='bottom-minus'){
+    const ne = clamp(snap15(selState.endMin - step), snap15(selState.startMin + 15), 1440);
+    selState.endMin = ne;
+    updateSelectionVisual();
+  }
 }
 
 function positionToolbar(corner){
   if(!toolbarEl || !weekGeom || !corner) return;
   const rect = weekGeom.rect;
-  const pad = 8; // inset from chart edges
+  const pad = 8;
 
-  // First, place offscreen to get size
+  // measure
   toolbarEl.style.left = '-9999px';
   toolbarEl.style.top  = '-9999px';
   const w = toolbarEl.offsetWidth;
@@ -773,7 +721,11 @@ function positionToolbar(corner){
   else if(corner==='BL'){ left = rect.left + pad; top = rect.bottom - h - pad; }
   else { /* BR */ left = rect.right - w - pad; top = rect.bottom - h - pad; }
 
-  // Clamp within viewport just in case
+  // Special case: Sunday selected & left-side corner → place in hour gutter
+  if(selState && selState.dayIdx===0 && (corner==='TL' || corner==='BL')){
+    left = rect.left - w - pad; // sit fully left of grid
+  }
+
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
   left = clamp(left, 0, Math.max(0, vw - w));
@@ -783,52 +735,21 @@ function positionToolbar(corner){
   toolbarEl.style.top  = `${top}px`;
 }
 
-/* ---------- Month & Day Views (unchanged UI) ---------- */
-function buildMonthView(){
-  const base = new Date();
-  activeDayISO = toISO(base);
-
-  const first = new Date(base.getFullYear(), base.getMonth(), 1);
-  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
-  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-
-  screenEl.innerHTML = `
-    <div class="month-wrap">
-      <div class="head">
-        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
-        <div class="title">${label}</div>
-        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
-      </div>
-      <div class="month-dow" aria-hidden="false">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-      </div>
-      <div class="month-grid" id="monthGrid"></div>
-    </div>
-  `;
-  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); saveSoon(200); };
-  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
-
-  const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay();
-  const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
-  for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
-  for(let day=1; day<=last.getDate(); day++){
-    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
-    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
-    if(iso===toISO(new Date())) tile.classList.add('today');
-    g.appendChild(tile);
-  }
-  const used = firstWeekday + last.getDate();
-  const rem = (Math.ceil(used/7)*7) - used;
-  for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
+function clearSelection(){
+  selState=null;
+  const host=document.getElementById('selHost');
+  if(host) host.innerHTML='';
+  toolbarEl=null;
+  toolbarCorner=null;
 }
 
-function buildDayView(){
+/* ---------- Month & Day Views (minimal stubs) ---------- */
+function buildMonthView(){
   screenEl.innerHTML = `
     <div class="wrap">
-      <div class="head"><div></div><div class="title">Day</div><div></div></div>
+      <div class="head"><div></div><div class="title">Month</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r28</div>
+        <div class="watermark">Chrono build r29</div>
       </div>
     </div>
   `;
@@ -846,6 +767,7 @@ async function init(){
 
   visibleWeekFirst = weekStart(new Date());
   activeDayISO = toISO(new Date());
+  activeView = 'week';
   render();
 
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
@@ -859,10 +781,8 @@ function render(){
     visibleWeekFirst = weekStart(new Date());
     buildWeekView();
   } else if(activeView==='day'){
-    activeDayISO = toISO(new Date());
-    buildDayView();
+    buildMonthView(); // placeholder
   } else if(activeView==='month'){
-    activeDayISO = toISO(new Date());
     buildMonthView();
   } else {
     screenEl.innerHTML='';
