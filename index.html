@@ -126,6 +126,7 @@
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
     box-shadow:0 10px 24px rgba(0,0,0,.22); padding:8px 10px; z-index:1500; pointer-events:auto;
     font-weight:800; font-size:12px; display:grid; gap:6px; place-items:center; min-width:160px;
+    touch-action:none;
   }
   .edgeRow{ display:flex; gap:12px; }
   .edgeBtn{
@@ -188,7 +189,7 @@
   </main>
 
 <script>
-console.info('Chrono build r35');
+console.info('Chrono build r37');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -220,7 +221,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* Storage */
-const DB_NAME='chronoDB', DB_VERSION=12;
+const DB_NAME='chronoDB', DB_VERSION=13;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -297,8 +298,9 @@ async function clearChainEverywhere(curId){
 /* In-memory selection for CURRENT week only */
 let chain = null;
 
-/* Edge intent (so ✓ always works) */
+/* Edge intent + modal state */
 let pendingEdge = null; // {direction, parentSnapshot, parentWeekISO}
+let edgeOpen = false;
 
 function snapshotState(){ return { activeView, activeDayISO }; }
 async function saveAll(){
@@ -491,7 +493,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Loading current week's chain ---------- */
+/* ---------- Load chain for current week ---------- */
 async function loadChainForCurrentWeek(){
   const rec = await readWeekRecord(visibleWeekFirst);
   if(!rec){ chain=null; drawSelection(); return; }
@@ -501,6 +503,7 @@ async function loadChainForCurrentWeek(){
 
 /* ---------- Tap to create new 1h block (single selector invariant) ---------- */
 async function onWeekGridTap(e){
+  if(edgeOpen) return;   // ignore taps while confirm is visible
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
   if(!weekGeom) weekGeom = computeGeometry(grid,7);
@@ -632,7 +635,6 @@ function startDrag(ev, kind, segIdx){
   const applyCapAndRules = ()=>{
     const minGap=15;
 
-    // Cap total duration to 24h relative to the other end (or parentTimes when editing child week)
     const hasOther = !!other;
     const parentTimes = chain.parentTimes || null;
 
@@ -648,7 +650,6 @@ function startDrag(ev, kind, segIdx){
       }else if(dragKind==='bottom'){
         seg.endMin = seg.startMin + maxMyDur;
       }else{
-        // move: keep duration; clamp inside allowable window
         const dur=myDur;
         let low = 0, high = 1440 - dur;
         if(chain.dir==='next' && !isParent && (otherStart!==null)) high = Math.min(high, otherStart - dur);
@@ -661,20 +662,19 @@ function startDrag(ev, kind, segIdx){
     // Directional adjacency constraints (no crossing)
     if(other){
       if(chain.dir==='next'){
-        if(!isParent){ // child (next day) cannot end past parent's start
+        if(!isParent){ // child cannot end past parent's start
           seg.endMin = Math.min(seg.endMin, other.startMin);
           seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{         // parent cannot start earlier than child duration
+        }else{         // parent cannot exceed 1440 - childDur
           const childDur = totalDur(other);
-          seg.startMin = Math.max(seg.startMin, childDur);
-          seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
+          seg.endMin = Math.min(seg.endMin, seg.startMin + (1440 - childDur));
         }
       }else if(chain.dir==='prev'){
-        if(isParent){ // parent end cannot exceed 1440 - childDur
+        if(isParent){  // parent end cannot exceed 1440 - childDur
           const childDur = totalDur(other);
           seg.endMin = Math.min(seg.endMin, 1440 - childDur);
           seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{        // child (previous day) cannot start before 1440 - parentDur
+        }else{         // child cannot start before 1440 - parentDur
           const parentDur = totalDur(other);
           seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
           seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
@@ -723,7 +723,6 @@ function startDrag(ev, kind, segIdx){
 
     applyCapAndRules();
 
-    // show edge prompt only when single-segment chain reaches edge
     if(chain.segments.length===1){
       if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
       else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
@@ -777,6 +776,7 @@ function handleViewportPos(seg, which){
 /* ---------- Edge confirm ---------- */
 function showEdgeConfirm(direction, anchorX, anchorY){
   removeEdgeConfirm();
+  edgeOpen = true;
   const box=document.createElement('div');
   box.className='edgeConfirm';
   box.style.left = Math.max(12, Math.min(window.innerWidth-172, Math.round(anchorX-80)))+'px';
@@ -790,14 +790,20 @@ function showEdgeConfirm(direction, anchorX, anchorY){
   `;
   document.body.appendChild(box);
 
+  const stopAll = (e)=>{ e.preventDefault(); e.stopPropagation(); };
+  ['pointerdown','pointerup','touchstart','touchend','click'].forEach(t=> box.addEventListener(t, stopAll, {capture:true}));
+
   box.addEventListener('click', async (e)=>{
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
     if(act==='cancel'){ removeEdgeConfirm(); pendingEdge=null; return; }
-    if(act==='ok'){ await confirmSpillFromPending(); removeEdgeConfirm(); }
-  }, {passive:true});
+    if(act==='ok'){
+      await confirmSpillFromPending();
+      setTimeout(()=> removeEdgeConfirm(), 0);
+    }
+  });
 }
-function removeEdgeConfirm(){ document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
+function removeEdgeConfirm(){ edgeOpen=false; document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
 
 /* ---------- Confirm spill (dedup across weeks; single-chain invariant) ---------- */
 async function confirmSpillFromPending(){
@@ -880,7 +886,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r35</div>
+        <div class="watermark">Chrono build r37</div>
       </div>
     </div>
   `;
