@@ -4,10 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Chrono</title>
-
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
-
 <style>
   :root{
     --r-lg:12px; --r-pill:999px;
@@ -26,8 +24,8 @@
     --marquee-shadow:0 0 0 3px rgba(0,0,0,.15), 0 10px 18px rgba(0,0,0,.20);
 
     /* Handles */
-    --handle-height:48px; /* big, thumb-friendly */
-    --handle-stroke:#6f6f6f; /* prominent tab border */
+    --handle-height:48px;
+    --handle-stroke:#6f6f6f;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -96,89 +94,40 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Day watermark */
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
-  /* ---------- Selection marquee component ---------- */
-  .selHost{
-    position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000;
-  }
+  /* ---------- Selection UI ---------- */
+  .selHost{ position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
-    position:absolute;
-    box-sizing:border-box;
-    border:var(--marquee-border) solid #fff;
-    box-shadow: var(--marquee-shadow);
-    border-radius:8px;
-    pointer-events:auto;
-    cursor:grab;
-    touch-action:none;
+    position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
+    box-shadow: var(--marquee-shadow); border-radius:8px; pointer-events:auto; cursor:grab; touch-action:none;
   }
   .marqueeRect:active{ cursor:grabbing; }
-
   .stamp{
-    position:absolute;
-    left:50%;
-    transform:translateX(-50%);
-    background:#fff;
-    color:#111;
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:4px 8px;
-    font-size:12px;
-    font-variant-numeric:tabular-nums;
-    font-weight:800;
-    white-space:nowrap;
-    pointer-events:none;
-    z-index:2;
+    position:absolute; left:50%; transform:translateX(-50%); background:#fff; color:#111;
+    border:1px solid var(--border); border-radius:10px; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:800; white-space:nowrap; pointer-events:none; z-index:2;
   }
-
-  .handle{
-    position:absolute;
-    left:0;
-    width:100%;
-    height:var(--handle-height);
-    pointer-events:auto;
-    cursor:ns-resize;
-    z-index:3;
-    touch-action:none;
-  }
+  .handle{ position:absolute; left:0; width:100%; height:var(--handle-height); pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; }
   .handle svg{ display:block; width:100%; height:100%; }
-  .handle polygon{
-    fill:#fff;
-    stroke:var(--handle-stroke);
-    stroke-width:2.25;
-    stroke-linejoin:round;
-  }
+  .handle polygon{ fill:#fff; stroke:var(--handle-stroke); stroke-width:2.25; stroke-linejoin:round; }
 
-  .hint{
-    position:absolute; left:50%; top:calc(var(--dow-h) + 8px);
-    transform:translateX(-50%);
-    background:#111; color:#fff; font-size:12px; font-weight:700;
-    padding:6px 10px; border-radius:10px; box-shadow:0 6px 16px rgba(0,0,0,.22);
-    opacity:0; transition:opacity .25s ease, transform .25s ease;
-    z-index:50; pointer-events:none;
-  }
+  .hint{ position:absolute; left:50%; top:calc(var(--dow-h) + 8px); transform:translateX(-50%);
+    background:#111; color:#fff; font-size:12px; font-weight:700; padding:6px 10px; border-radius:10px; box-shadow:0 6px 16px rgba(0,0,0,.22);
+    opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Spillover confirm (overlay) ---------- */
-  .confirmOverlay{
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-    background:rgba(0,0,0,.25); backdrop-filter:saturate(120%) blur(2px);
-    z-index:2000; pointer-events:auto;
+  /* ---------- Edge confirm (inline; no dimming) ---------- */
+  .edgeConfirm{
+    position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 10px 24px rgba(0,0,0,.22); padding:8px 10px; z-index:1500; pointer-events:auto;
+    font-weight:800; font-size:12px; display:grid; gap:6px; place-items:center; min-width:160px;
   }
-  .confirmBox{
-    background:#fff; color:#111; border:1px solid var(--border); border-radius:12px;
-    box-shadow:0 10px 24px rgba(0,0,0,.22);
-    width:min(92vw, 360px); padding:14px; text-align:center; font-weight:800;
+  .edgeRow{ display:flex; gap:12px; }
+  .edgeBtn{
+    min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
   }
-  .confirmText{ font-size:14px; margin-bottom:10px; }
-  .confirmBtns{ display:flex; gap:12px; justify-content:center; }
-  .btnMini{
-    min-width:64px; height:40px; padding:0 12px; border-radius:10px;
-    border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
-  }
-  .btnMini.ok{ background:#e6e6e6; }
+  .edgeBtn.ok{ background:#e6e6e6; }
 </style>
 </head>
 <body>
@@ -235,7 +184,7 @@
   </main>
 
 <script>
-console.info('Chrono build r27');
+console.info('Chrono build r28');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -318,11 +267,12 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ---------- Week View + Selection Marquee ---------- */
-let weekGeom=null;              // geometry
-let selState=null;              // {dayIdx,startMin,endMin}
-let dragKind=null;              // 'top' | 'bottom' | 'move' | null
+/* ---------- Week View + Linked Selection Chain ---------- */
+let weekGeom=null;               // geometry
+let selChain=null;               // { segments:[{dayIdx,startMin,endMin}], id:number }
+let dragKind=null;               // 'top' | 'bottom' | 'move'
 let dragStartY=0, baseStart=0, baseEnd=0, baseDur15=60;
+let dragSegIndex=0;              // which segment the drag belongs to (0 or 1)
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -343,7 +293,6 @@ function buildWeekView(){
         <div class="hours" id="weekHours"></div>
       </div>
 
-      <!-- fixed overlay host lives outside #screen to avoid clipping -->
       <div class="selHost" id="selHost" aria-hidden="false"></div>
       <div class="hint" id="weekHint">Tap anywhere to edit</div>
     </div>
@@ -359,15 +308,14 @@ function buildWeekView(){
 
   new ResizeObserver(()=>{ repaintWeek(true); }).observe(grid);
 
-  // First-open hint (once)
   try{
-    if(!localStorage.getItem('hint_week_edit_v4')){
+    if(!localStorage.getItem('hint_week_edit_v5')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v4','1');
+      localStorage.setItem('hint_week_edit_v5','1');
     }
   }catch{}
 }
@@ -403,7 +351,7 @@ function repaintWeek(skipSel=false){
   buildMask(weekGeom,7);
   paintNowMagnifier(weekGeom);
 
-  if(selState && !skipSel) updateSelectionVisual();
+  if(selChain && !skipSel) drawSelection();
 }
 
 function computeGeometry(gridEl, cols){
@@ -416,7 +364,6 @@ function computeGeometry(gridEl, cols){
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
 
-  // quarter-hour step positions
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
     const h=rowH[hr];
@@ -486,7 +433,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* Tap to create marquee */
+/* ---------- Selection creation ---------- */
 function onWeekGridTap(e){
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
@@ -496,174 +443,187 @@ function onWeekGridTap(e){
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
 
-  // Find tapped day column and lock it
   let dayIdx=0;
-  for(let i=0;i<7;i++){
-    if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
-  }
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
-  // Start with 60m selection aligned to nearest 15-minute grid
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  const startMin = snap15(Math.floor(minuteFloat/60)*60); // start at hour (snapped)
+  const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
 
-  selState = { dayIdx, startMin, endMin };
+  selChain = { id: Date.now(), segments:[{ dayIdx, startMin, endMin }] };
 
-  // Build the marquee UI (fixed overlay so nothing is clipped by #screen)
   host.innerHTML='';
-  const m=document.createElement('div');
-  m.className='marquee';
-  m.innerHTML=`
-    <div class="marqueeRect" id="mqRect" title="Drag to move"></div>
-
-    <div class="stamp" id="mqTopStamp"></div>
-    <div class="handle" id="mqTopHandle" title="Drag to adjust start">
-      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="1,47 50,3 99,47"></polygon>
-      </svg>
-    </div>
-
-    <div class="stamp" id="mqBotStamp"></div>
-    <div class="handle" id="mqBotHandle" title="Drag to adjust end">
-      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="1,3 50,47 99,3"></polygon>
-      </svg>
-    </div>
-  `;
-  host.appendChild(m);
-
-  // Attach pointer handlers
-  m.querySelector('#mqTopHandle').addEventListener('pointerdown', ev=>startDrag(ev,'top'));
-  m.querySelector('#mqBotHandle').addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
-  m.querySelector('#mqRect').addEventListener('pointerdown', ev=>startDrag(ev,'move'));
-
-  updateSelectionVisual();
+  drawSelection();
 }
 
-function minutesToY(min){
-  const idx = clamp(Math.round(min/15), 0, 96);
-  return weekGeom.slotY[idx];
-}
-function yToMinutesRaw(yPx){
-  const y = clamp(yPx, 0, weekGeom.totalH);
-  const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
-  return clamp(ratio * 1440, 0, 1440);
-}
-
-function updateSelectionVisual(){
-  if(!selState) return;
-  const grid=document.getElementById('weekGrid');
-  const host=document.getElementById('selHost');
-  if(!grid || !host) return;
-
-  const rect=weekGeom.rect;
-
-  const colLeft = weekGeom.colX[selState.dayIdx];
-  const colRight= weekGeom.colX[selState.dayIdx+1];
-  const colWidth= (colRight - colLeft) - (selState.dayIdx===6?1:0);
-
-  const topY  = minutesToY(selState.startMin);
-  const botY  = minutesToY(selState.endMin);
-  const height= Math.max(1, botY - topY);
-
-  /* NOTE: overlay is fixed to the viewport; positions are viewport-relative */
-  const offsetLeft = rect.left + colLeft;
-  const offsetTop  = rect.top;
-
-  // Rectangle (draggable body)
-  const rEl = host.querySelector('#mqRect');
-  rEl.style.left   = `${offsetLeft}px`;
-  rEl.style.top    = `${offsetTop + topY}px`;
-  rEl.style.width  = `${colWidth}px`;
-  rEl.style.height = `${height}px`;
-
-  // Constants
-  const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
-  const stampH=26;
-
-  // Top stamp
-  const topStamp=host.querySelector('#mqTopStamp');
-  topStamp.textContent = toHHMM(selState.startMin);
-  topStamp.style.left = `${offsetLeft + colWidth/2}px`;
-  topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
-
-  // Top handle
-  const topHandle=host.querySelector('#mqTopHandle');
-  topHandle.style.left  = `${offsetLeft}px`;
-  topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
-  topHandle.style.width = `${colWidth}px`;
-  topHandle.style.height= `${triH}px`;
-
-  // Bottom stamp
-  const botStamp=host.querySelector('#mqBotStamp');
-  botStamp.textContent = toHHMM(selState.endMin);
-  botStamp.style.left = `${offsetLeft + colWidth/2}px`;
-  botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
-
-  // Bottom handle
-  const botHandle=host.querySelector('#mqBotHandle');
-  botHandle.style.left  = `${offsetLeft}px`;
-  botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
-  botHandle.style.width = `${colWidth}px`;
-  botHandle.style.height= `${triH}px`;
+/* ---------- Helpers ---------- */
+function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
+function yToMinutesRaw(yPx){ const y = clamp(yPx, 0, weekGeom.totalH); const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0; return clamp(ratio * 1440, 0, 1440); }
+function chainDuration(){
+  if(!selChain) return 0;
+  const s=selChain.segments;
+  if(s.length===1) return s[0].endMin - s[0].startMin;
+  // across midnight: (24h - first.start) + second.end
+  return clamp((1440 - s[0].startMin) + s[1].endMin, 0, 1440);
 }
 
-function startDrag(ev, kind){
-  if(!selState) return;
+/* ---------- Draw selection (supports 1 or 2 segments) ---------- */
+function drawSelection(){
+  if(!selChain) return;
+  const host=document.getElementById('selHost'); if(!host) return;
+  host.innerHTML='';
+
+  const segs = selChain.segments.slice().sort((a,b)=>{
+    // order by absolute day position (within the visible week)
+    return a.dayIdx - b.dayIdx;
+  });
+
+  segs.forEach((seg, idx)=>{
+    const rect=weekGeom.rect;
+    const colLeft = weekGeom.colX[seg.dayIdx];
+    const colRight= weekGeom.colX[seg.dayIdx+1];
+    const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
+    const topY  = minutesToY(seg.startMin);
+    const botY  = minutesToY(seg.endMin);
+    const height= Math.max(1, botY - topY);
+
+    const offsetLeft = rect.left + colLeft;
+    const offsetTop  = rect.top;
+
+    const m=document.createElement('div');
+    m.className='marquee';
+    m.innerHTML=`
+      <div class="marqueeRect" data-seg="${idx}"></div>
+
+      ${idx===0 ? `
+        <div class="stamp" id="mqTopStamp${idx}"></div>
+        <div class="handle" id="mqTopHandle${idx}">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="1,47 50,3 99,47"></polygon>
+          </svg>
+        </div>` : ''}
+
+      ${idx===segs.length-1 ? `
+        <div class="stamp" id="mqBotStamp${idx}"></div>
+        <div class="handle" id="mqBotHandle${idx}">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="1,3 50,47 99,3"></polygon>
+          </svg>
+        </div>` : ''}
+    `;
+    host.appendChild(m);
+
+    const rEl = m.querySelector('.marqueeRect');
+    rEl.style.left   = `${offsetLeft}px`;
+    rEl.style.top    = `${offsetTop + topY}px`;
+    rEl.style.width  = `${colWidth}px`;
+    rEl.style.height = `${height}px`;
+    rEl.addEventListener('pointerdown', ev=>startDragChain(ev,'move', idx));
+
+    const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
+    const stampH=26;
+
+    if(idx===0){
+      const topStamp=m.querySelector(`#mqTopStamp${idx}`);
+      const labelTop = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
+      topStamp.textContent = labelTop;
+      topStamp.style.left = `${offsetLeft + colWidth/2}px`;
+      topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
+
+      const topHandle=m.querySelector(`#mqTopHandle${idx}`);
+      topHandle.style.left  = `${offsetLeft}px`;
+      topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
+      topHandle.style.width = `${colWidth}px`;
+      topHandle.style.height= `${triH}px`;
+      topHandle.addEventListener('pointerdown', ev=>startDragChain(ev,'top', idx));
+    }
+
+    if(idx===segs.length-1){
+      const botStamp=m.querySelector(`#mqBotStamp${idx}`);
+      const labelBot = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
+      botStamp.textContent = labelBot;
+      botStamp.style.left = `${offsetLeft + colWidth/2}px`;
+      botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
+
+      const botHandle=m.querySelector(`#mqBotHandle${idx}`);
+      botHandle.style.left  = `${offsetLeft}px`;
+      botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
+      botHandle.style.width = `${colWidth}px`;
+      botHandle.style.height= `${triH}px`;
+      botHandle.addEventListener('pointerdown', ev=>startDragChain(ev,'bottom', idx));
+    }
+  });
+}
+
+/* ---------- Drag handlers ---------- */
+function startDragChain(ev, kind, segIdx){
+  if(!selChain) return;
   dragKind = kind;
+  dragSegIndex = segIdx;
   ev.preventDefault();
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  const seg = selChain.segments[segIdx];
   dragStartY = ev.clientY;
-  baseStart = selState.startMin;
-  baseEnd   = selState.endMin;
-  baseDur15 = snap15(baseEnd - baseStart); // keep duration snapped for MOVE
+  baseStart = seg.startMin;
+  baseEnd   = seg.endMin;
+  baseDur15 = snap15(baseEnd - baseStart);
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
     const minGap = 15;
+    const s = selChain.segments;
 
     if(dragKind==='move'){
-      // Move whole box in 15-min steps; preserve 15-min duration
-      const newStart = clamp(snap15(baseStart + deltaMinRaw), 0, 1440);
-      let newEnd = newStart + baseDur15;
-      if(newEnd > 1440){ newEnd = 1440; selState.startMin = snap15(1440 - baseDur15); }
-      else selState.startMin = newStart;
-      selState.endMin = clamp(newEnd, selState.startMin + minGap, 1440);
+      // Move all segments equally, clamped within their day
+      const delta = snap15(deltaMinRaw);
+      for(const sg of s){
+        let newStart = clamp(sg.startMin + delta, 0, 1440);
+        let newEnd   = clamp(sg.endMin   + delta, 0, 1440);
+        // keep duration constant
+        const dur = sg.endMin - sg.startMin;
+        if(newEnd - newStart !== dur){
+          if(delta>0){ newStart = clamp(newEnd - dur, 0, 1440 - dur); }
+          else{ newEnd = clamp(newStart + dur, dur, 1440); }
+        }
+        sg.startMin = snap15(newStart);
+        sg.endMin   = snap15(newEnd);
+      }
     } else if(dragKind==='top'){
       const raw = baseStart + deltaMinRaw;
       const snapped = snap15(raw);
-      selState.startMin = clamp(snapped, 0, selState.endMin - minGap);
+      selChain.segments[segIdx].startMin = clamp(snapped, 0, selChain.segments[segIdx].endMin - minGap);
     } else if(dragKind==='bottom'){
       const raw = baseEnd + deltaMinRaw;
       const snapped = snap15(raw);
-      selState.endMin = clamp(snapped, selState.startMin + minGap, 1440);
+      selChain.segments[segIdx].endMin = clamp(snapped, selChain.segments[segIdx].startMin + minGap, 1440);
     }
-    updateSelectionVisual();
+    // Enforce overall ≤ 24h
+    if(chainDuration()>1440){
+      // rollback minimal: clamp end of last segment
+      const last = selChain.segments[selChain.segments.length-1];
+      last.endMin = clamp(last.endMin - (chainDuration()-1440), last.startMin+minGap, 1440);
+    }
+    drawSelection();
   };
 
   const up=(e)=>{
-    // Already snapped during drag; just ensure constraints
-    selState.startMin = snap15(selState.startMin);
-    selState.endMin   = snap15(selState.endMin);
-    if(selState.endMin - selState.startMin < 15){
-      if(dragKind==='top'){
-        selState.startMin = clamp(selState.endMin - 15, 0, 1425);
-      }else if(dragKind==='bottom'){
-        selState.endMin   = clamp(selState.startMin + 15, 15, 1440);
-      }else{
-        selState.endMin = clamp(selState.startMin + 15, 15, 1440);
-      }
-    }
-    updateSelectionVisual();
+    // snap
+    const s = selChain.segments[segIdx];
+    s.startMin = snap15(s.startMin);
+    s.endMin   = snap15(s.endMin);
+    drawSelection();
 
-    // === Spillover confirm logic (only thing added) ===
-    if(dragKind==='top' && selState.startMin===0){
-      showSpillConfirm('prev'); // reached top → previous day
-    } else if(dragKind==='bottom' && selState.endMin===1440){
-      showSpillConfirm('next'); // reached bottom → next day
+    // Edge confirm only for exposed handles:
+    if(dragKind==='top' && segIdx===0 && s.startMin===0){
+      const pos = handleViewportPos(segIdx, 'top');
+      showEdgeConfirm('prev', pos.x, pos.y);
+    } else if(dragKind==='bottom' && segIdx===selChain.segments.length-1 && s.endMin===1440){
+      const pos = handleViewportPos(segIdx, 'bottom');
+      showEdgeConfirm('next', pos.x, pos.y);
     }
 
     e.currentTarget.releasePointerCapture(e.pointerId);
@@ -676,64 +636,90 @@ function startDrag(ev, kind){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* ---------- Spillover confirmation ---------- */
-function showSpillConfirm(direction){
-  // Build lightweight modal
-  const overlay=document.createElement('div');
-  overlay.className='confirmOverlay';
-  overlay.innerHTML=`
-    <div class="confirmBox" role="dialog" aria-modal="true">
-      <div class="confirmText">
-        Spill into ${direction==='prev' ? 'previous day' : 'next day'}?
-      </div>
-      <div class="confirmBtns">
-        <button class="btnMini" data-action="cancel" aria-label="Cancel">✕</button>
-        <button class="btnMini ok" data-action="ok" aria-label="Confirm">✓</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const close=()=>{ overlay.remove(); };
-
-  overlay.addEventListener('click', (e)=>{
-    const btn=e.target.closest('button');
-    if(!btn) return;
-    const act=btn.dataset.action;
-    if(act==='cancel'){ close(); return; }
-    if(act==='ok'){
-      // Move one handle into adjacent day at 23:00 (prev) or 00:00 (next)
-      if(direction==='prev'){
-        if(selState.dayIdx===0){
-          // Sunday → previous week's Saturday near 23:00
-          visibleWeekFirst = addDays(visibleWeekFirst, -7);
-          repaintWeek();
-          selState = { dayIdx:6, startMin:1380, endMin:1440 }; // 23:00–24:00
-        }else{
-          selState.dayIdx -= 1;
-          selState.startMin = 1380; // 23:00
-          selState.endMin   = 1440; // 24:00
-        }
-      }else{ // 'next'
-        if(selState.dayIdx===6){
-          // Saturday → next week's Sunday near 00:00
-          visibleWeekFirst = addDays(visibleWeekFirst, 7);
-          repaintWeek();
-          selState = { dayIdx:0, startMin:0, endMin:60 }; // 00:00–01:00
-        }else{
-          selState.dayIdx += 1;
-          selState.startMin = 0;   // 00:00
-          selState.endMin   = 60;  // 01:00
-        }
-      }
-      // Cap consecutive selection <= 24h (current single segment always ≤ 24h)
-      updateSelectionVisual();
-      close();
-    }
-  }, {passive:true});
+function handleViewportPos(segIdx, which){
+  // Return an anchor position for the inline confirm near the handle
+  const seg = selChain.segments[segIdx];
+  const rect=weekGeom.rect;
+  const colLeft = weekGeom.colX[seg.dayIdx];
+  const colRight= weekGeom.colX[seg.dayIdx+1];
+  const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
+  const x = rect.left + colLeft + colWidth/2;
+  const y = (which==='top')
+    ? rect.top + minutesToY(seg.startMin) - 56
+    : rect.top + minutesToY(seg.endMin) + 56;
+  return {x,y};
 }
 
-/* ---------- Month & Day Views (unchanged UI) ---------- */
+/* ---------- Edge confirm (no dim background) ---------- */
+function showEdgeConfirm(direction, anchorX, anchorY){
+  removeEdgeConfirm();
+
+  const box=document.createElement('div');
+  box.className='edgeConfirm';
+  box.style.left = Math.max(12, Math.min(window.innerWidth-172, Math.round(anchorX-80)))+'px';
+  box.style.top  = Math.max(12, Math.min(window.innerHeight-90, Math.round(anchorY-20)))+'px';
+  box.innerHTML=`
+    <div>${direction==='prev' ? 'Spill into previous day?' : 'Spill into next day?'}</div>
+    <div class="edgeRow">
+      <button class="edgeBtn" data-act="cancel" aria-label="Cancel">✕</button>
+      <button class="edgeBtn ok" data-act="ok" aria-label="Confirm">✓</button>
+    </div>
+  `;
+  document.body.appendChild(box);
+
+  box.addEventListener('click', (e)=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const act=b.dataset.act;
+    if(act==='cancel'){ removeEdgeConfirm(); return; }
+    if(act==='ok'){ confirmSpill(direction); removeEdgeConfirm(); }
+  }, {passive:true});
+}
+function removeEdgeConfirm(){
+  document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove());
+}
+
+/* ---------- Confirm spill: create linked segment on adjacent row ---------- */
+function confirmSpill(direction){
+  if(!selChain || selChain.segments.length>1) return; // only extend once
+  const a = selChain.segments[0];
+
+  if(direction==='prev'){
+    // Handle Sunday -> previous week's Saturday visual rule
+    if(a.dayIdx===0){
+      visibleWeekFirst = addDays(visibleWeekFirst, -7);
+      repaintWeek();
+      // after repaint, weekGeom re-computed; set chain to Sat + original
+      selChain = { id: selChain.id, segments:[
+        { dayIdx:6, startMin:1380, endMin:1440},           // 23:00–24:00 on Sat
+        { dayIdx:0, startMin:0, endMin:a.endMin }          // original now starts at 00:00
+      ]};
+    }else{
+      selChain = { id: selChain.id, segments:[
+        { dayIdx:a.dayIdx-1, startMin:1380, endMin:1440 }, // 23:00–24:00 previous day
+        { dayIdx:a.dayIdx,   startMin:0,    endMin:a.endMin }
+      ]};
+    }
+  } else {
+    // direction === 'next'
+    if(a.dayIdx===6){
+      visibleWeekFirst = addDays(visibleWeekFirst, 7);
+      repaintWeek();
+      selChain = { id: selChain.id, segments:[
+        { dayIdx:6, startMin:a.startMin, endMin:1440 },   // current Sat to midnight
+        { dayIdx:0, startMin:0,          endMin:60 }      // next Sun 00:00–01:00 default
+      ]};
+    }else{
+      selChain = { id: selChain.id, segments:[
+        { dayIdx:a.dayIdx,   startMin:a.startMin, endMin:1440 }, // to midnight
+        { dayIdx:a.dayIdx+1, startMin:0,          endMin:60 }    // 00:00–01:00
+      ]};
+    }
+  }
+  // Cap chain ≤ 24h (already true by construction)
+  drawSelection();
+}
+
+/* ---------- Month & Day Views (unchanged) ---------- */
 function buildMonthView(){
   const base = new Date();
   activeDayISO = toISO(base);
@@ -778,7 +764,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r27</div>
+        <div class="watermark">Chrono build r28</div>
       </div>
     </div>
   `;
@@ -829,6 +815,5 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-
 </body>
 </html>
