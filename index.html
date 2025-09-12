@@ -121,7 +121,7 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm (clickable, no tap-through) ---------- */
+  /* ---------- Edge confirm (clickable, blocks background) ---------- */
   .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
@@ -187,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r39');
+console.info('Chrono build r40');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -218,8 +218,8 @@ new ResizeObserver(()=> {
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* Storage */
-const DB_NAME='chronoDB', DB_VERSION=15;
+/* --------- Storage (LS fallback) ---------- */
+const DB_NAME='chronoDB', DB_VERSION=16;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -260,56 +260,34 @@ async function storageGet(k){
     req.onerror=()=>rej(req.error);
   });
 }
-function weekKey(weekISO){ return `sel2:${weekISO}`; }
 
-/* -------- Selection persistence (per-week) --------
-A week record stores 0-2 segments that belong to that week.
-{
-  id,
-  dir: 'prev'|'next'|null,
-  segments: [ { dayIdx,startMin,endMin,isParent:boolean } ],
-  parentTimes?: { startMin,endMin } // child week only
+/* ---------- Single-chain global persistence ----------
+selChain = {
+  id: number,
+  parent: { weekISO, dayIdx, startMin, endMin },
+  child:  { weekISO, dayIdx, startMin, endMin } | null,
+  dir: 'prev'|'next'|null
 }
----------------------------------------------------- */
+Only ONE chain can exist. Tap elsewhere nukes and creates a new 1h parent.
+------------------------------------------------------*/
+const CHAIN_KEY='selChain_v2';
+async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
+async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
-async function persistChainForWeek(weekDate, record){
-  const wkISO = getWeekISO(weekDate);
-  await storageSet(weekKey(wkISO), record || undefined);
-}
-async function readWeekRecord(weekDate){
-  return await storageGet(weekKey(getWeekISO(weekDate)));
-}
-async function readWeekRecByISO(weekISO){ return storageGet(weekKey(weekISO)); }
-async function writeWeekRecByISO(weekISO, rec){ return storageSet(weekKey(weekISO), rec||undefined); }
-async function clearChainEverywhere(curId){
-  const curISO = getWeekISO(visibleWeekFirst);
-  const prevISO = toISO(addDays(weekStart(new Date(curISO)), -7));
-  const nextISO = toISO(addDays(weekStart(new Date(curISO)),  7));
-  const cur = await readWeekRecByISO(curISO);
-  const pv  = await readWeekRecByISO(prevISO);
-  const nx  = await readWeekRecByISO(nextISO);
-  if(cur && (!curId || cur.id===curId)) await writeWeekRecByISO(curISO, undefined);
-  if(pv  && (!curId || pv.id===curId))  await writeWeekRecByISO(prevISO, undefined);
-  if(nx  && (!curId || nx.id===curId))  await writeWeekRecByISO(nextISO, undefined);
-}
-
-/* In-memory selection for CURRENT week only */
+/* In-memory */
 let chain = null;
 
-/* Edge intent + modal state */
-let pendingEdge = null; // {direction, parentSnapshot, parentWeekISO}
+/* Edge confirm state */
 let edgeOpen = false;
+let pendingEdge = null; // {direction:'prev'|'next', forSeg:'parent'|'child'}
 
 function snapshotState(){ return { activeView, activeDayISO }; }
 async function saveAll(){
   await storageSet('state', snapshotState());
-  await persistChainForWeek(visibleWeekFirst, chain);
+  await saveChain(chain);
 }
 let saveTimer=null;
-function saveSoon(ms=600){
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms);
-}
+function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
 /* Controls */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -326,7 +304,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* ---------- Week View ---------- */
 let weekGeom=null;
 let dragKind=null;               // 'top'|'bottom'|'move'
-let dragSegIndex=0;
+let dragTarget='parent';         // which segment we’re dragging: 'parent' or 'child'
 let dragStartY=0, baseStart=0, baseEnd=0;
 
 function buildWeekView(){
@@ -355,11 +333,11 @@ function buildWeekView(){
 
   document.getElementById('prevWeekBtn').onclick=async ()=>{
     visibleWeekFirst=addDays(visibleWeekFirst,-7);
-    repaintWeek(); await loadChainForCurrentWeek(); saveSoon(200);
+    repaintWeek(); await loadAndDraw(); saveSoon(200);
   };
   document.getElementById('nextWeekBtn').onclick=async ()=>{
     visibleWeekFirst=addDays(visibleWeekFirst, 7);
-    repaintWeek(); await loadChainForCurrentWeek(); saveSoon(200);
+    repaintWeek(); await loadAndDraw(); saveSoon(200);
   };
 
   const grid=document.getElementById('weekGrid');
@@ -368,15 +346,17 @@ function buildWeekView(){
   repaintWeek();
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
-  loadChainForCurrentWeek().catch(()=>{});
+  loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_v10')){
+    if(!localStorage.getItem('hint_week_edit_r40')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_v10','1');
+      localStorage.setItem('hint_week_edit_r40','1');
     }
   }catch{}
 }
+
+async function loadAndDraw(){ chain = await loadChain(); drawSelection(); }
 
 function repaintWeek(skipSel=false){
   const first=visibleWeekFirst, last=addDays(first,6);
@@ -491,21 +471,10 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Load chain for current week ---------- */
-async function loadChainForCurrentWeek(){
-  const rec = await readWeekRecord(visibleWeekFirst);
-  if(!rec){ chain=null; drawSelection(); return; }
-  chain = { id:rec.id, dir:rec.dir||null, segments:(rec.segments||[]).slice(), parentTimes: rec.parentTimes||null };
-  drawSelection();
-}
-
-/* ---------- Tap to create new 1h block (single selector invariant) ---------- */
+/* ---------- Tap to create new parent (single selector invariant) ---------- */
 async function onWeekGridTap(e){
-  if(edgeOpen) return;   // ignore taps while confirm is visible
-  const grid=document.getElementById('weekGrid');
-  const host=document.getElementById('selHost');
-  if(!weekGeom) weekGeom = computeGeometry(grid,7);
-
+  if(edgeOpen) return;   // ignore taps while confirm visible
+  if(!weekGeom) return;
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
@@ -517,52 +486,67 @@ async function onWeekGridTap(e){
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
 
-  await clearChainEverywhere(chain?.id); // kill any existing chain in adjacent weeks
-  chain = { id: Date.now(), dir:null, segments:[{ dayIdx, startMin, endMin, isParent:true }] };
-  await persistChainForWeek(visibleWeekFirst, chain);
-
-  host.innerHTML='';
+  // New chain replaces any existing one
+  chain = {
+    id: Date.now(),
+    parent: { weekISO:getWeekISO(visibleWeekFirst), dayIdx, startMin, endMin },
+    child: null,
+    dir: null
+  };
+  await saveChain(chain);
   drawSelection();
 }
 
-/* ---------- Draw (supports up to 2 segments in current week) ---------- */
+/* ---------- Helpers ---------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
+function segOnThisWeek(seg){ return seg && seg.weekISO === getWeekISO(visibleWeekFirst); }
+function otherSeg(segName){ return segName==='parent' ? chain.child : chain.parent; }
+function boundsFromSeg(seg){
+  const rect=weekGeom.rect;
+  const colLeft = weekGeom.colX[seg.dayIdx];
+  const colRight= weekGeom.colX[seg.dayIdx+1];
+  const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
+  const topY  = minutesToY(seg.startMin);
+  const botY  = minutesToY(seg.endMin);
+  const height= Math.max(1, botY - topY);
+  const offsetLeft = rect.left + colLeft;
+  const offsetTop  = rect.top;
+  return {offsetLeft, offsetTop, colWidth, topY, botY, height};
+}
 
+/* ---------- Draw (shows whichever segment(s) belong to this week) ---------- */
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
-  if(!chain || !chain.segments || chain.segments.length===0) return;
+  if(!chain) return;
 
-  const segs = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
+  const segsToDraw=[];
+  if(segOnThisWeek(chain.parent)) segsToDraw.push({seg:chain.parent, name:'parent'});
+  if(segOnThisWeek(chain.child))  segsToDraw.push({seg:chain.child,  name:'child'});
 
-  segs.forEach((seg, idx)=>{
-    const rect=weekGeom.rect;
-    const colLeft = weekGeom.colX[seg.dayIdx];
-    const colRight= weekGeom.colX[seg.dayIdx+1];
-    const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
-    const topY  = minutesToY(seg.startMin);
-    const botY  = minutesToY(seg.endMin);
-    const height= Math.max(1, botY - topY);
+  if(segsToDraw.length===0) return;
 
-    const offsetLeft = rect.left + colLeft;
-    const offsetTop  = rect.top;
+  // Order: earlier dayIdx first
+  segsToDraw.sort((a,b)=>a.seg.dayIdx - b.seg.dayIdx);
+
+  segsToDraw.forEach((entry, idx)=>{
+    const seg=entry.seg, name=entry.name;
+    const b=boundsFromSeg(seg);
 
     const m=document.createElement('div');
     m.className='marquee';
     m.innerHTML=`
-      <div class="marqueeRect" data-seg="${idx}"></div>
-
+      <div class="marqueeRect" data-name="${name}"></div>
       ${idx===0 ? `
-        <div class="stamp" id="mqTopStamp${idx}"></div>
-        <div class="handle" id="mqTopHandle${idx}">
+        <div class="stamp" id="topStamp_${name}"></div>
+        <div class="handle" id="topHandle_${name}">
           <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
             <polygon points="1,47 50,3 99,47"></polygon>
           </svg>
         </div>` : ''}
-
-      ${idx===segs.length-1 ? `
-        <div class="stamp" id="mqBotStamp${idx}"></div>
-        <div class="handle" id="mqBotHandle${idx}">
+      ${idx===segsToDraw.length-1 ? `
+        <div class="stamp" id="botStamp_${name}"></div>
+        <div class="handle" id="botHandle_${name}">
           <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
             <polygon points="1,3 50,47 99,3"></polygon>
           </svg>
@@ -570,128 +554,59 @@ function drawSelection(){
     `;
     host.appendChild(m);
 
-    const rEl = m.querySelector('.marqueeRect');
-    rEl.style.left   = `${offsetLeft}px`;
-    rEl.style.top    = `${offsetTop + topY}px`;
-    rEl.style.width  = `${colWidth}px`;
-    rEl.style.height = `${height}px`;
-    rEl.addEventListener('pointerdown', ev=>startDrag(ev,'move', idx));
+    const rectEl = m.querySelector('.marqueeRect');
+    rectEl.style.left   = `${b.offsetLeft}px`;
+    rectEl.style.top    = `${b.offsetTop + b.topY}px`;
+    rectEl.style.width  = `${b.colWidth}px`;
+    rectEl.style.height = `${b.height}px`;
+    rectEl.addEventListener('pointerdown', ev=>startDrag(ev,'move', name));
 
     const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
     const stampH=26;
 
     if(idx===0){
-      const topStamp=m.querySelector(`#mqTopStamp${idx}`);
-      const labelTop = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
-      topStamp.textContent = labelTop;
-      topStamp.style.left = `${offsetLeft + colWidth/2}px`;
-      topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
+      const topStamp=m.querySelector(`#topStamp_${name}`);
+      topStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
+      topStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
+      topStamp.style.top  = `${b.offsetTop + b.topY - (stampH + stampPad)}px`;
 
-      const topHandle=m.querySelector(`#mqTopHandle${idx}`);
-      topHandle.style.left  = `${offsetLeft}px`;
-      topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
-      topHandle.style.width = `${colWidth}px`;
+      const topHandle=m.querySelector(`#topHandle_${name}`);
+      topHandle.style.left  = `${b.offsetLeft}px`;
+      topHandle.style.top   = `${b.offsetTop + b.topY - (stampH + stampPad + triH)}px`;
+      topHandle.style.width = `${b.colWidth}px`;
       topHandle.style.height= `${triH}px`;
-      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', idx));
+      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name));
     }
 
-    if(idx===segs.length-1){
-      const botStamp=m.querySelector(`#mqBotStamp${idx}`);
-      const labelBot = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
-      botStamp.textContent = labelBot;
-      botStamp.style.left = `${offsetLeft + colWidth/2}px`;
-      botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
+    if(idx===segsToDraw.length-1){
+      const botStamp=m.querySelector(`#botStamp_${name}`);
+      botStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
+      botStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
+      botStamp.style.top  = `${b.offsetTop + b.botY + stampPad}px`;
 
-      const botHandle=m.querySelector(`#mqBotHandle${idx}`);
-      botHandle.style.left  = `${offsetLeft}px`;
-      botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
-      botHandle.style.width = `${colWidth}px`;
+      const botHandle=m.querySelector(`#botHandle_${name}`);
+      botHandle.style.left  = `${b.offsetLeft}px`;
+      botHandle.style.top   = `${b.offsetTop + b.botY + stampPad + stampH}px`;
+      botHandle.style.width = `${b.colWidth}px`;
       botHandle.style.height= `${triH}px`;
-      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', idx));
+      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name));
     }
   });
 }
 
-/* ---------- Drag with strict 24h cap (no auto-adjust of the other segment) ---------- */
-function startDrag(ev, kind, segIdx){
+/* ---------- Drag logic: strict cap, no auto-adjust other segment ---------- */
+function startDrag(ev, kind, which){
   if(!chain) return;
-  const segsSorted = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
-  const seg = segsSorted[segIdx];
-  const other = segsSorted.length===2 ? segsSorted[1-segIdx] : null;
-
+  const seg = which==='parent' ? chain.parent : chain.child;
+  if(!seg) return;
   dragKind = kind;
-  dragSegIndex = segIdx;
+  dragTarget = which;
   ev.preventDefault(); ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
-
-  const isParent = !!seg.isParent;
 
   dragStartY = ev.clientY;
   baseStart = seg.startMin;
   baseEnd   = seg.endMin;
-
-  const applyCapAndRules = ()=>{
-    const minGap=15;
-
-    const hasOther = !!other;
-    const parentTimes = chain.parentTimes || null;
-
-    const otherStart = hasOther ? other.startMin : (parentTimes? parentTimes.startMin : null);
-    const otherEnd   = hasOther ? other.endMin   : (parentTimes? parentTimes.endMin   : null);
-    const otherDur   = (otherStart!==null && otherEnd!==null) ? (otherEnd - otherStart) : 0;
-    const myDur      = totalDur(seg);
-    const maxMyDur   = Math.max(0, 1440 - otherDur); // total across both <= 1440
-
-    if(myDur > maxMyDur){
-      if(dragKind==='top'){ seg.startMin = seg.endMin - maxMyDur; }
-      else if(dragKind==='bottom'){ seg.endMin = seg.startMin + maxMyDur; }
-      else{
-        const dur=myDur;
-        let low = 0, high = 1440 - dur;
-        if(chain.dir==='next' && !isParent && (otherStart!==null)) high = Math.min(high, otherStart - dur);
-        if(chain.dir==='prev' &&  isParent && (otherDur>0))        high = Math.min(high, 1440 - otherDur - dur);
-        seg.startMin = clamp(seg.startMin, low, high);
-        seg.endMin   = seg.startMin + dur;
-      }
-    }
-
-    // Directional adjacency constraints (no crossing; child cannot intrude past parent)
-    if(other){
-      if(chain.dir==='next'){
-        if(!isParent){ // child (next week) cannot end past parent's start (this week)
-          seg.endMin = Math.min(seg.endMin, other.startMin);
-          seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{         // parent cap is 1440 - childDur
-          const childDur = totalDur(other);
-          seg.endMin = Math.min(seg.endMin, seg.startMin + (1440 - childDur));
-        }
-      }else if(chain.dir==='prev'){
-        if(isParent){  // parent cannot exceed 1440 - childDur
-          const childDur = totalDur(other);
-          seg.endMin = Math.min(seg.endMin, 1440 - childDur);
-          seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{         // child (prev week) cannot start before 1440 - parentDur
-          const parentDur = totalDur(other);
-          seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
-          seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
-        }
-      }
-    }else if(parentTimes){
-      // Editing child week (only child segment exists here); enforce against parent's times
-      if(chain.dir==='next'){
-        seg.endMin = Math.min(seg.endMin, parentTimes.startMin);
-        seg.startMin = Math.max(seg.startMin, seg.endMin - (1440 - (parentTimes.endMin - parentTimes.startMin)));
-      }else if(chain.dir==='prev'){
-        const parentDur = parentTimes.endMin - parentTimes.startMin;
-        seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
-        seg.endMin   = Math.min(seg.endMin, 1440);
-      }
-    }
-
-    // Bounds
-    seg.startMin = clamp(seg.startMin, 0, 1425);
-    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
-  };
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
@@ -711,24 +626,18 @@ function startDrag(ev, kind, segIdx){
       seg.endMin = clamp(snapped, seg.startMin + 15, 1440);
     }
 
-    applyCapAndRules();
-
-    if(chain.segments.length===1){
-      if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
-      else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
-    }
-
+    enforceCaps(seg, which);
     drawSelection();
   };
 
   const up=async (e)=>{
     seg.startMin = snap15(seg.startMin);
     seg.endMin   = snap15(seg.endMin);
-    if(chain.segments.length===1){
-      if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
-      else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
-    }
-    await persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
+
+    // Only offer confirm when at an edge, we have no child yet (or editing parent at opposite edge).
+    maybeOfferSpill(seg, which);
+
+    await saveChain(chain).catch(()=>{});
     saveSoon(200);
 
     e.currentTarget.releasePointerCapture(e.pointerId);
@@ -741,30 +650,89 @@ function startDrag(ev, kind, segIdx){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-function setPendingAndShow(direction, seg){
-  pendingEdge = {
-    direction,
-    parentSnapshot: { ...seg, isParent:true },
-    parentWeekISO: getWeekISO(visibleWeekFirst)
-  };
-  const pos = handleViewportPos(seg, direction==='prev'?'top':'bottom');
-  showEdgeConfirm(direction, pos.x, pos.y);
+/* Enforce 24h cap and “child cannot cross into parent” constraint */
+function enforceCaps(seg, which){
+  const other = otherSeg(which);
+  const minGap=15;
+
+  if(!other){
+    // single segment: just clamp to [0,1440]
+    seg.startMin = clamp(seg.startMin, 0, 1425);
+    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
+    return;
+  }
+
+  // total duration across both ≤ 1440
+  const myDur = totalDur(seg);
+  const otherDur = totalDur(other);
+  const maxMyDur = Math.max(0, 1440 - otherDur);
+  if(myDur > maxMyDur){
+    if(dragKind==='top'){ seg.startMin = seg.endMin - maxMyDur; }
+    else if(dragKind==='bottom'){ seg.endMin = seg.startMin + maxMyDur; }
+    else {
+      const dur = myDur;
+      seg.startMin = clamp(seg.startMin, 0, 1440 - dur);
+      seg.endMin   = seg.startMin + dur;
+    }
+  }
+
+  // Directional rule:
+  // dir==='next' => child is next-week (Sun), cannot end past parent's start
+  // dir==='prev' => child is prev-week (Sat late), cannot start before 1440 - parentDur
+  if(chain.dir==='next'){
+    if(which==='child'){
+      seg.endMin   = Math.min(seg.endMin, chain.parent.startMin);
+      seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+    }else{ // editing parent
+      const childDur = totalDur(chain.child);
+      seg.endMin = Math.min(seg.endMin, seg.startMin + (1440 - childDur));
+    }
+  }else if(chain.dir==='prev'){
+    if(which==='parent'){
+      const childDur = totalDur(chain.child);
+      seg.endMin = Math.min(seg.endMin, 1440 - childDur);
+      seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+    }else{ // editing child
+      const parentDur = totalDur(chain.parent);
+      seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
+      seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
+    }
+  }
+
+  // Bounds
+  seg.startMin = clamp(seg.startMin, 0, 1425);
+  seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
 }
 
-function handleViewportPos(seg, which){
-  const rect=weekGeom.rect;
-  const colLeft = weekGeom.colX[seg.dayIdx];
-  const colRight= weekGeom.colX[seg.dayIdx+1];
-  const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
-  const x = rect.left + colLeft + colWidth/2;
-  const y = (which==='top')
-    ? rect.top + minutesToY(seg.startMin) - 56
-    : rect.top + minutesToY(seg.endMin) + 56;
+/* Offer spill only on edge, only when appropriate, once per edge hit */
+function maybeOfferSpill(seg, which){
+  if(edgeOpen) return;
+  // Already have a child? Do not offer another spill here.
+  if(chain.child){
+    // Only show “other side” confirm if parent dragged to the opposite edge and child exists? Not for this phase.
+    return;
+  }
+  if(which!=='parent') return; // only parent can create a child
+
+  // Edge conditions
+  if(seg.startMin===0){
+    pendingEdge = {direction:'prev', forSeg:'parent'};
+    showEdgeConfirm('prev', anchorFor(seg,'top'));
+  }else if(seg.endMin===1440){
+    pendingEdge = {direction:'next', forSeg:'parent'};
+    showEdgeConfirm('next', anchorFor(seg,'bottom'));
+  }
+}
+
+function anchorFor(seg, which){
+  const b=boundsFromSeg(seg);
+  const x = b.offsetLeft + b.colWidth/2;
+  const y = which==='top' ? (b.offsetTop + b.topY - 56) : (b.offsetTop + b.botY + 56);
   return {x,y};
 }
 
-/* ---------- Edge confirm (clickable; blocks background) ---------- */
-function showEdgeConfirm(direction, anchorX, anchorY){
+/* ---------- Edge confirm ---------- */
+function showEdgeConfirm(direction, anchor){
   removeEdgeConfirm();
   edgeOpen = true;
 
@@ -775,8 +743,8 @@ function showEdgeConfirm(direction, anchorX, anchorY){
 
   const box=document.createElement('div');
   box.className='edgeConfirm';
-  box.style.left = Math.max(12, Math.min(window.innerWidth-172, Math.round(anchorX-80)))+'px';
-  box.style.top  = Math.max(12, Math.min(window.innerHeight-90, Math.round(anchorY-20)))+'px';
+  box.style.left = Math.max(12, Math.min(window.innerWidth-172, Math.round(anchor.x-80)))+'px';
+  box.style.top  = Math.max(12, Math.min(window.innerHeight-90, Math.round(anchor.y-20)))+'px';
   box.innerHTML=`
     <div>${direction==='prev' ? 'Spill into previous day?' : 'Spill into next day?'}</div>
     <div class="edgeRow">
@@ -790,49 +758,40 @@ function showEdgeConfirm(direction, anchorX, anchorY){
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
     if(act==='cancel'){ removeEdgeConfirm(); pendingEdge=null; return; }
-    if(act==='ok'){ await confirmSpillFromPending(); removeEdgeConfirm(); }
+    if(act==='ok'){ await confirmSpill(); removeEdgeConfirm(); }
   });
 }
-
 function removeEdgeConfirm(){
   edgeOpen=false;
   document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove());
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
-/* ---------- Confirm spill (dedup across weeks; single-chain invariant) ---------- */
-async function confirmSpillFromPending(){
-  if(!pendingEdge || !chain || chain.segments.length!==1) { pendingEdge=null; return; }
+/* Create child ONLY in the adjacent week; navigate there for editing */
+async function confirmSpill(){
+  if(!pendingEdge || !chain) { pendingEdge=null; return; }
+  const dir = pendingEdge.direction; // 'prev' or 'next'
+  const parent = chain.parent;
+  if(!parent) { pendingEdge=null; return; }
 
-  const {direction, parentSnapshot, parentWeekISO} = pendingEdge;
-  const id = chain.id;
-  const parent = parentSnapshot;
+  // Child defaults:
+  // prev spill => child in previous week, Saturday 23:00–24:00 (adjustable)
+  // next spill => child in next week, Sunday 00:00–01:00 (adjustable)
+  const parentWeek = new Date(parent.weekISO);
+  const targetWeek = dir==='prev' ? addDays(parentWeek, -7) : addDays(parentWeek, +7);
+  const targetISO  = getWeekISO(targetWeek);
 
-  // Persist parent in its week (no duplicates)
-  await writeWeekRecByISO(parentWeekISO, { id, dir:direction, segments:[{...parent, isParent:true}] });
+  chain.dir = dir;
+  chain.child = (dir==='prev')
+    ? { weekISO:targetISO, dayIdx:6, startMin:1380, endMin:1440 }  // Sat late
+    : { weekISO:targetISO, dayIdx:0, startMin:0, endMin:60 };      // Sun early
 
-  // Create child in adjacent week only (Sun->prev Sat, Sat->next Sun)
-  const parentWeek = weekStart(new Date(parentWeekISO));
-  const targetISO = toISO(addDays(parentWeek, direction==='prev'? -7 : 7));
-  const childSeg = (direction==='prev')
-      ? { dayIdx:6, startMin:1380, endMin:1440, isParent:false }  // Sat 23:00–24:00
-      : { dayIdx:0, startMin:0, endMin:60,   isParent:false };    // Sun 00:00–01:00
-  const childRec = { id, dir:direction, segments:[childSeg], parentTimes:{ startMin: parent.startMin, endMin: parent.endMin } };
+  await saveChain(chain);
 
-  const existingChild = await readWeekRecByISO(targetISO);
-  if(!existingChild || existingChild.id!==id){
-    await writeWeekRecByISO(targetISO, childRec);
-  }else{
-    await writeWeekRecByISO(targetISO, { ...existingChild, dir:direction, segments:[childSeg], parentTimes: childRec.parentTimes });
-  }
-
-  // Navigate to child week for immediate adjustment
+  // Jump to child week to edit its triangle immediately
   visibleWeekFirst = weekStart(new Date(targetISO));
   repaintWeek();
-  chain = childRec;
-  await persistChainForWeek(visibleWeekFirst, chain);
   drawSelection();
-
   pendingEdge=null;
 }
 
@@ -881,7 +840,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r39</div>
+        <div class="watermark">Chrono build r40</div>
       </div>
     </div>
   `;
