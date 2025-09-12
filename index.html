@@ -121,7 +121,7 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm (clickable, no tap-through) ---------- */
+  /* ---------- Edge confirm ---------- */
   .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
@@ -187,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r43');
+console.info('Chrono build r44 — Sunday-first normalized');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -195,13 +195,13 @@ const buttons = [...document.querySelectorAll('.btn')];
 
 let activeView = null;
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());
+let visibleWeekFirst = weekStart(new Date()); // Sunday-first baseline everywhere
 
-const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0=Sun … 6=Sat
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; } // 0=Sun
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function toHHMM(min){ const mm = ((Math.round(min)|0)+1440)%1440; const h = Math.floor(mm/60), r = mm%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
@@ -210,7 +210,7 @@ function totalDur(a){ return (a.endMin - a.startMin); }
 
 /* numeric week stamps (avoid TZ bugs) */
 const DAY_MS = 86400000;
-function weekStamp(d){ return +weekStart(d); }
+function weekStamp(d){ return +weekStart(d); }           // stamp is always Sunday 00:00
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
@@ -221,7 +221,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* ------------------- Storage ------------------- */
-const DB_NAME='chronoDB', DB_VERSION=19;
+const DB_NAME='chronoDB', DB_VERSION=20;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -258,14 +258,11 @@ async function storageGet(k){
 
 /* ------------------- Selector chain (single) ------------------- */
 /*
-chain = {
-  id: number,
-  parent: { weekSt:number, dayIdx:number, startMin:number, endMin:number },   // main segment (origin day)
-  child:  { weekSt:number, dayIdx:number, startMin:number, endMin:number } | null, // spill segment
-  dir: 'prev'|'next'|null                                                     // spill direction from parent
-}
+Sunday-first normalized everywhere:
+- dayIdx: 0=Sun … 6=Sat
+- weekSt: stamp for that week's Sunday 00:00
 */
-const CHAIN_KEY='selChain_v5';
+const CHAIN_KEY='selChain_v6';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -335,10 +332,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r43')){
+    if(!localStorage.getItem('hint_week_edit_r44')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r43','1');
+      localStorage.setItem('hint_week_edit_r44','1');
     }
   }catch{}
 }
@@ -456,7 +453,7 @@ async function onWeekGridTap(e){
   const relY=e.clientY - rect.top;
 
   let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } } // 0=Sun…6=Sat
 
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
@@ -576,23 +573,22 @@ function enforceCaps(seg, which){
     return;
   }
 
-  // Combined duration limited to 24h
-  const myDur = totalDur(seg);
-  const otherDur = totalDur(other);
-  const maxMyDur = Math.max(0, 1440 - otherDur);
+  // Combined duration limited to 24h; clamp only the dragged end
+  const myDur   = totalDur(seg);
+  const otherDur= totalDur(other);
+  const maxMyDur= Math.max(0, 1440 - otherDur);
   if(myDur > maxMyDur){
     if(dragKind==='top'){ seg.startMin = seg.endMin - maxMyDur; }
     else if(dragKind==='bottom'){ seg.endMin = seg.startMin + maxMyDur; }
     else { const dur=myDur; seg.startMin = clamp(seg.startMin, 0, 1440 - dur); seg.endMin = seg.startMin + dur; }
   }
 
-  // Directional caps at midnight boundaries (no auto-adjusting the other piece)
+  // Direction-aware caps: Sunday-first
   if(chain.dir==='next'){
-    // parent: ends at 1440; child: starts at 0
+    // parent (dayIdx N), child (dayIdx N+1 or next week Sun)
     if(which==='child'){
-      // child cannot exceed remaining hours left by parent
       const parentDur = totalDur(chain.parent);
-      const childMaxEnd = 1440 - parentDur; // with start=0, end <= this
+      const childMaxEnd = 1440 - parentDur; // child start at 0
       seg.endMin = Math.min(seg.endMin, childMaxEnd);
       seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
     }else{
@@ -600,16 +596,16 @@ function enforceCaps(seg, which){
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
     }
   }else if(chain.dir==='prev'){
-    // child lives on previous day ending at 1440; parent starts at 0
+    // child is previous-day ending at 1440; parent starts at 0
     if(which==='parent'){
       const childDur = totalDur(chain.child);
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
       seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
     }else{
       const parentDur = totalDur(chain.parent||{startMin:0,endMin:0});
-      const childMinStart = 1440 - parentDur; // with end=1440, start >= this
-      seg.startMin = Math.max(seg.startMin, childMinStart);
-      seg.endMin = Math.max(seg.endMin, seg.startMin + minGap);
+      const minStart = 1440 - parentDur; // child end fixed at 1440
+      seg.startMin = Math.max(seg.startMin, minStart);
+      seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
     }
   }
 
@@ -655,7 +651,7 @@ function startDrag(ev, kind, which){
     seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin);
 
     const justCreated = (Date.now() - createdAt) < 350;
-    if(!chain.child && which==='parent' && wasDrag && !justCreated){
+    if(!edgeOpen && !pendingEdge && !chain.child && which==='parent' && wasDrag && !justCreated){
       if(seg.startMin===0){ pendingEdge={direction:'prev'}; showEdgeConfirm('prev', anchorFor(seg,'top')); }
       else if(seg.endMin===1440){ pendingEdge={direction:'next'}; showEdgeConfirm('next', anchorFor(seg,'bottom')); }
     }
@@ -680,7 +676,7 @@ function anchorFor(seg, which){
   return {x,y};
 }
 
-/* ------------------- Spillover confirm ------------------- */
+/* ------------------- Spillover confirm (one-shot, no tap-through) ------------------- */
 function showEdgeConfirm(direction, anchor){
   removeEdgeConfirm(); edgeOpen = true;
 
@@ -716,32 +712,32 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
-/* Spillover creation: same-week if possible; week-hop only at borders */
+/* Spillover creation: same-week if possible; week-hop only at Sun↑ / Sat↓ */
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
-  const p = chain.parent;
+  const p = chain.parent;              // Sunday-first indices guaranteed
   let childWeek = p.weekSt;
-  let childDay  = null;
+  let childDay;
 
   if(direction==='next'){
-    if(p.dayIdx < 6){               // same chart (Mon..Sat spilling to next day)
+    if(p.dayIdx < 6){                  // spill to next day within SAME week (Sun..Fri->Mon..Sat; Sat handled below)
       childDay = p.dayIdx + 1;
-    }else{                           // Sunday spilling to next week
+    }else{                              // p.dayIdx===6 (Sat) -> next week Sunday
       childWeek = p.weekSt + 7*DAY_MS;
-      childDay  = 0;
-      visibleWeekFirst = stampToDate(childWeek); // navigate exactly one week forward
+      childDay  = 0;                    // Sunday
+      visibleWeekFirst = stampToDate(childWeek); // hop exactly one week forward
       repaintWeek();
     }
     chain.dir = 'next';
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:60 };
   }else{ // 'prev'
-    if(p.dayIdx > 0){               // same chart (Tue..Sun spilling to previous day)
+    if(p.dayIdx > 0){                   // spill to previous day within SAME week (Mon..Sat->Sun..Fri)
       childDay = p.dayIdx - 1;
-    }else{                           // Monday (dayIdx 0) spilling to previous week’s Sunday
+    }else{                              // p.dayIdx===0 (Sun) -> previous week Saturday
       childWeek = p.weekSt - 7*DAY_MS;
-      childDay  = 6;
-      visibleWeekFirst = stampToDate(childWeek); // navigate exactly one week back
+      childDay  = 6;                    // Saturday
+      visibleWeekFirst = stampToDate(childWeek); // hop exactly one week back
       repaintWeek();
     }
     chain.dir = 'prev';
@@ -776,7 +772,7 @@ function buildMonthView(){
   document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
 
   const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay();
+  const firstWeekday = first.getDay(); // 0=Sun
   const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
   for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
   for(let day=1; day<=last.getDate(); day++){
@@ -795,7 +791,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r43</div>
+        <div class="watermark">Chrono build r44</div>
       </div>
     </div>
   `;
