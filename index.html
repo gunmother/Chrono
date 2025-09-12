@@ -1,3 +1,5 @@
+Here’s the full file with robust spill detection, parent/child behavior (no cross-adjustments), correct Sunday↔Saturday week carryover, and week-scoped persistence. Build r31.
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,7 +106,8 @@
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
-    box-shadow: var(--marquee-shadow); border-radius:8px; pointer-events:auto; cursor:grab; touch-action:none;
+    box-shadow: var(--marquee-shadow);
+    border-radius:8px; pointer-events:auto; cursor:grab; touch-action:none;
   }
   .marqueeRect:active{ cursor:grabbing; }
   .stamp{
@@ -187,7 +190,7 @@
   </main>
 
 <script>
-console.info('Chrono build r30');
+console.info('Chrono build r31');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -217,8 +220,8 @@ new ResizeObserver(()=> {
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* Storage (light) */
-const DB_NAME='chronoDB', DB_VERSION=9;
+/* Storage */
+const DB_NAME='chronoDB', DB_VERSION=10;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -259,50 +262,39 @@ async function storageGet(k){
     req.onerror=()=>rej(req.error);
   });
 }
-function weekKey(weekISO){ return `sel:${weekISO}`; }
+function weekKey(weekISO){ return `sel2:${weekISO}`; }
 
-/* -------- Selection persistence model (per-week) --------
-Record shape per week:
+/* -------- Selection persistence (per-week) --------
+A week record stores 0-2 segments that belong to that week.
 {
-  id, spilled:boolean, dir:'prev'|'next'|null,
-  isParent:boolean,
-  segment:{ dayIdx, startMin, endMin }
+  id,
+  dir: 'prev'|'next'|null,      // if chain crosses weeks
+  segments: [ { dayIdx,startMin,endMin,isParent:boolean } ] // only those in THIS week
 }
-Parent is the original day user started on.
----------------------------------------------------------- */
+---------------------------------------------------- */
 
-async function persistThisWeek(rec){
-  const wkISO = getWeekISO(visibleWeekFirst);
-  await storageSet(weekKey(wkISO), rec || undefined);
+async function persistChainForWeek(weekDate, record){
+  const wkISO = getWeekISO(weekDate);
+  await storageSet(weekKey(wkISO), record || undefined);
 }
-async function readWeek(weekDate){
+async function readWeekRecord(weekDate){
   return await storageGet(weekKey(getWeekISO(weekDate)));
 }
-function neighborWeekDate(weekDate, dir){
-  if(!dir) return null;
-  return addDays(weekDate, dir==='prev' ? 7 : -7) /* invert to fetch the *other* week when needed? nope */ ;
-}
-/* Correct neighbor given a direction from parent’s perspective:
-   dir==='prev' => child is in previous week => neighbor = currentWeek - 7
-   dir==='next' => child is in next week     => neighbor = currentWeek + 7
-*/
-function neighborByDir(weekDate, dir){
-  if(!dir) return null;
-  return addDays(weekDate, dir==='prev' ? -7 : 7);
-}
 
-/* In-memory selection (current week’s segment only) */
-let sel = null;
-/* sel = {
-   id, spilled, dir, isParent,
-   segment:{dayIdx,startMin,endMin},
-   parentTimes:{startMin,endMin}|null  // for clamps when we’re the child
+/* In-memory selection for the CURRENT week only */
+let chain = null;
+/* chain = {
+   id,
+   dir: 'prev'|'next'|null,
+   segments: [ { dayIdx,startMin,endMin,isParent } ],  // only segments that live in this week
+   // For child clamps when editing this week:
+   parentTimes: { startMin,endMin } | null
 } */
 
 function snapshotState(){ return { activeView, activeDayISO }; }
 async function saveAll(){
   await storageSet('state', snapshotState());
-  await persistThisWeek(sel);
+  await persistChainForWeek(visibleWeekFirst, chain);
 }
 let saveTimer=null;
 function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
@@ -322,6 +314,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* ---------- Week View ---------- */
 let weekGeom=null;
 let dragKind=null;               // 'top'|'bottom'|'move'
+let dragSegIndex=0;
 let dragStartY=0, baseStart=0, baseEnd=0;
 
 function buildWeekView(){
@@ -350,11 +343,11 @@ function buildWeekView(){
 
   document.getElementById('prevWeekBtn').onclick=async ()=>{
     visibleWeekFirst=addDays(visibleWeekFirst,-7);
-    repaintWeek(); await loadSelectionForCurrentWeek(); saveSoon(200);
+    repaintWeek(); await loadChainForCurrentWeek(); saveSoon(200);
   };
   document.getElementById('nextWeekBtn').onclick=async ()=>{
     visibleWeekFirst=addDays(visibleWeekFirst, 7);
-    repaintWeek(); await loadSelectionForCurrentWeek(); saveSoon(200);
+    repaintWeek(); await loadChainForCurrentWeek(); saveSoon(200);
   };
 
   const grid=document.getElementById('weekGrid');
@@ -363,16 +356,16 @@ function buildWeekView(){
   repaintWeek();
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
-  loadSelectionForCurrentWeek().catch(()=>{});
+  loadChainForCurrentWeek().catch(()=>{});
 
   try{
-    if(!localStorage.getItem('hint_week_edit_v7')){
+    if(!localStorage.getItem('hint_week_edit_v8')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v7','1');
+      localStorage.setItem('hint_week_edit_v8','1');
     }
   }catch{}
 }
@@ -408,7 +401,7 @@ function repaintWeek(skipSel=false){
   buildMask(weekGeom,7);
   paintNowMagnifier(weekGeom);
 
-  if(sel && !skipSel) drawSelection();
+  if(chain && !skipSel) drawSelection();
 }
 
 function computeGeometry(gridEl, cols){
@@ -490,33 +483,27 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Load/save selection for current week ---------- */
-async function loadSelectionForCurrentWeek(){
-  const rec = await readWeek(visibleWeekFirst);
-  if(!rec){ sel=null; drawSelection(); return; }
+/* ---------- Loading current week's chain ---------- */
+async function loadChainForCurrentWeek(){
+  const rec = await readWeekRecord(visibleWeekFirst);
+  if(!rec){ chain=null; drawSelection(); return; }
 
+  // If chain crosses weeks, pull parent times from neighbor to clamp child
   let parentTimes=null;
-  if(rec.spilled){
-    // Get parent’s times from the other week if needed
-    const otherWeek = neighborByDir(visibleWeekFirst, rec.dir);
-    const nrec = await readWeek(otherWeek);
-    if(nrec && nrec.id===rec.id && nrec.isParent){
-      parentTimes = { startMin:nrec.segment.startMin, endMin:nrec.segment.endMin };
-    } else if(rec.isParent){
-      parentTimes = { startMin:rec.segment.startMin, endMin:rec.segment.endMin };
+  if(rec.dir){
+    const neighborWeek = addDays(visibleWeekFirst, rec.dir==='prev' ? 7 : -7); // the other side where parent likely lives (depending which week you're viewing)
+    const neighborRec = await readWeekRecord(neighborWeek);
+    if(neighborRec && neighborRec.id===rec.id){
+      const parentSeg = neighborRec.segments.find(s=>s.isParent);
+      if(parentSeg) parentTimes = { startMin: parentSeg.startMin, endMin: parentSeg.endMin };
     }
   }
 
-  sel = {
-    id: rec.id, spilled:!!rec.spilled, dir: rec.dir||null,
-    isParent: !!rec.isParent,
-    segment: {...rec.segment},
-    parentTimes
-  };
+  chain = { id:rec.id, dir:rec.dir||null, segments:(rec.segments||[]).slice(), parentTimes };
   drawSelection();
 }
 
-/* ---------- Tap to create ---------- */
+/* ---------- Tap to create new 1h block (clears chain in this week only) ---------- */
 function onWeekGridTap(e){
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
@@ -533,117 +520,121 @@ function onWeekGridTap(e){
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
 
-  // New single-week parent selection; clear any previous for this week
-  sel = { id: Date.now(), spilled:false, dir:null, isParent:true, segment:{dayIdx,startMin,endMin}, parentTimes:null };
-  persistThisWeek({
-    id:sel.id, spilled:false, dir:null, isParent:true,
-    segment:{...sel.segment}
-  }).catch(()=>{});
+  chain = { id: Date.now(), dir:null, segments:[{ dayIdx, startMin, endMin, isParent:true }] };
+  persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
 
   host.innerHTML='';
   drawSelection();
 }
 
-/* ---------- Drawing (single segment in this week) ---------- */
+/* ---------- Draw (supports up to 2 segments in current week) ---------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
-  if(!sel) return;
+  if(!chain || !chain.segments || chain.segments.length===0) return;
 
-  const seg = sel.segment;
-  const rect=weekGeom.rect;
-  const colLeft = weekGeom.colX[seg.dayIdx];
-  const colRight= weekGeom.colX[seg.dayIdx+1];
-  const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
-  const topY  = minutesToY(seg.startMin);
-  const botY  = minutesToY(seg.endMin);
-  const height= Math.max(1, botY - topY);
+  const segs = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
 
-  const offsetLeft = rect.left + colLeft;
-  const offsetTop  = rect.top;
+  segs.forEach((seg, idx)=>{
+    const rect=weekGeom.rect;
+    const colLeft = weekGeom.colX[seg.dayIdx];
+    const colRight= weekGeom.colX[seg.dayIdx+1];
+    const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
+    const topY  = minutesToY(seg.startMin);
+    const botY  = minutesToY(seg.endMin);
+    const height= Math.max(1, botY - topY);
 
-  const m=document.createElement('div');
-  m.className='marquee';
-  m.innerHTML=`
-    <div class="marqueeRect" id="mqRect"></div>
+    const offsetLeft = rect.left + colLeft;
+    const offsetTop  = rect.top;
 
-    <div class="stamp" id="mqTopStamp"></div>
-    <div class="handle" id="mqTopHandle">
-      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="1,47 50,3 99,47"></polygon>
-      </svg>
-    </div>
+    const m=document.createElement('div');
+    m.className='marquee';
+    m.innerHTML=`
+      <div class="marqueeRect" data-seg="${idx}"></div>
 
-    <div class="stamp" id="mqBotStamp"></div>
-    <div class="handle" id="mqBotHandle">
-      <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="1,3 50,47 99,3"></polygon>
-      </svg>
-    </div>
-  `;
-  host.appendChild(m);
+      ${idx===0 ? `
+        <div class="stamp" id="mqTopStamp${idx}"></div>
+        <div class="handle" id="mqTopHandle${idx}">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="1,47 50,3 99,47"></polygon>
+          </svg>
+        </div>` : ''}
 
-  const rEl = m.querySelector('#mqRect');
-  rEl.style.left   = `${offsetLeft}px`;
-  rEl.style.top    = `${offsetTop + topY}px`;
-  rEl.style.width  = `${colWidth}px`;
-  rEl.style.height = `${height}px`;
-  rEl.addEventListener('pointerdown', ev=>startDrag(ev,'move'));
+      ${idx===segs.length-1 ? `
+        <div class="stamp" id="mqBotStamp${idx}"></div>
+        <div class="handle" id="mqBotHandle${idx}">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+            <polygon points="1,3 50,47 99,3"></polygon>
+          </svg>
+        </div>` : ''}
+    `;
+    host.appendChild(m);
 
-  const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
-  const stampH=26;
+    const rEl = m.querySelector('.marqueeRect');
+    rEl.style.left   = `${offsetLeft}px`;
+    rEl.style.top    = `${offsetTop + topY}px`;
+    rEl.style.width  = `${colWidth}px`;
+    rEl.style.height = `${height}px`;
+    rEl.addEventListener('pointerdown', ev=>startDrag(ev,'move', idx));
 
-  const topStamp=m.querySelector('#mqTopStamp');
-  const labelTop = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
-  topStamp.textContent = labelTop;
-  topStamp.style.left = `${offsetLeft + colWidth/2}px`;
-  topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
+    const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
+    const stampH=26;
 
-  const topHandle=m.querySelector('#mqTopHandle');
-  topHandle.style.left  = `${offsetLeft}px`;
-  topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
-  topHandle.style.width = `${colWidth}px`;
-  topHandle.style.height= `${triH}px`;
-  topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top'));
+    if(idx===0){
+      const topStamp=m.querySelector(`#mqTopStamp${idx}`);
+      const labelTop = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
+      topStamp.textContent = labelTop;
+      topStamp.style.left = `${offsetLeft + colWidth/2}px`;
+      topStamp.style.top  = `${offsetTop + topY - (stampH + stampPad)}px`;
 
-  const botStamp=m.querySelector('#mqBotStamp');
-  const labelBot = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
-  botStamp.textContent = labelBot;
-  botStamp.style.left = `${offsetLeft + colWidth/2}px`;
-  botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
+      const topHandle=m.querySelector(`#mqTopHandle${idx}`);
+      topHandle.style.left  = `${offsetLeft}px`;
+      topHandle.style.top   = `${offsetTop + topY - (stampH + stampPad + triH)}px`;
+      topHandle.style.width = `${colWidth}px`;
+      topHandle.style.height= `${triH}px`;
+      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', idx));
+    }
 
-  const botHandle=m.querySelector('#mqBotHandle');
-  botHandle.style.left  = `${offsetLeft}px`;
-  botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
-  botHandle.style.width = `${colWidth}px`;
-  botHandle.style.height= `${triH}px`;
-  botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom'));
+    if(idx===segs.length-1){
+      const botStamp=m.querySelector(`#mqBotStamp${idx}`);
+      const labelBot = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
+      botStamp.textContent = labelBot;
+      botStamp.style.left = `${offsetLeft + colWidth/2}px`;
+      botStamp.style.top  = `${offsetTop + botY + stampPad}px`;
+
+      const botHandle=m.querySelector(`#mqBotHandle${idx}`);
+      botHandle.style.left  = `${offsetLeft}px`;
+      botHandle.style.top   = `${offsetTop + botY + stampPad + stampH}px`;
+      botHandle.style.width = `${colWidth}px`;
+      botHandle.style.height= `${triH}px`;
+      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', idx));
+    }
+  });
 }
 
-/* ---------- Drag (single segment + parent/child clamps) ---------- */
-function yToMinutesRaw(yPx){
-  const y = clamp(yPx, 0, weekGeom.totalH);
-  const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
-  return clamp(ratio * 1440, 0, 1440);
-}
-
-function startDrag(ev, kind){
-  if(!sel) return;
+/* ---------- Drag with parent/child clamp and robust edge detection ---------- */
+function startDrag(ev, kind, segIdx){
+  if(!chain) return;
   dragKind = kind;
+  dragSegIndex = segIdx;
   ev.preventDefault();
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
+  const seg = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx)[segIdx];
   dragStartY = ev.clientY;
-  baseStart = sel.segment.startMin;
-  baseEnd   = sel.segment.endMin;
+  baseStart = seg.startMin;
+  baseEnd   = seg.endMin;
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
     const minGap = 15;
+
+    const segsSorted = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
+    const isParent = segsSorted[segIdx].isParent===true;
 
     if(dragKind==='move'){
       const delta = snap15(deltaMinRaw);
@@ -654,47 +645,51 @@ function startDrag(ev, kind){
         if(delta>0){ newStart = clamp(newEnd - dur, 0, 1440 - dur); }
         else{ newEnd = clamp(newStart + dur, dur, 1440); }
       }
-      sel.segment.startMin = snap15(newStart);
-      sel.segment.endMin   = snap15(newEnd);
+      seg.startMin = snap15(newStart);
+      seg.endMin   = snap15(newEnd);
     } else if(dragKind==='top'){
       const snapped = snap15(baseStart + deltaMinRaw);
-      sel.segment.startMin = clamp(snapped, 0, sel.segment.endMin - minGap);
-      // If we are the CHILD with dir==='prev', clamp by parent's duration
-      if(sel.spilled && !sel.isParent && sel.dir==='prev' && sel.parentTimes){
-        const parentDur = sel.parentTimes.endMin - sel.parentTimes.startMin;
-        sel.segment.startMin = Math.max(sel.segment.startMin, parentDur);
+      seg.startMin = clamp(snapped, 0, seg.endMin - minGap);
+
+      // If this segment is the child via dir==='prev', clamp child's start ≥ parent duration
+      if(!isParent && chain.dir==='prev' && chain.parentTimes){
+        const parentDur = chain.parentTimes.endMin - chain.parentTimes.startMin;
+        seg.startMin = Math.max(seg.startMin, parentDur);
       }
     } else if(dragKind==='bottom'){
       const snapped = snap15(baseEnd + deltaMinRaw);
-      sel.segment.endMin = clamp(snapped, sel.segment.startMin + minGap, 1440);
-      // If we are the CHILD with dir==='next', clamp end ≤ parent.start
-      if(sel.spilled && !sel.isParent && sel.dir==='next' && sel.parentTimes){
-        sel.segment.endMin = Math.min(sel.segment.endMin, sel.parentTimes.startMin);
+      seg.endMin = clamp(snapped, seg.startMin + minGap, 1440);
+
+      // If this segment is the child via dir==='next', clamp child's end ≤ parent.start
+      if(!isParent && chain.dir==='next' && chain.parentTimes){
+        seg.endMin = Math.min(seg.endMin, chain.parentTimes.startMin);
       }
     }
     drawSelection();
   };
 
   const up=async (e)=>{
-    sel.segment.startMin = snap15(sel.segment.startMin);
-    sel.segment.endMin   = snap15(sel.segment.endMin);
+    // snap
+    const s = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx)[segIdx];
+    s.startMin = snap15(s.startMin);
+    s.endMin   = snap15(s.endMin);
     drawSelection();
 
-    // Edge confirm only if not spilled yet
-    if(!sel.spilled){
-      if(dragKind==='top' && sel.segment.startMin===0){
-        const pos = handleViewportPos('top');
+    // Robust edge test: allow within 3 minutes of edge (handles rounding)
+    const nearTop = s.startMin <= 3;
+    const nearBottom = (1440 - s.endMin) <= 3;
+
+    if(chain.segments.length===1){
+      if(dragKind==='top' && nearTop){
+        const pos = handleViewportPos(s,'top');
         showEdgeConfirm('prev', pos.x, pos.y);
-      } else if(dragKind==='bottom' && sel.segment.endMin===1440){
-        const pos = handleViewportPos('bottom');
+      }else if(dragKind==='bottom' && nearBottom){
+        const pos = handleViewportPos(s,'bottom');
         showEdgeConfirm('next', pos.x, pos.y);
       }
     }
 
-    await persistThisWeek({
-      id:sel.id, spilled:sel.spilled, dir:sel.dir, isParent:sel.isParent,
-      segment:{...sel.segment}
-    }).catch(()=>{});
+    await persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
     saveSoon(200);
 
     e.currentTarget.releasePointerCapture(e.pointerId);
@@ -707,8 +702,7 @@ function startDrag(ev, kind){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-function handleViewportPos(which){
-  const seg = sel.segment;
+function handleViewportPos(seg, which){
   const rect=weekGeom.rect;
   const colLeft = weekGeom.colX[seg.dayIdx];
   const colRight= weekGeom.colX[seg.dayIdx+1];
@@ -746,64 +740,73 @@ function showEdgeConfirm(direction, anchorX, anchorY){
 }
 function removeEdgeConfirm(){ document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
 
-/* ---------- Confirm spill (create child in adjacent week/day) ---------- */
+/* ---------- Confirm spill (creates second segment; week carryover fixed) ---------- */
 async function confirmSpill(direction){
-  if(!sel || sel.spilled) return;
+  if(!chain || chain.segments.length!==1) return;
 
-  const parent = { ...sel.segment }; // snapshot
-  const currentWeek = new Date(visibleWeekFirst);
+  const parent = chain.segments[0]; // only segment so far
+  const id = chain.id;
 
   if(direction==='prev'){
-    // If on Sunday, move to previous week and show Saturday child there
     if(parent.dayIdx===0){
-      // write parent in this (current) week
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'prev', isParent:true, segment:{...parent} });
-      // switch to previous week
+      // Sunday → previous week, child on Saturday 23:00–24:00 THERE, and switch view THERE
+      // Persist parent (this week)
+      await persistChainForWeek(visibleWeekFirst, { id, dir:'prev', segments:[{...parent, isParent:true}] });
+
+      // Switch to previous week
       visibleWeekFirst = addDays(visibleWeekFirst, -7);
       repaintWeek();
 
-      // child on Saturday 23:00–24:00 in previous week
-      sel = {
-        id: parent.id || sel.id,
-        spilled:true, dir:'prev', isParent:false,
-        segment:{ dayIdx:6, startMin:1380, endMin:1440 },
+      // Create child in that previous week
+      chain = {
+        id, dir:'prev',
+        segments:[{ dayIdx:6, startMin:1380, endMin:1440, isParent:false }],
         parentTimes:{ startMin: parent.startMin, endMin: parent.endMin }
       };
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'prev', isParent:false, segment:{...sel.segment} });
+      await persistChainForWeek(visibleWeekFirst, chain);
       drawSelection();
       return;
     } else {
-      // same week spill to previous day
-      sel.spilled=true; sel.dir='prev';
-      // child will live in previous day (same week)
-      sel.isParent=true; // we remain parent in this week
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'prev', isParent:true, segment:{...sel.segment} });
-      // switch view to same week’s previous day is not needed; user keeps editing here
-      // But per your spec, since it’s not crossing week, we keep view and user can navigate if desired.
+      // Within same week: add child on previous day 23:00–24:00
+      chain.dir = 'prev';
+      chain.segments = [
+        { dayIdx:parent.dayIdx-1, startMin:1380, endMin:1440, isParent:false },
+        { ...parent, isParent:true }
+      ];
+      chain.parentTimes = { startMin: parent.startMin, endMin: parent.endMin };
+      await persistChainForWeek(visibleWeekFirst, chain);
+      drawSelection();
+      return;
     }
   } else { // 'next'
-    // If on Saturday, switch to next week and show Sunday child there
     if(parent.dayIdx===6){
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'next', isParent:true, segment:{...parent} });
+      // Saturday → next week, child on Sunday 00:00–01:00 THERE, and switch view THERE
+      await persistChainForWeek(visibleWeekFirst, { id, dir:'next', segments:[{...parent, isParent:true}] });
+
       visibleWeekFirst = addDays(visibleWeekFirst, 7);
       repaintWeek();
 
-      sel = {
-        id: parent.id || sel.id,
-        spilled:true, dir:'next', isParent:false,
-        segment:{ dayIdx:0, startMin:0, endMin:60 },
+      chain = {
+        id, dir:'next',
+        segments:[{ dayIdx:0, startMin:0, endMin:60, isParent:false }],
         parentTimes:{ startMin: parent.startMin, endMin: parent.endMin }
       };
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'next', isParent:false, segment:{...sel.segment} });
+      await persistChainForWeek(visibleWeekFirst, chain);
       drawSelection();
       return;
     } else {
-      sel.spilled=true; sel.dir='next';
-      sel.isParent=true;
-      await persistThisWeek({ id:sel.id, spilled:true, dir:'next', isParent:true, segment:{...sel.segment} });
+      // Within same week: add child on next day 00:00–01:00
+      chain.dir = 'next';
+      chain.segments = [
+        { ...parent, isParent:true },
+        { dayIdx:parent.dayIdx+1, startMin:0, endMin:60, isParent:false }
+      ];
+      chain.parentTimes = { startMin: parent.startMin, endMin: parent.endMin };
+      await persistChainForWeek(visibleWeekFirst, chain);
+      drawSelection();
+      return;
     }
   }
-  drawSelection();
 }
 
 /* ---------- Month & Day Views (unchanged UI) ---------- */
@@ -851,7 +854,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r30</div>
+        <div class="watermark">Chrono build r31</div>
       </div>
     </div>
   `;
@@ -905,3 +908,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
