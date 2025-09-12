@@ -187,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r45 — Sunday-first, one-handle-per-side, stable spillover');
+console.info('Chrono build r46 — single-triangle-only adjustments');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -221,7 +221,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* ------------------- Storage ------------------- */
-const DB_NAME='chronoDB', DB_VERSION=21;
+const DB_NAME='chronoDB', DB_VERSION=22;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -265,7 +265,7 @@ chain = {
   dir: 'prev'|'next'|null
 }
 */
-const CHAIN_KEY='selChain_v7';
+const CHAIN_KEY='selChain_v8';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -335,10 +335,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r45')){
+    if(!localStorage.getItem('hint_week_edit_r46')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r45','1');
+      localStorage.setItem('hint_week_edit_r46','1');
     }
   }catch{}
 }
@@ -490,40 +490,22 @@ function boundsFromSeg(seg){
   return {offsetLeft, offsetTop, colWidth, topY, botY, height};
 }
 
-function whichSingleHandleFor(segName){
-  // When only one segment is visible on this week, show exactly ONE handle:
-  // dir='next'  -> parent-week: top handle (start), child-week: bottom handle (end)
-  // dir='prev'  -> parent-week: bottom handle (end), child-week: top handle (start)
-  if(!chain || !chain.dir) return 'both'; // no spill -> both ends available within same week
-  const seg = (segName==='parent'? chain.parent: chain.child);
-  const isParentWeek = seg.weekSt === getVisibleWeekStamp() && segName==='parent';
-  const isChildWeek  = seg.weekSt === getVisibleWeekStamp() && segName==='child';
-
-  if(chain.child && !segOnThisWeek(segName==='parent'? chain.child: chain.parent)){
-    if(chain.dir==='next'){
-      if(isParentWeek) return 'top';
-      if(isChildWeek)  return 'bottom';
-    }else if(chain.dir==='prev'){
-      if(isParentWeek) return 'bottom';
-      if(isChildWeek)  return 'top';
-    }
-  }
-  return 'both-if-edges'; // both may exist, but we still only render outer ends when both visible
-}
-
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
   if(!chain) return;
 
-  const bothVisible = segOnThisWeek(chain.parent) && segOnThisWeek(chain.child);
+  const parentHere = segOnThisWeek(chain.parent);
+  const childHere  = segOnThisWeek(chain.child);
+
+  if(!parentHere && !childHere) return;
 
   const segs=[];
-  if(segOnThisWeek(chain.parent)) segs.push({seg:chain.parent, name:'parent'});
-  if(segOnThisWeek(chain.child))  segs.push({seg:chain.child,  name:'child'});
-  if(segs.length===0) return;
-
+  if(parentHere) segs.push({seg:chain.parent, name:'parent'});
+  if(childHere)  segs.push({seg:chain.child,  name:'child'});
   segs.sort((a,b)=>a.seg.dayIdx-b.seg.dayIdx);
+
+  const bothVisible = parentHere && childHere;
 
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
@@ -534,16 +516,21 @@ function drawSelection(){
 
     // Decide which handles to render
     let renderTop=false, renderBottom=false;
-    if(bothVisible){
-      // Only render outer extremities
+    if(!chain.child){
+      // single segment: both handles + body can move
+      renderTop = renderBottom = true;
+    }else if(bothVisible){
+      // two segments same chart: only the outer extremities adjustable
       renderTop = (idx===0);
       renderBottom = (idx===segs.length-1);
     }else{
-      const which = whichSingleHandleFor(name);
-      if(which==='top') renderTop=true;
-      else if(which==='bottom') renderBottom=true;
-      else if(which==='both') renderTop=renderBottom=true;
-      else if(which==='both-if-edges'){ renderTop=true; renderBottom=true; }
+      // only one of the segments is visible on this chart
+      if(chain.dir==='next'){
+        // parent on parent-week => top only; child on child-week => bottom only
+        if(name==='parent') renderTop=true; else renderBottom=true;
+      }else if(chain.dir==='prev'){
+        if(name==='parent') renderBottom=true; else renderTop=true;
+      }
     }
 
     m.innerHTML=`
@@ -566,7 +553,11 @@ function drawSelection(){
     rectEl.style.top    = `${b.offsetTop + b.topY}px`;
     rectEl.style.width  = `${b.colWidth}px`;
     rectEl.style.height = `${b.height}px`;
-    rectEl.addEventListener('pointerdown', ev=>startDrag(ev,'move', name));
+
+    // IMPORTANT: when spilled (has child), disable body move so only ONE triangle adjusts at a time
+    if(!chain.child){
+      rectEl.addEventListener('pointerdown', ev=>startDrag(ev,'move', name));
+    } // else: no 'move' handler attached
 
     const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
     const stampH=26;
@@ -621,15 +612,16 @@ function enforceCaps(seg, which){
   if(myDur > maxMyDur){
     if(dragKind==='top'){ seg.startMin = seg.endMin - maxMyDur; }
     else if(dragKind==='bottom'){ seg.endMin = seg.startMin + maxMyDur; }
-    else { const dur=myDur; seg.startMin = clamp(seg.startMin, 0, 1440 - dur); seg.endMin = seg.startMin + dur; }
+    else { // 'move' only allowed when no child, but guard anyway
+      const dur=myDur; seg.startMin = clamp(seg.startMin, 0, 1440 - dur); seg.endMin = seg.startMin + dur;
+    }
   }
 
-  // Direction-aware caps: Sunday-first
+  // Direction-aware boundaries to keep each side independent while respecting shared budget
   if(chain.dir==='next'){
-    // parent earlier day (ends ≤ 1440 - childDur); child later day (start≥0 fixed at 0, end ≤ remaining)
     if(which==='child'){
       const parentDur = totalDur(chain.parent);
-      const childMaxEnd = 1440 - parentDur; // child starts at 0
+      const childMaxEnd = 1440 - parentDur;
       seg.endMin = Math.min(seg.endMin, childMaxEnd);
       seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
     }else{
@@ -637,14 +629,13 @@ function enforceCaps(seg, which){
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
     }
   }else if(chain.dir==='prev'){
-    // child earlier day (ends at 1440, start ≥ 1440 - parentDur); parent later day (starts at 0, end ≤ 1440 - childDur)
     if(which==='parent'){
       const childDur = totalDur(chain.child);
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
       seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
     }else{
       const parentDur = totalDur(chain.parent||{startMin:0,endMin:0});
-      const minStart = 1440 - parentDur; // child end fixed at 1440
+      const minStart = 1440 - parentDur;
       seg.startMin = Math.max(seg.startMin, minStart);
       seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
     }
@@ -672,6 +663,7 @@ function startDrag(ev, kind, which){
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
     if(dragKind==='move'){
+      // Only possible when no child (rect not binded when spilled), but keep guard:
       const delta = snap15(deltaMinRaw);
       const dur = baseEnd - baseStart;
       let newStart = clamp(baseStart + delta, 0, 1440 - dur);
@@ -832,7 +824,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r45</div>
+        <div class="watermark">Chrono build r46</div>
       </div>
     </div>
   `;
