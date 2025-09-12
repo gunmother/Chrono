@@ -90,6 +90,7 @@
   /* Month */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
+  .month-dow span{ text-align:center }
   .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
   .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
@@ -120,7 +121,7 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm ---------- */
+  /* ---------- Edge confirm (clickable, no tap-through) ---------- */
   .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
@@ -186,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r42');
+console.info('Chrono build r43');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -220,7 +221,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* ------------------- Storage ------------------- */
-const DB_NAME='chronoDB', DB_VERSION=18;
+const DB_NAME='chronoDB', DB_VERSION=19;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -259,12 +260,12 @@ async function storageGet(k){
 /*
 chain = {
   id: number,
-  parent: { weekSt:number, dayIdx:number, startMin:number, endMin:number },
-  child:  { weekSt:number, dayIdx:number, startMin:number, endMin:number } | null,
-  dir: 'prev'|'next'|null
+  parent: { weekSt:number, dayIdx:number, startMin:number, endMin:number },   // main segment (origin day)
+  child:  { weekSt:number, dayIdx:number, startMin:number, endMin:number } | null, // spill segment
+  dir: 'prev'|'next'|null                                                     // spill direction from parent
 }
 */
-const CHAIN_KEY='selChain_v4';
+const CHAIN_KEY='selChain_v5';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -334,10 +335,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r42')){
+    if(!localStorage.getItem('hint_week_edit_r43')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r42','1');
+      localStorage.setItem('hint_week_edit_r43','1');
     }
   }catch{}
 }
@@ -575,6 +576,7 @@ function enforceCaps(seg, which){
     return;
   }
 
+  // Combined duration limited to 24h
   const myDur = totalDur(seg);
   const otherDur = totalDur(other);
   const maxMyDur = Math.max(0, 1440 - otherDur);
@@ -584,12 +586,31 @@ function enforceCaps(seg, which){
     else { const dur=myDur; seg.startMin = clamp(seg.startMin, 0, 1440 - dur); seg.endMin = seg.startMin + dur; }
   }
 
+  // Directional caps at midnight boundaries (no auto-adjusting the other piece)
   if(chain.dir==='next'){
-    if(which==='child'){ seg.endMin = Math.min(seg.endMin, chain.parent.startMin); seg.startMin = Math.min(seg.startMin, seg.endMin - minGap); }
-    else{ const childDur = totalDur(chain.child); seg.endMin = Math.min(seg.endMin, seg.startMin + (1440 - childDur)); }
+    // parent: ends at 1440; child: starts at 0
+    if(which==='child'){
+      // child cannot exceed remaining hours left by parent
+      const parentDur = totalDur(chain.parent);
+      const childMaxEnd = 1440 - parentDur; // with start=0, end <= this
+      seg.endMin = Math.min(seg.endMin, childMaxEnd);
+      seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+    }else{
+      const childDur = totalDur(chain.child||{startMin:0,endMin:0});
+      seg.endMin = Math.min(seg.endMin, 1440 - childDur);
+    }
   }else if(chain.dir==='prev'){
-    if(which==='parent'){ const childDur = totalDur(chain.child); seg.endMin = Math.min(seg.endMin, 1440 - childDur); seg.startMin = Math.min(seg.startMin, seg.endMin - minGap); }
-    else{ const parentDur = totalDur(chain.parent); seg.startMin = Math.max(seg.startMin, 1440 - parentDur); seg.endMin = Math.max(seg.endMin, seg.startMin + minGap); }
+    // child lives on previous day ending at 1440; parent starts at 0
+    if(which==='parent'){
+      const childDur = totalDur(chain.child);
+      seg.endMin = Math.min(seg.endMin, 1440 - childDur);
+      seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+    }else{
+      const parentDur = totalDur(chain.parent||{startMin:0,endMin:0});
+      const childMinStart = 1440 - parentDur; // with end=1440, start >= this
+      seg.startMin = Math.max(seg.startMin, childMinStart);
+      seg.endMin = Math.max(seg.endMin, seg.startMin + minGap);
+    }
   }
 
   seg.startMin = clamp(seg.startMin, 0, 1425);
@@ -683,7 +704,6 @@ function showEdgeConfirm(direction, anchor){
 
   box.addEventListener('pointerdown', ev=>ev.stopPropagation());
   box.addEventListener('click', ev=>ev.stopPropagation());
-
   box.addEventListener('click', async (e)=>{
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
@@ -696,21 +716,40 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
+/* Spillover creation: same-week if possible; week-hop only at borders */
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
-  const parent = chain.parent;
-  const targetSt = parent.weekSt + (direction==='prev' ? -7*DAY_MS : 7*DAY_MS);
+  const p = chain.parent;
+  let childWeek = p.weekSt;
+  let childDay  = null;
 
-  chain.dir = direction;
-  chain.child = (direction==='prev')
-    ? { weekSt: targetSt, dayIdx:6, startMin:1380, endMin:1440 }
-    : { weekSt: targetSt, dayIdx:0,  startMin:0,    endMin:60   };
+  if(direction==='next'){
+    if(p.dayIdx < 6){               // same chart (Mon..Sat spilling to next day)
+      childDay = p.dayIdx + 1;
+    }else{                           // Sunday spilling to next week
+      childWeek = p.weekSt + 7*DAY_MS;
+      childDay  = 0;
+      visibleWeekFirst = stampToDate(childWeek); // navigate exactly one week forward
+      repaintWeek();
+    }
+    chain.dir = 'next';
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:60 };
+  }else{ // 'prev'
+    if(p.dayIdx > 0){               // same chart (Tue..Sun spilling to previous day)
+      childDay = p.dayIdx - 1;
+    }else{                           // Monday (dayIdx 0) spilling to previous week’s Sunday
+      childWeek = p.weekSt - 7*DAY_MS;
+      childDay  = 6;
+      visibleWeekFirst = stampToDate(childWeek); // navigate exactly one week back
+      repaintWeek();
+    }
+    chain.dir = 'prev';
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:1380, endMin:1440 };
+  }
 
   await saveChain(chain);
-
-  visibleWeekFirst = stampToDate(targetSt);
-  repaintWeek(); drawSelection();
+  drawSelection();
 }
 
 /* ------------------- Month & Day Views (unchanged) ------------------- */
@@ -756,7 +795,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r42</div>
+        <div class="watermark">Chrono build r43</div>
       </div>
     </div>
   `;
