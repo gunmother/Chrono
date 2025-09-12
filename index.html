@@ -100,7 +100,6 @@
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
   /* ---------- Selection marquee component ---------- */
-  /* NOTE: fixed overlay so stamps/handles can extend beyond the card boundaries */
   .selHost{
     position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000;
   }
@@ -111,7 +110,7 @@
     border:var(--marquee-border) solid #fff;
     box-shadow: var(--marquee-shadow);
     border-radius:8px;
-    pointer-events:auto;   /* allow dragging whole box */
+    pointer-events:auto;
     cursor:grab;
     touch-action:none;
   }
@@ -134,7 +133,6 @@
     z-index:2;
   }
 
-  /* SVG handles with visible border */
   .handle{
     position:absolute;
     left:0;
@@ -143,7 +141,7 @@
     pointer-events:auto;
     cursor:ns-resize;
     z-index:3;
-    touch-action:none;     /* prevent scroll while dragging */
+    touch-action:none;
   }
   .handle svg{ display:block; width:100%; height:100%; }
   .handle polygon{
@@ -153,7 +151,6 @@
     stroke-linejoin:round;
   }
 
-  /* Hint */
   .hint{
     position:absolute; left:50%; top:calc(var(--dow-h) + 8px);
     transform:translateX(-50%);
@@ -163,6 +160,25 @@
     z-index:50; pointer-events:none;
   }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Spillover confirm (overlay) ---------- */
+  .confirmOverlay{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.25); backdrop-filter:saturate(120%) blur(2px);
+    z-index:2000; pointer-events:auto;
+  }
+  .confirmBox{
+    background:#fff; color:#111; border:1px solid var(--border); border-radius:12px;
+    box-shadow:0 10px 24px rgba(0,0,0,.22);
+    width:min(92vw, 360px); padding:14px; text-align:center; font-weight:800;
+  }
+  .confirmText{ font-size:14px; margin-bottom:10px; }
+  .confirmBtns{ display:flex; gap:12px; justify-content:center; }
+  .btnMini{
+    min-width:64px; height:40px; padding:0 12px; border-radius:10px;
+    border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
+  }
+  .btnMini.ok{ background:#e6e6e6; }
 </style>
 </head>
 <body>
@@ -219,7 +235,7 @@
   </main>
 
 <script>
-console.info('Chrono build r26');
+console.info('Chrono build r27');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -643,6 +659,13 @@ function startDrag(ev, kind){
     }
     updateSelectionVisual();
 
+    // === Spillover confirm logic (only thing added) ===
+    if(dragKind==='top' && selState.startMin===0){
+      showSpillConfirm('prev'); // reached top → previous day
+    } else if(dragKind==='bottom' && selState.endMin===1440){
+      showSpillConfirm('next'); // reached bottom → next day
+    }
+
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -651,6 +674,63 @@ function startDrag(ev, kind){
 
   window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
+}
+
+/* ---------- Spillover confirmation ---------- */
+function showSpillConfirm(direction){
+  // Build lightweight modal
+  const overlay=document.createElement('div');
+  overlay.className='confirmOverlay';
+  overlay.innerHTML=`
+    <div class="confirmBox" role="dialog" aria-modal="true">
+      <div class="confirmText">
+        Spill into ${direction==='prev' ? 'previous day' : 'next day'}?
+      </div>
+      <div class="confirmBtns">
+        <button class="btnMini" data-action="cancel" aria-label="Cancel">✕</button>
+        <button class="btnMini ok" data-action="ok" aria-label="Confirm">✓</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close=()=>{ overlay.remove(); };
+
+  overlay.addEventListener('click', (e)=>{
+    const btn=e.target.closest('button');
+    if(!btn) return;
+    const act=btn.dataset.action;
+    if(act==='cancel'){ close(); return; }
+    if(act==='ok'){
+      // Move one handle into adjacent day at 23:00 (prev) or 00:00 (next)
+      if(direction==='prev'){
+        if(selState.dayIdx===0){
+          // Sunday → previous week's Saturday near 23:00
+          visibleWeekFirst = addDays(visibleWeekFirst, -7);
+          repaintWeek();
+          selState = { dayIdx:6, startMin:1380, endMin:1440 }; // 23:00–24:00
+        }else{
+          selState.dayIdx -= 1;
+          selState.startMin = 1380; // 23:00
+          selState.endMin   = 1440; // 24:00
+        }
+      }else{ // 'next'
+        if(selState.dayIdx===6){
+          // Saturday → next week's Sunday near 00:00
+          visibleWeekFirst = addDays(visibleWeekFirst, 7);
+          repaintWeek();
+          selState = { dayIdx:0, startMin:0, endMin:60 }; // 00:00–01:00
+        }else{
+          selState.dayIdx += 1;
+          selState.startMin = 0;   // 00:00
+          selState.endMin   = 60;  // 01:00
+        }
+      }
+      // Cap consecutive selection <= 24h (current single segment always ≤ 24h)
+      updateSelectionVisual();
+      close();
+    }
+  }, {passive:true});
 }
 
 /* ---------- Month & Day Views (unchanged UI) ---------- */
@@ -698,7 +778,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r26</div>
+        <div class="watermark">Chrono build r27</div>
       </div>
     </div>
   `;
@@ -739,7 +819,7 @@ function render(){
 init();
 </script>
 
-<!-- Service worker registration -->
+<!-- Service worker registration (unchanged) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -752,4 +832,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-
