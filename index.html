@@ -188,7 +188,7 @@
   </main>
 
 <script>
-console.info('Chrono build r33');
+console.info('Chrono build r35');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -211,6 +211,7 @@ function toHHMM(min){
   return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
 }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
+function totalDur(a){ return (a.endMin - a.startMin); }
 
 /* Width sync */
 new ResizeObserver(()=> {
@@ -219,7 +220,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* Storage */
-const DB_NAME='chronoDB', DB_VERSION=11;
+const DB_NAME='chronoDB', DB_VERSION=12;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -279,11 +280,24 @@ async function persistChainForWeek(weekDate, record){
 async function readWeekRecord(weekDate){
   return await storageGet(weekKey(getWeekISO(weekDate)));
 }
+async function readWeekRecByISO(weekISO){ return storageGet(weekKey(weekISO)); }
+async function writeWeekRecByISO(weekISO, rec){ return storageSet(weekKey(weekISO), rec||undefined); }
+async function clearChainEverywhere(curId){
+  const curISO = getWeekISO(visibleWeekFirst);
+  const prevISO = toISO(addDays(weekStart(new Date(curISO)), -7));
+  const nextISO = toISO(addDays(weekStart(new Date(curISO)),  7));
+  const cur = await readWeekRecByISO(curISO);
+  const pv  = await readWeekRecByISO(prevISO);
+  const nx  = await readWeekRecByISO(nextISO);
+  if(cur && (!curId || cur.id===curId)) await writeWeekRecByISO(curISO, undefined);
+  if(pv  && (!curId || pv.id===curId))  await writeWeekRecByISO(prevISO, undefined);
+  if(nx  && (!curId || nx.id===curId))  await writeWeekRecByISO(nextISO, undefined);
+}
 
 /* In-memory selection for CURRENT week only */
 let chain = null;
 
-/* Edge intent (so ✓ works reliably) */
+/* Edge intent (so ✓ always works) */
 let pendingEdge = null; // {direction, parentSnapshot, parentWeekISO}
 
 function snapshotState(){ return { activeView, activeDayISO }; }
@@ -477,7 +491,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Load chain for current week ---------- */
+/* ---------- Loading current week's chain ---------- */
 async function loadChainForCurrentWeek(){
   const rec = await readWeekRecord(visibleWeekFirst);
   if(!rec){ chain=null; drawSelection(); return; }
@@ -485,8 +499,8 @@ async function loadChainForCurrentWeek(){
   drawSelection();
 }
 
-/* ---------- Tap to create new 1h block ---------- */
-function onWeekGridTap(e){
+/* ---------- Tap to create new 1h block (single selector invariant) ---------- */
+async function onWeekGridTap(e){
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
   if(!weekGeom) weekGeom = computeGeometry(grid,7);
@@ -502,8 +516,9 @@ function onWeekGridTap(e){
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
 
+  await clearChainEverywhere(chain?.id); // kill any existing chain in adjacent weeks
   chain = { id: Date.now(), dir:null, segments:[{ dayIdx, startMin, endMin, isParent:true }] };
-  persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
+  await persistChainForWeek(visibleWeekFirst, chain);
 
   host.innerHTML='';
   drawSelection();
@@ -596,16 +611,16 @@ function drawSelection(){
   });
 }
 
-/* ---------- Drag with child-only clamp & edge intent ---------- */
+/* ---------- Drag with strict 24h cap (no auto-adjust of the other segment) ---------- */
 function startDrag(ev, kind, segIdx){
   if(!chain) return;
   const segsSorted = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
   const seg = segsSorted[segIdx];
+  const other = segsSorted.length===2 ? segsSorted[1-segIdx] : null;
 
   dragKind = kind;
   dragSegIndex = segIdx;
-  ev.preventDefault();
-  ev.stopPropagation();
+  ev.preventDefault(); ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
   const isParent = !!seg.isParent;
@@ -613,6 +628,74 @@ function startDrag(ev, kind, segIdx){
   dragStartY = ev.clientY;
   baseStart = seg.startMin;
   baseEnd   = seg.endMin;
+
+  const applyCapAndRules = ()=>{
+    const minGap=15;
+
+    // Cap total duration to 24h relative to the other end (or parentTimes when editing child week)
+    const hasOther = !!other;
+    const parentTimes = chain.parentTimes || null;
+
+    const otherStart = hasOther ? other.startMin : (parentTimes? parentTimes.startMin : null);
+    const otherEnd   = hasOther ? other.endMin   : (parentTimes? parentTimes.endMin   : null);
+    const otherDur   = (otherStart!==null && otherEnd!==null) ? (otherEnd - otherStart) : 0;
+    const myDur      = totalDur(seg);
+    const maxMyDur   = Math.max(0, 1440 - otherDur);
+
+    if(myDur > maxMyDur){
+      if(dragKind==='top'){
+        seg.startMin = seg.endMin - maxMyDur;
+      }else if(dragKind==='bottom'){
+        seg.endMin = seg.startMin + maxMyDur;
+      }else{
+        // move: keep duration; clamp inside allowable window
+        const dur=myDur;
+        let low = 0, high = 1440 - dur;
+        if(chain.dir==='next' && !isParent && (otherStart!==null)) high = Math.min(high, otherStart - dur);
+        if(chain.dir==='prev' &&  isParent && (otherDur>0))        high = Math.min(high, 1440 - otherDur - dur);
+        seg.startMin = clamp(seg.startMin, low, high);
+        seg.endMin   = seg.startMin + dur;
+      }
+    }
+
+    // Directional adjacency constraints (no crossing)
+    if(other){
+      if(chain.dir==='next'){
+        if(!isParent){ // child (next day) cannot end past parent's start
+          seg.endMin = Math.min(seg.endMin, other.startMin);
+          seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+        }else{         // parent cannot start earlier than child duration
+          const childDur = totalDur(other);
+          seg.startMin = Math.max(seg.startMin, childDur);
+          seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
+        }
+      }else if(chain.dir==='prev'){
+        if(isParent){ // parent end cannot exceed 1440 - childDur
+          const childDur = totalDur(other);
+          seg.endMin = Math.min(seg.endMin, 1440 - childDur);
+          seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
+        }else{        // child (previous day) cannot start before 1440 - parentDur
+          const parentDur = totalDur(other);
+          seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
+          seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
+        }
+      }
+    }else if(parentTimes){
+      // Editing child week (only child segment exists here)
+      if(chain.dir==='next'){
+        seg.endMin = Math.min(seg.endMin, parentTimes.startMin);
+        seg.startMin = Math.max(seg.startMin, seg.endMin - (1440 - (parentTimes.endMin - parentTimes.startMin)));
+      }else if(chain.dir==='prev'){
+        const parentDur = parentTimes.endMin - parentTimes.startMin;
+        seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
+        seg.endMin   = Math.min(seg.endMin, 1440);
+      }
+    }
+
+    // Bounds
+    seg.startMin = clamp(seg.startMin, 0, 1425);
+    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
+  };
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
@@ -633,19 +716,14 @@ function startDrag(ev, kind, segIdx){
     } else if(dragKind==='top'){
       const snapped = snap15(baseStart + deltaMinRaw);
       seg.startMin = clamp(snapped, 0, seg.endMin - minGap);
-      if(!isParent && chain.dir==='prev' && chain.parentTimes){
-        const parentDur = chain.parentTimes.endMin - chain.parentTimes.startMin;
-        seg.startMin = Math.max(seg.startMin, parentDur);
-      }
     } else if(dragKind==='bottom'){
       const snapped = snap15(baseEnd + deltaMinRaw);
       seg.endMin = clamp(snapped, seg.startMin + minGap, 1440);
-      if(!isParent && chain.dir==='next' && chain.parentTimes){
-        seg.endMin = Math.min(seg.endMin, chain.parentTimes.startMin);
-      }
     }
 
-    // live edge hint
+    applyCapAndRules();
+
+    // show edge prompt only when single-segment chain reaches edge
     if(chain.segments.length===1){
       if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
       else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
@@ -657,13 +735,10 @@ function startDrag(ev, kind, segIdx){
   const up=async (e)=>{
     seg.startMin = snap15(seg.startMin);
     seg.endMin   = snap15(seg.endMin);
-    drawSelection();
-
     if(chain.segments.length===1){
       if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
       else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
     }
-
     await persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
     saveSoon(200);
 
@@ -724,7 +799,7 @@ function showEdgeConfirm(direction, anchorX, anchorY){
 }
 function removeEdgeConfirm(){ document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
 
-/* ---------- Confirm spill ---------- */
+/* ---------- Confirm spill (dedup across weeks; single-chain invariant) ---------- */
 async function confirmSpillFromPending(){
   if(!pendingEdge || !chain || chain.segments.length!==1) { pendingEdge=null; return; }
 
@@ -732,64 +807,31 @@ async function confirmSpillFromPending(){
   const id = chain.id;
   const parent = parentSnapshot;
 
-  // Ensure we're on the parent week when writing parent side
-  const curWeekISO = getWeekISO(visibleWeekFirst);
-  if(curWeekISO !== parentWeekISO){
-    // write child first if user navigated oddly
+  // Persist parent in its week (no duplicates)
+  await writeWeekRecByISO(parentWeekISO, { id, dir:direction, segments:[{...parent, isParent:true}] });
+
+  // Child lives in adjacent week only for Sun↑Sat (prev) or Sat↓Sun (next)
+  const parentWeek = weekStart(new Date(parentWeekISO));
+  const targetISO = toISO(addDays(parentWeek, direction==='prev'? -7 : 7));
+  const existingChild = await readWeekRecByISO(targetISO);
+  const childSeg = (direction==='prev')
+      ? { dayIdx:6, startMin:1380, endMin:1440, isParent:false }
+      : { dayIdx:0, startMin:0, endMin:60,   isParent:false };
+
+  const childRec = { id, dir:direction, segments:[childSeg], parentTimes:{ startMin: parent.startMin, endMin: parent.endMin } };
+  if(!existingChild || existingChild.id!==id){
+    await writeWeekRecByISO(targetISO, childRec);
+  }else{
+    await writeWeekRecByISO(targetISO, { ...existingChild, dir:direction, segments:[childSeg], parentTimes: childRec.parentTimes });
   }
 
-  if(direction==='prev'){
-    if(parent.dayIdx===0){
-      // Persist parent in current (Sunday) week
-      await persistChainForWeek(weekStart(new Date(parentWeekISO)), { id, dir:'prev', segments:[{...parent, isParent:true}] });
+  // Navigate to child week
+  visibleWeekFirst = weekStart(new Date(targetISO));
+  repaintWeek();
+  chain = childRec;
+  await persistChainForWeek(visibleWeekFirst, chain);
+  drawSelection();
 
-      // Switch to previous week, create child on Saturday 23:00–24:00
-      visibleWeekFirst = addDays(weekStart(new Date(parentWeekISO)), -7);
-      repaintWeek();
-
-      chain = {
-        id, dir:'prev',
-        segments:[{ dayIdx:6, startMin:1380, endMin:1440, isParent:false }],
-        parentTimes:{ startMin: parent.startMin, endMin: parent.endMin }
-      };
-      await persistChainForWeek(visibleWeekFirst, chain);
-      drawSelection();
-    } else {
-      // Same week child on previous day
-      chain.dir = 'prev';
-      chain.segments = [
-        { dayIdx:parent.dayIdx-1, startMin:1380, endMin:1440, isParent:false },
-        { ...parent, isParent:true }
-      ];
-      chain.parentTimes = { startMin: parent.startMin, endMin: parent.endMin };
-      await persistChainForWeek(visibleWeekFirst, chain);
-      drawSelection();
-    }
-  } else { // next
-    if(parent.dayIdx===6){
-      await persistChainForWeek(weekStart(new Date(parentWeekISO)), { id, dir:'next', segments:[{...parent, isParent:true}] });
-
-      visibleWeekFirst = addDays(weekStart(new Date(parentWeekISO)), 7);
-      repaintWeek();
-
-      chain = {
-        id, dir:'next',
-        segments:[{ dayIdx:0, startMin:0, endMin:60, isParent:false }],
-        parentTimes:{ startMin: parent.startMin, endMin: parent.endMin }
-      };
-      await persistChainForWeek(visibleWeekFirst, chain);
-      drawSelection();
-    } else {
-      chain.dir = 'next';
-      chain.segments = [
-        { ...parent, isParent:true },
-        { dayIdx:parent.dayIdx+1, startMin:0, endMin:60, isParent:false }
-      ];
-      chain.parentTimes = { startMin: parent.startMin, endMin: parent.endMin };
-      await persistChainForWeek(visibleWeekFirst, chain);
-      drawSelection();
-    }
-  }
   pendingEdge=null;
 }
 
@@ -838,7 +880,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r33</div>
+        <div class="watermark">Chrono build r35</div>
       </div>
     </div>
   `;
