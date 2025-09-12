@@ -121,20 +121,15 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm (inline; no dimming) ---------- */
-  .edgeVeil{
-    position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto;
-  }
+  /* ---------- Edge confirm (clickable, no tap-through) ---------- */
+  .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
     box-shadow:0 10px 24px rgba(0,0,0,.22); padding:8px 10px; z-index:1501; pointer-events:auto;
-    font-weight:800; font-size:12px; display:grid; gap:6px; place-items:center; min-width:160px;
-    touch-action:none;
+    font-weight:800; font-size:12px; display:grid; gap:6px; place-items:center; min-width:160px; touch-action:none;
   }
   .edgeRow{ display:flex; gap:12px; }
-  .edgeBtn{
-    min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer;
-  }
+  .edgeBtn{ min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .edgeBtn.ok{ background:#e6e6e6; }
 </style>
 </head>
@@ -192,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r38');
+console.info('Chrono build r39');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -224,7 +219,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* Storage */
-const DB_NAME='chronoDB', DB_VERSION=14;
+const DB_NAME='chronoDB', DB_VERSION=15;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -252,7 +247,7 @@ async function storageSet(k,v){
     const tx=db.transaction('kv','readwrite');
     const store=tx.objectStore('kv');
     if(v===undefined) store.delete(k); else store.put({k,v});
-    tx.oncomplete=()=>res(true); tx.onerror()=>rej(tx.error);
+    tx.oncomplete=()=>res(true); tx.onerror = ()=>rej(tx.error);
   });
 }
 async function storageGet(k){
@@ -375,10 +370,10 @@ function buildWeekView(){
 
   loadChainForCurrentWeek().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_v9')){
+    if(!localStorage.getItem('hint_week_edit_v10')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_v9','1');
+      localStorage.setItem('hint_week_edit_v10','1');
     }
   }catch{}
 }
@@ -645,14 +640,12 @@ function startDrag(ev, kind, segIdx){
     const otherEnd   = hasOther ? other.endMin   : (parentTimes? parentTimes.endMin   : null);
     const otherDur   = (otherStart!==null && otherEnd!==null) ? (otherEnd - otherStart) : 0;
     const myDur      = totalDur(seg);
-    const maxMyDur   = Math.max(0, 1440 - otherDur);
+    const maxMyDur   = Math.max(0, 1440 - otherDur); // total across both <= 1440
 
     if(myDur > maxMyDur){
-      if(dragKind==='top'){
-        seg.startMin = seg.endMin - maxMyDur;
-      }else if(dragKind==='bottom'){
-        seg.endMin = seg.startMin + maxMyDur;
-      }else{
+      if(dragKind==='top'){ seg.startMin = seg.endMin - maxMyDur; }
+      else if(dragKind==='bottom'){ seg.endMin = seg.startMin + maxMyDur; }
+      else{
         const dur=myDur;
         let low = 0, high = 1440 - dur;
         if(chain.dir==='next' && !isParent && (otherStart!==null)) high = Math.min(high, otherStart - dur);
@@ -662,29 +655,29 @@ function startDrag(ev, kind, segIdx){
       }
     }
 
-    // Directional adjacency constraints (no crossing)
+    // Directional adjacency constraints (no crossing; child cannot intrude past parent)
     if(other){
       if(chain.dir==='next'){
-        if(!isParent){ // child cannot end past parent's start
+        if(!isParent){ // child (next week) cannot end past parent's start (this week)
           seg.endMin = Math.min(seg.endMin, other.startMin);
           seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{         // parent cannot exceed 1440 - childDur
+        }else{         // parent cap is 1440 - childDur
           const childDur = totalDur(other);
           seg.endMin = Math.min(seg.endMin, seg.startMin + (1440 - childDur));
         }
       }else if(chain.dir==='prev'){
-        if(isParent){  // parent end cannot exceed 1440 - childDur
+        if(isParent){  // parent cannot exceed 1440 - childDur
           const childDur = totalDur(other);
           seg.endMin = Math.min(seg.endMin, 1440 - childDur);
           seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
-        }else{         // child cannot start before 1440 - parentDur
+        }else{         // child (prev week) cannot start before 1440 - parentDur
           const parentDur = totalDur(other);
           seg.startMin = Math.max(seg.startMin, 1440 - parentDur);
           seg.endMin   = Math.max(seg.endMin, seg.startMin + minGap);
         }
       }
     }else if(parentTimes){
-      // Editing child week (only child segment exists here)
+      // Editing child week (only child segment exists here); enforce against parent's times
       if(chain.dir==='next'){
         seg.endMin = Math.min(seg.endMin, parentTimes.startMin);
         seg.startMin = Math.max(seg.startMin, seg.endMin - (1440 - (parentTimes.endMin - parentTimes.startMin)));
@@ -703,25 +696,19 @@ function startDrag(ev, kind, segIdx){
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
-    const minGap = 15;
 
     if(dragKind==='move'){
       const delta = snap15(deltaMinRaw);
-      let newStart = clamp(baseStart + delta, 0, 1440);
-      let newEnd   = clamp(baseEnd   + delta, 0, 1440);
       const dur = baseEnd - baseStart;
-      if(newEnd - newStart !== dur){
-        if(delta>0){ newStart = clamp(newEnd - dur, 0, 1440 - dur); }
-        else{ newEnd = clamp(newStart + dur, dur, 1440); }
-      }
-      seg.startMin = snap15(newStart);
-      seg.endMin   = snap15(newEnd);
+      let newStart = clamp(baseStart + delta, 0, 1440 - dur);
+      let newEnd   = newStart + dur;
+      seg.startMin = newStart; seg.endMin = newEnd;
     } else if(dragKind==='top'){
       const snapped = snap15(baseStart + deltaMinRaw);
-      seg.startMin = clamp(snapped, 0, seg.endMin - minGap);
+      seg.startMin = clamp(snapped, 0, seg.endMin - 15);
     } else if(dragKind==='bottom'){
       const snapped = snap15(baseEnd + deltaMinRaw);
-      seg.endMin = clamp(snapped, seg.startMin + minGap, 1440);
+      seg.endMin = clamp(snapped, seg.startMin + 15, 1440);
     }
 
     applyCapAndRules();
@@ -776,13 +763,14 @@ function handleViewportPos(seg, which){
   return {x,y};
 }
 
-/* ---------- Edge confirm (clickable; no tap-through) ---------- */
+/* ---------- Edge confirm (clickable; blocks background) ---------- */
 function showEdgeConfirm(direction, anchorX, anchorY){
   removeEdgeConfirm();
   edgeOpen = true;
 
   const veil=document.createElement('div');
   veil.className='edgeVeil';
+  veil.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); }, {capture:true});
   document.body.appendChild(veil);
 
   const box=document.createElement('div');
@@ -798,10 +786,6 @@ function showEdgeConfirm(direction, anchorX, anchorY){
   `;
   document.body.appendChild(box);
 
-  // clicks on veil do nothing except block underlying grid
-  veil.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); }, {capture:true});
-
-  // handle buttons
   box.addEventListener('click', async (e)=>{
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
@@ -827,22 +811,22 @@ async function confirmSpillFromPending(){
   // Persist parent in its week (no duplicates)
   await writeWeekRecByISO(parentWeekISO, { id, dir:direction, segments:[{...parent, isParent:true}] });
 
-  // Child lives in adjacent week only for Sun↑Sat (prev) or Sat↓Sun (next)
+  // Create child in adjacent week only (Sun->prev Sat, Sat->next Sun)
   const parentWeek = weekStart(new Date(parentWeekISO));
   const targetISO = toISO(addDays(parentWeek, direction==='prev'? -7 : 7));
-  const existingChild = await readWeekRecByISO(targetISO);
   const childSeg = (direction==='prev')
-      ? { dayIdx:6, startMin:1380, endMin:1440, isParent:false }
-      : { dayIdx:0, startMin:0, endMin:60,   isParent:false };
-
+      ? { dayIdx:6, startMin:1380, endMin:1440, isParent:false }  // Sat 23:00–24:00
+      : { dayIdx:0, startMin:0, endMin:60,   isParent:false };    // Sun 00:00–01:00
   const childRec = { id, dir:direction, segments:[childSeg], parentTimes:{ startMin: parent.startMin, endMin: parent.endMin } };
+
+  const existingChild = await readWeekRecByISO(targetISO);
   if(!existingChild || existingChild.id!==id){
     await writeWeekRecByISO(targetISO, childRec);
   }else{
     await writeWeekRecByISO(targetISO, { ...existingChild, dir:direction, segments:[childSeg], parentTimes: childRec.parentTimes });
   }
 
-  // Navigate to child week
+  // Navigate to child week for immediate adjustment
   visibleWeekFirst = weekStart(new Date(targetISO));
   repaintWeek();
   chain = childRec;
@@ -897,7 +881,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r38</div>
+        <div class="watermark">Chrono build r39</div>
       </div>
     </div>
   `;
