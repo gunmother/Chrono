@@ -4,8 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Chrono</title>
+
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
+
 <style>
   :root{
     --r-lg:12px; --r-pill:999px;
@@ -24,8 +26,8 @@
     --marquee-shadow:0 0 0 3px rgba(0,0,0,.15), 0 10px 18px rgba(0,0,0,.20);
 
     /* Handles */
-    --handle-height:48px;
-    --handle-stroke:#6f6f6f;
+    --handle-height:48px; /* big, thumb-friendly */
+    --handle-stroke:#6f6f6f; /* prominent tab border */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -94,20 +96,26 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
+  /* Day watermark */
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
-  /* ---------- Selection UI ---------- */
+  /* ---------- Selection marquee component ---------- */
   .selHost{ position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
-    box-shadow: var(--marquee-shadow); border-radius:8px; pointer-events:auto; cursor:grab; touch-action:none;
+    box-shadow: var(--marquee-shadow);
+    border-radius:8px; pointer-events:auto; cursor:grab; touch-action:none;
   }
   .marqueeRect:active{ cursor:grabbing; }
+
   .stamp{
-    position:absolute; left:50%; transform:translateX(-50%); background:#fff; color:#111;
-    border:1px solid var(--border); border-radius:10px; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:800; white-space:nowrap; pointer-events:none; z-index:2;
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
+    padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:800; white-space:nowrap;
+    pointer-events:none; z-index:2;
   }
+
   .handle{ position:absolute; left:0; width:100%; height:var(--handle-height); pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; }
   .handle svg{ display:block; width:100%; height:100%; }
   .handle polygon{ fill:#fff; stroke:var(--handle-stroke); stroke-width:2.25; stroke-linejoin:round; }
@@ -184,7 +192,7 @@
   </main>
 
 <script>
-console.info('Chrono build r28');
+console.info('Chrono build r29');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -199,6 +207,7 @@ function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function getWeekISO(dateObj){ return toISO(weekStart(dateObj)); }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function toHHMM(min){
   const mm = ((Math.round(min)|0)+1440)%1440;
@@ -214,7 +223,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* Storage (light) */
-const DB_NAME='chronoDB', DB_VERSION=7;
+const DB_NAME='chronoDB', DB_VERSION=8;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -232,11 +241,16 @@ function idbOpen(){
   return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
 }
 async function storageSet(k,v){
-  if(STORAGE_MODE==='ls'){ localStorage.setItem(k, JSON.stringify(v)); return true; }
+  if(STORAGE_MODE==='ls'){
+    if(v===undefined) localStorage.removeItem(k);
+    else localStorage.setItem(k, JSON.stringify(v));
+    return true;
+  }
   const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
   return new Promise((res,rej)=>{
     const tx=db.transaction('kv','readwrite');
-    tx.objectStore('kv').put({k,v});
+    const store=tx.objectStore('kv');
+    if(v===undefined) store.delete(k); else store.put({k,v});
     tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
   });
 }
@@ -250,8 +264,69 @@ async function storageGet(k){
     req.onerror=()=>rej(req.error);
   });
 }
+
+/* persist only on the involved week(s) */
+function weekKey(weekISO){ return `sel:${weekISO}`; }
+async function persistChain(){
+  if(!selChain){ await storageSet(weekKey(getWeekISO(visibleWeekFirst)), undefined); return; }
+
+  // compute absolute dates for each segment
+  const segmentsAbs = selChain.segments.map(s=>{
+    const date = addDays(visibleWeekFirst, s.dayIdx);
+    return { ...s, absISO: toISO(date), weekISO: getWeekISO(date) };
+  });
+
+  // write per-week payloads; only the segment that belongs to that week
+  const byWeek = {};
+  for(const seg of segmentsAbs){
+    byWeek[seg.weekISO] = { id: selChain.id, spilled: !!selChain.spilled, dir: selChain.dir||null,
+      segment: { dayIdx: (new Date(seg.absISO)).getDay(), startMin: seg.startMin, endMin: seg.endMin } };
+  }
+  const weeks = Object.keys(byWeek);
+  for(const w of weeks){ await storageSet(weekKey(w), byWeek[w]); }
+  // clear any stale neighbor if chain returned to single week
+  if(weeks.length===1){
+    const neighbor = getNeighborWeekISO(wToDate(weeks[0]), selChain.dir);
+    if(neighbor) await storageSet(weekKey(neighbor), undefined);
+  }
+}
+function wToDate(weekISO){ const [y,m,d]=weekISO.split('-').map(Number); return new Date(y,m-1,d); }
+function getNeighborWeekISO(weekDate, dir){
+  if(!dir) return null;
+  const off = (dir==='prev')? -7 : 7;
+  return getWeekISO(addDays(weekDate, off));
+}
+async function loadChainForWeek(weekDate){
+  const wkISO = getWeekISO(weekDate);
+  const rec = await storageGet(weekKey(wkISO));
+  if(!rec){ selChain=null; drawSelection(); return; }
+
+  // base segment lives in this week
+  const baseSeg = { dayIdx: rec.segment.dayIdx, startMin: rec.segment.startMin, endMin: rec.segment.endMin };
+  let segments=[baseSeg], spilled=!!rec.spilled, dir=rec.dir||null, id=rec.id;
+
+  if(spilled && dir){
+    const neighborISO = getNeighborWeekISO(weekDate, dir);
+    if(neighborISO){
+      const nrec = await storageGet(weekKey(neighborISO));
+      if(nrec && nrec.id===id){
+        const nseg = nrec.segment;
+        // order by absolute date: previous week first for 'prev', this week first for 'next'
+        if(dir==='prev'){ segments=[nseg, baseSeg]; }
+        else { segments=[baseSeg, nseg]; }
+      }
+    }
+  }
+  selChain = { id, segments, spilled, dir };
+  drawSelection();
+}
+
+/* State snapshot */
 function snapshotState(){ return { activeView, activeDayISO }; }
-async function saveAll(){ await storageSet('state', snapshotState()); }
+async function saveAll(){
+  await storageSet('state', snapshotState());
+  await persistChain();
+}
 let saveTimer=null;
 function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
@@ -269,10 +344,10 @@ document.querySelector('.controls').addEventListener('click', e=>{
 
 /* ---------- Week View + Linked Selection Chain ---------- */
 let weekGeom=null;               // geometry
-let selChain=null;               // { segments:[{dayIdx,startMin,endMin}], id:number }
+let selChain=null;               // { id, segments:[{dayIdx,startMin,endMin}], spilled?:bool, dir?:'prev'|'next' }
 let dragKind=null;               // 'top' | 'bottom' | 'move'
 let dragStartY=0, baseStart=0, baseEnd=0, baseDur15=60;
-let dragSegIndex=0;              // which segment the drag belongs to (0 or 1)
+let dragSegIndex=0;              // segment index for handle
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -298,24 +373,27 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
-  document.getElementById('nextWeekBtn').onclick=()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
+  document.getElementById('prevWeekBtn').onclick=async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await loadChainForWeek(visibleWeekFirst); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick=async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await loadChainForWeek(visibleWeekFirst); saveSoon(200); };
 
   const grid=document.getElementById('weekGrid');
   grid.addEventListener('click', onWeekGridTap, {passive:true});
 
   repaintWeek();
+  new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
-  new ResizeObserver(()=>{ repaintWeek(true); }).observe(grid);
+  // restore any selection for this week (and its adjacent if spilled)
+  loadChainForWeek(visibleWeekFirst).catch(()=>{});
 
+  // First-open hint (once)
   try{
-    if(!localStorage.getItem('hint_week_edit_v5')){
+    if(!localStorage.getItem('hint_week_edit_v6')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{
         hint.classList.add('show');
         setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
       });
-      localStorage.setItem('hint_week_edit_v5','1');
+      localStorage.setItem('hint_week_edit_v6','1');
     }
   }catch{}
 }
@@ -364,6 +442,7 @@ function computeGeometry(gridEl, cols){
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
 
+  // quarter-hour step positions
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
     const h=rowH[hr];
@@ -443,41 +522,54 @@ function onWeekGridTap(e){
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
 
+  // Find tapped day column and lock it
   let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  for(let i=0;i<7;i++){
+    if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; }
+  }
 
+  // Start with 60m selection aligned to nearest hour (snapped)
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
   const endMin   = clamp(startMin + 60, 0, 1440);
 
-  selChain = { id: Date.now(), segments:[{ dayIdx, startMin, endMin }] };
+  // New chain clears stored pair (this week + neighbor if existed)
+  selChain = { id: Date.now(), segments:[{ dayIdx, startMin, endMin }], spilled:false, dir:null };
+  persistChain().catch(()=>{});
 
   host.innerHTML='';
   drawSelection();
 }
 
 /* ---------- Helpers ---------- */
-function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
-function yToMinutesRaw(yPx){ const y = clamp(yPx, 0, weekGeom.totalH); const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0; return clamp(ratio * 1440, 0, 1440); }
-function chainDuration(){
-  if(!selChain) return 0;
-  const s=selChain.segments;
-  if(s.length===1) return s[0].endMin - s[0].startMin;
-  // across midnight: (24h - first.start) + second.end
-  return clamp((1440 - s[0].startMin) + s[1].endMin, 0, 1440);
+function minutesToY(min){
+  const idx = clamp(Math.round(min/15), 0, 96);
+  return weekGeom.slotY[idx];
+}
+function yToMinutesRaw(yPx){
+  const y = clamp(yPx, 0, weekGeom.totalH);
+  const ratio = weekGeom.totalH ? (y / weekGeom.totalH) : 0;
+  return clamp(ratio * 1440, 0, 1440);
+}
+function sortedSegs(){
+  if(!selChain) return [];
+  return selChain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
+}
+function totalDurationCap(){
+  // For a two-seg chain, cap is 24h: seg2.endMin <= seg1.startMin (after sorting)
+  if(!selChain || selChain.segments.length<2) return;
+  const [s0, s1] = sortedSegs();
+  const limit = s0.startMin; // max endMin of later segment
+  if(s1.endMin > limit) s1.endMin = limit;
 }
 
 /* ---------- Draw selection (supports 1 or 2 segments) ---------- */
 function drawSelection(){
-  if(!selChain) return;
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
+  if(!selChain) return;
 
-  const segs = selChain.segments.slice().sort((a,b)=>{
-    // order by absolute day position (within the visible week)
-    return a.dayIdx - b.dayIdx;
-  });
-
+  const segs = sortedSegs();
   segs.forEach((seg, idx)=>{
     const rect=weekGeom.rect;
     const colLeft = weekGeom.colX[seg.dayIdx];
@@ -555,7 +647,7 @@ function drawSelection(){
   });
 }
 
-/* ---------- Drag handlers ---------- */
+/* ---------- Drag handlers with 24h cap ---------- */
 function startDragChain(ev, kind, segIdx){
   if(!selChain) return;
   dragKind = kind;
@@ -564,7 +656,7 @@ function startDragChain(ev, kind, segIdx){
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
-  const seg = selChain.segments[segIdx];
+  const seg = sortedSegs()[segIdx]; // use sorted order for indices used in draw
   dragStartY = ev.clientY;
   baseStart = seg.startMin;
   baseEnd   = seg.endMin;
@@ -575,22 +667,21 @@ function startDragChain(ev, kind, segIdx){
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
     const minGap = 15;
-    const s = selChain.segments;
+    const segs = sortedSegs();
 
     if(dragKind==='move'){
-      // Move all segments equally, clamped within their day
+      // Move both segments equally, if present
       const delta = snap15(deltaMinRaw);
-      for(const sg of s){
-        let newStart = clamp(sg.startMin + delta, 0, 1440);
-        let newEnd   = clamp(sg.endMin   + delta, 0, 1440);
-        // keep duration constant
-        const dur = sg.endMin - sg.startMin;
+      for(const s of selChain.segments){
+        let newStart = clamp(s.startMin + delta, 0, 1440);
+        let newEnd   = clamp(s.endMin   + delta, 0, 1440);
+        const dur = s.endMin - s.startMin;
         if(newEnd - newStart !== dur){
           if(delta>0){ newStart = clamp(newEnd - dur, 0, 1440 - dur); }
           else{ newEnd = clamp(newStart + dur, dur, 1440); }
         }
-        sg.startMin = snap15(newStart);
-        sg.endMin   = snap15(newEnd);
+        s.startMin = snap15(newStart);
+        s.endMin   = snap15(newEnd);
       }
     } else if(dragKind==='top'){
       const raw = baseStart + deltaMinRaw;
@@ -601,30 +692,36 @@ function startDragChain(ev, kind, segIdx){
       const snapped = snap15(raw);
       selChain.segments[segIdx].endMin = clamp(snapped, selChain.segments[segIdx].startMin + minGap, 1440);
     }
-    // Enforce overall ≤ 24h
-    if(chainDuration()>1440){
-      // rollback minimal: clamp end of last segment
-      const last = selChain.segments[selChain.segments.length-1];
-      last.endMin = clamp(last.endMin - (chainDuration()-1440), last.startMin+minGap, 1440);
-    }
+
+    // 24h cap for two segments
+    totalDurationCap();
+
     drawSelection();
   };
 
-  const up=(e)=>{
-    // snap
-    const s = selChain.segments[segIdx];
-    s.startMin = snap15(s.startMin);
-    s.endMin   = snap15(s.endMin);
+  const up=async (e)=>{
+    // snap and cap
+    for(const s of selChain.segments){ s.startMin = snap15(s.startMin); s.endMin = snap15(s.endMin); }
+    totalDurationCap();
     drawSelection();
 
-    // Edge confirm only for exposed handles:
-    if(dragKind==='top' && segIdx===0 && s.startMin===0){
-      const pos = handleViewportPos(segIdx, 'top');
-      showEdgeConfirm('prev', pos.x, pos.y);
-    } else if(dragKind==='bottom' && segIdx===selChain.segments.length-1 && s.endMin===1440){
-      const pos = handleViewportPos(segIdx, 'bottom');
-      showEdgeConfirm('next', pos.x, pos.y);
+    // Edge confirm only if not already spilled AND at the boundary for the exposed handle
+    const segs = sortedSegs();
+    const isFirst = (segIdx===0);
+    const isLast  = (segIdx===segs.length-1);
+
+    if(!selChain.spilled){
+      if(dragKind==='top' && isFirst && segs[0].startMin===0){
+        const pos = handleViewportPos(segs[0], 'top');
+        showEdgeConfirm('prev', pos.x, pos.y);
+      } else if(dragKind==='bottom' && isLast && segs[segs.length-1].endMin===1440){
+        const pos = handleViewportPos(segs[segs.length-1], 'bottom');
+        showEdgeConfirm('next', pos.x, pos.y);
+      }
     }
+
+    await persistChain().catch(()=>{});
+    saveSoon(200);
 
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
@@ -636,9 +733,7 @@ function startDragChain(ev, kind, segIdx){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-function handleViewportPos(segIdx, which){
-  // Return an anchor position for the inline confirm near the handle
-  const seg = selChain.segments[segIdx];
+function handleViewportPos(seg, which){
   const rect=weekGeom.rect;
   const colLeft = weekGeom.colX[seg.dayIdx];
   const colRight= weekGeom.colX[seg.dayIdx+1];
@@ -650,7 +745,7 @@ function handleViewportPos(segIdx, which){
   return {x,y};
 }
 
-/* ---------- Edge confirm (no dim background) ---------- */
+/* ---------- Edge confirm (inline; no dim background) ---------- */
 function showEdgeConfirm(direction, anchorX, anchorY){
   removeEdgeConfirm();
 
@@ -674,52 +769,62 @@ function showEdgeConfirm(direction, anchorX, anchorY){
     if(act==='ok'){ confirmSpill(direction); removeEdgeConfirm(); }
   }, {passive:true});
 }
-function removeEdgeConfirm(){
-  document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove());
-}
+function removeEdgeConfirm(){ document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
 
-/* ---------- Confirm spill: create linked segment on adjacent row ---------- */
-function confirmSpill(direction){
-  if(!selChain || selChain.segments.length>1) return; // only extend once
+/* ---------- Confirm spill: link a second segment (24h cap, no re-prompt) ---------- */
+async function confirmSpill(direction){
+  if(!selChain || selChain.spilled) return;
   const a = selChain.segments[0];
 
   if(direction==='prev'){
-    // Handle Sunday -> previous week's Saturday visual rule
+    // If Sunday, switch to previous week and link Saturday segment
     if(a.dayIdx===0){
+      const oldWeek = visibleWeekFirst;
       visibleWeekFirst = addDays(visibleWeekFirst, -7);
       repaintWeek();
-      // after repaint, weekGeom re-computed; set chain to Sat + original
-      selChain = { id: selChain.id, segments:[
-        { dayIdx:6, startMin:1380, endMin:1440},           // 23:00–24:00 on Sat
-        { dayIdx:0, startMin:0, endMin:a.endMin }          // original now starts at 00:00
-      ]};
+      selChain = { id: selChain.id, spilled:true, dir:'prev',
+        segments:[
+          { dayIdx:6, startMin:1380, endMin:1440 },         // Sat 23:00–24:00
+          { dayIdx:0, startMin:0,    endMin:a.endMin }      // Sun 00:00–end
+        ]};
+      await persistChain().catch(()=>{});
+      await loadChainForWeek(visibleWeekFirst).catch(()=>{});
     }else{
-      selChain = { id: selChain.id, segments:[
-        { dayIdx:a.dayIdx-1, startMin:1380, endMin:1440 }, // 23:00–24:00 previous day
-        { dayIdx:a.dayIdx,   startMin:0,    endMin:a.endMin }
-      ]};
+      selChain = { id: selChain.id, spilled:true, dir:'prev',
+        segments:[
+          { dayIdx:a.dayIdx-1, startMin:1380, endMin:1440 }, // prev day 23:00–24:00
+          { dayIdx:a.dayIdx,   startMin:0,    endMin:a.endMin }
+        ]};
     }
-  } else {
-    // direction === 'next'
+  } else { // 'next'
     if(a.dayIdx===6){
+      const oldWeek = visibleWeekFirst;
       visibleWeekFirst = addDays(visibleWeekFirst, 7);
       repaintWeek();
-      selChain = { id: selChain.id, segments:[
-        { dayIdx:6, startMin:a.startMin, endMin:1440 },   // current Sat to midnight
-        { dayIdx:0, startMin:0,          endMin:60 }      // next Sun 00:00–01:00 default
-      ]};
+      selChain = { id: selChain.id, spilled:true, dir:'next',
+        segments:[
+          { dayIdx:6, startMin:a.startMin, endMin:1440 },   // Sat start→24:00
+          { dayIdx:0, startMin:0,          endMin:60 }      // Sun 00:00–01:00 default
+        ]};
+      await persistChain().catch(()=>{});
+      await loadChainForWeek(visibleWeekFirst).catch(()=>{});
     }else{
-      selChain = { id: selChain.id, segments:[
-        { dayIdx:a.dayIdx,   startMin:a.startMin, endMin:1440 }, // to midnight
-        { dayIdx:a.dayIdx+1, startMin:0,          endMin:60 }    // 00:00–01:00
-      ]};
+      selChain = { id: selChain.id, spilled:true, dir:'next',
+        segments:[
+          { dayIdx:a.dayIdx,   startMin:a.startMin, endMin:1440 }, // to midnight
+          { dayIdx:a.dayIdx+1, startMin:0,          endMin:60 }    // next day start
+        ]};
     }
   }
-  // Cap chain ≤ 24h (already true by construction)
+
+  // Enforce 24h cap (later segment end ≤ first segment start)
+  totalDurationCap();
   drawSelection();
+  await persistChain().catch(()=>{});
+  saveSoon(200);
 }
 
-/* ---------- Month & Day Views (unchanged) ---------- */
+/* ---------- Month & Day Views (unchanged UI) ---------- */
 function buildMonthView(){
   const base = new Date();
   activeDayISO = toISO(base);
@@ -764,7 +869,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r28</div>
+        <div class="watermark">Chrono build r29</div>
       </div>
     </div>
   `;
@@ -815,5 +920,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
 </body>
 </html>
