@@ -187,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r44 — Sunday-first normalized');
+console.info('Chrono build r45 — Sunday-first, one-handle-per-side, stable spillover');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -195,13 +195,13 @@ const buttons = [...document.querySelectorAll('.btn')];
 
 let activeView = null;
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date()); // Sunday-first baseline everywhere
+let visibleWeekFirst = weekStart(new Date()); // 0=Sun week baseline
 
-const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0=Sun … 6=Sat
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; } // 0=Sun
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function toHHMM(min){ const mm = ((Math.round(min)|0)+1440)%1440; const h = Math.floor(mm/60), r = mm%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
@@ -210,7 +210,7 @@ function totalDur(a){ return (a.endMin - a.startMin); }
 
 /* numeric week stamps (avoid TZ bugs) */
 const DAY_MS = 86400000;
-function weekStamp(d){ return +weekStart(d); }           // stamp is always Sunday 00:00
+function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
@@ -221,7 +221,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* ------------------- Storage ------------------- */
-const DB_NAME='chronoDB', DB_VERSION=20;
+const DB_NAME='chronoDB', DB_VERSION=21;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -258,11 +258,14 @@ async function storageGet(k){
 
 /* ------------------- Selector chain (single) ------------------- */
 /*
-Sunday-first normalized everywhere:
-- dayIdx: 0=Sun … 6=Sat
-- weekSt: stamp for that week's Sunday 00:00
+chain = {
+  id: number,
+  parent: { weekSt:number, dayIdx:0..6, startMin:number, endMin:number },
+  child:  { weekSt:number, dayIdx:0..6, startMin:number, endMin:number } | null,
+  dir: 'prev'|'next'|null
+}
 */
-const CHAIN_KEY='selChain_v6';
+const CHAIN_KEY='selChain_v7';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -332,10 +335,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r44')){
+    if(!localStorage.getItem('hint_week_edit_r45')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r44','1');
+      localStorage.setItem('hint_week_edit_r45','1');
     }
   }catch{}
 }
@@ -453,7 +456,7 @@ async function onWeekGridTap(e){
   const relY=e.clientY - rect.top;
 
   let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } } // 0=Sun…6=Sat
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
   const startMin = snap15(Math.floor(minuteFloat/60)*60);
@@ -487,10 +490,33 @@ function boundsFromSeg(seg){
   return {offsetLeft, offsetTop, colWidth, topY, botY, height};
 }
 
+function whichSingleHandleFor(segName){
+  // When only one segment is visible on this week, show exactly ONE handle:
+  // dir='next'  -> parent-week: top handle (start), child-week: bottom handle (end)
+  // dir='prev'  -> parent-week: bottom handle (end), child-week: top handle (start)
+  if(!chain || !chain.dir) return 'both'; // no spill -> both ends available within same week
+  const seg = (segName==='parent'? chain.parent: chain.child);
+  const isParentWeek = seg.weekSt === getVisibleWeekStamp() && segName==='parent';
+  const isChildWeek  = seg.weekSt === getVisibleWeekStamp() && segName==='child';
+
+  if(chain.child && !segOnThisWeek(segName==='parent'? chain.child: chain.parent)){
+    if(chain.dir==='next'){
+      if(isParentWeek) return 'top';
+      if(isChildWeek)  return 'bottom';
+    }else if(chain.dir==='prev'){
+      if(isParentWeek) return 'bottom';
+      if(isChildWeek)  return 'top';
+    }
+  }
+  return 'both-if-edges'; // both may exist, but we still only render outer ends when both visible
+}
+
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
   if(!chain) return;
+
+  const bothVisible = segOnThisWeek(chain.parent) && segOnThisWeek(chain.child);
 
   const segs=[];
   if(segOnThisWeek(chain.parent)) segs.push({seg:chain.parent, name:'parent'});
@@ -505,14 +531,29 @@ function drawSelection(){
 
     const m=document.createElement('div');
     m.className='marquee';
+
+    // Decide which handles to render
+    let renderTop=false, renderBottom=false;
+    if(bothVisible){
+      // Only render outer extremities
+      renderTop = (idx===0);
+      renderBottom = (idx===segs.length-1);
+    }else{
+      const which = whichSingleHandleFor(name);
+      if(which==='top') renderTop=true;
+      else if(which==='bottom') renderBottom=true;
+      else if(which==='both') renderTop=renderBottom=true;
+      else if(which==='both-if-edges'){ renderTop=true; renderBottom=true; }
+    }
+
     m.innerHTML=`
       <div class="marqueeRect" data-name="${name}"></div>
-      ${idx===0 ? `
+      ${renderTop ? `
         <div class="stamp" id="topStamp_${name}"></div>
         <div class="handle" id="topHandle_${name}">
           <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true"><polygon points="1,47 50,3 99,47"></polygon></svg>
         </div>` : ''}
-      ${idx===segs.length-1 ? `
+      ${renderBottom ? `
         <div class="stamp" id="botStamp_${name}"></div>
         <div class="handle" id="botHandle_${name}">
           <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true"><polygon points="1,3 50,47 99,3"></polygon></svg>
@@ -530,7 +571,7 @@ function drawSelection(){
     const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
     const stampH=26;
 
-    if(idx===0){
+    if(renderTop){
       const topStamp=m.querySelector(`#topStamp_${name}`);
       topStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
       topStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
@@ -544,7 +585,7 @@ function drawSelection(){
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name));
     }
 
-    if(idx===segs.length-1){
+    if(renderBottom){
       const botStamp=m.querySelector(`#botStamp_${name}`);
       botStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
       botStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
@@ -573,7 +614,7 @@ function enforceCaps(seg, which){
     return;
   }
 
-  // Combined duration limited to 24h; clamp only the dragged end
+  // Combined duration limited to 24h; clamp only the dragged end (no auto-adjusting the counterpart)
   const myDur   = totalDur(seg);
   const otherDur= totalDur(other);
   const maxMyDur= Math.max(0, 1440 - otherDur);
@@ -585,10 +626,10 @@ function enforceCaps(seg, which){
 
   // Direction-aware caps: Sunday-first
   if(chain.dir==='next'){
-    // parent (dayIdx N), child (dayIdx N+1 or next week Sun)
+    // parent earlier day (ends ≤ 1440 - childDur); child later day (start≥0 fixed at 0, end ≤ remaining)
     if(which==='child'){
       const parentDur = totalDur(chain.parent);
-      const childMaxEnd = 1440 - parentDur; // child start at 0
+      const childMaxEnd = 1440 - parentDur; // child starts at 0
       seg.endMin = Math.min(seg.endMin, childMaxEnd);
       seg.startMin = Math.min(seg.startMin, seg.endMin - minGap);
     }else{
@@ -596,7 +637,7 @@ function enforceCaps(seg, which){
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
     }
   }else if(chain.dir==='prev'){
-    // child is previous-day ending at 1440; parent starts at 0
+    // child earlier day (ends at 1440, start ≥ 1440 - parentDur); parent later day (starts at 0, end ≤ 1440 - childDur)
     if(which==='parent'){
       const childDur = totalDur(chain.child);
       seg.endMin = Math.min(seg.endMin, 1440 - childDur);
@@ -626,7 +667,7 @@ function startDrag(ev, kind, which){
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
     dragPixels = Math.max(dragPixels, Math.abs(dyPx));
-    if(dragPixels > 6) wasDrag=true; // drag-only threshold
+    if(dragPixels > 6) wasDrag=true;
 
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
@@ -716,27 +757,27 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
-  const p = chain.parent;              // Sunday-first indices guaranteed
+  const p = chain.parent;              // 0=Sun indices
   let childWeek = p.weekSt;
   let childDay;
 
   if(direction==='next'){
-    if(p.dayIdx < 6){                  // spill to next day within SAME week (Sun..Fri->Mon..Sat; Sat handled below)
-      childDay = p.dayIdx + 1;
-    }else{                              // p.dayIdx===6 (Sat) -> next week Sunday
+    if(p.dayIdx < 6){
+      childDay = p.dayIdx + 1;         // same chart
+    }else{                              // Sat -> next week Sun
       childWeek = p.weekSt + 7*DAY_MS;
-      childDay  = 0;                    // Sunday
+      childDay  = 0;
       visibleWeekFirst = stampToDate(childWeek); // hop exactly one week forward
       repaintWeek();
     }
     chain.dir = 'next';
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:60 };
   }else{ // 'prev'
-    if(p.dayIdx > 0){                   // spill to previous day within SAME week (Mon..Sat->Sun..Fri)
-      childDay = p.dayIdx - 1;
-    }else{                              // p.dayIdx===0 (Sun) -> previous week Saturday
+    if(p.dayIdx > 0){
+      childDay = p.dayIdx - 1;         // same chart
+    }else{                              // Sun -> prev week Sat
       childWeek = p.weekSt - 7*DAY_MS;
-      childDay  = 6;                    // Saturday
+      childDay  = 6;
       visibleWeekFirst = stampToDate(childWeek); // hop exactly one week back
       repaintWeek();
     }
@@ -791,7 +832,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r44</div>
+        <div class="watermark">Chrono build r45</div>
       </div>
     </div>
   `;
