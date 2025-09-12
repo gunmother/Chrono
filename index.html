@@ -90,7 +90,6 @@
   /* Month */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
-  .month-dow span{ text-align:center }
   .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
   .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
@@ -121,7 +120,7 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm (clickable, no tap-through) ---------- */
+  /* ---------- Edge confirm ---------- */
   .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
@@ -187,7 +186,7 @@
   </main>
 
 <script>
-console.info('Chrono build r41');
+console.info('Chrono build r42');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -221,7 +220,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* ------------------- Storage ------------------- */
-const DB_NAME='chronoDB', DB_VERSION=17;
+const DB_NAME='chronoDB', DB_VERSION=18;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -265,13 +264,21 @@ chain = {
   dir: 'prev'|'next'|null
 }
 */
-const CHAIN_KEY='selChain_v3';
+const CHAIN_KEY='selChain_v4';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
 let chain = null;
+
+/* Spillover confirm state */
 let edgeOpen=false;
 let pendingEdge=null; // {direction:'prev'|'next'}
+
+/* Drag gesture state */
+let dragKind=null;               // 'top'|'bottom'|'move'
+let dragTarget='parent';
+let dragStartY=0, baseStart=0, baseEnd=0;
+let dragPixels=0, wasDrag=false, createdAt=0;
 
 function snapshotState(){ return { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }; }
 async function saveAll(){ await storageSet('state', snapshotState()); await saveChain(chain); }
@@ -291,9 +298,6 @@ document.querySelector('.controls').addEventListener('click', e=>{
 
 /* ------------------- Week View ------------------- */
 let weekGeom=null;
-let dragKind=null;               // 'top'|'bottom'|'move'
-let dragTarget='parent';
-let dragStartY=0, baseStart=0, baseEnd=0;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -330,10 +334,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r41')){
+    if(!localStorage.getItem('hint_week_edit_r42')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r41','1');
+      localStorage.setItem('hint_week_edit_r42','1');
     }
   }catch{}
 }
@@ -444,6 +448,8 @@ function paintNowMagnifier(geom){
 /* ------------------- Tap to create parent ------------------- */
 async function onWeekGridTap(e){
   if(edgeOpen || !weekGeom) return;
+  removeEdgeConfirm(); pendingEdge=null;
+
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
@@ -461,12 +467,12 @@ async function onWeekGridTap(e){
     child: null,
     dir: null
   };
+  createdAt = Date.now(); wasDrag=false;
   await saveChain(chain);
   drawSelection();
 }
 
 /* ------------------- Draw selection ------------------- */
-let weekGeomCache=null;
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 
@@ -598,9 +604,13 @@ function startDrag(ev, kind, which){
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
 
   dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
+  wasDrag=false; dragPixels=0;
 
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
+    dragPixels = Math.max(dragPixels, Math.abs(dyPx));
+    if(dragPixels > 6) wasDrag=true; // drag-only threshold
+
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
 
     if(dragKind==='move'){
@@ -623,8 +633,8 @@ function startDrag(ev, kind, which){
   const up=async (e)=>{
     seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin);
 
-    // Offer spill ONLY on release at an edge, and only if we're dragging the parent and no child exists yet.
-    if(!chain.child && which==='parent'){
+    const justCreated = (Date.now() - createdAt) < 350;
+    if(!chain.child && which==='parent' && wasDrag && !justCreated){
       if(seg.startMin===0){ pendingEdge={direction:'prev'}; showEdgeConfirm('prev', anchorFor(seg,'top')); }
       else if(seg.endMin===1440){ pendingEdge={direction:'next'}; showEdgeConfirm('next', anchorFor(seg,'bottom')); }
     }
@@ -671,34 +681,36 @@ function showEdgeConfirm(direction, anchor){
   `;
   document.body.appendChild(box);
 
+  box.addEventListener('pointerdown', ev=>ev.stopPropagation());
+  box.addEventListener('click', ev=>ev.stopPropagation());
+
   box.addEventListener('click', async (e)=>{
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
     if(act==='cancel'){ removeEdgeConfirm(); pendingEdge=null; return; }
-    if(act==='ok'){ await confirmSpill(); removeEdgeConfirm(); }
+    if(act==='ok'){ await confirmSpill(direction); removeEdgeConfirm(); }
   });
 }
-function removeEdgeConfirm(){ edgeOpen=false; document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); document.querySelectorAll('.edgeVeil').forEach(n=>n.remove()); }
+function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
+  document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove());
+  document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
+}
 
-async function confirmSpill(){
-  if(!pendingEdge || !chain || !chain.parent) { pendingEdge=null; return; }
-  const dir = pendingEdge.direction;
+async function confirmSpill(direction){
+  if(!chain || !chain.parent) return;
+
   const parent = chain.parent;
+  const targetSt = parent.weekSt + (direction==='prev' ? -7*DAY_MS : 7*DAY_MS);
 
-  const targetSt = parent.weekSt + (dir==='prev' ? -7*DAY_MS : 7*DAY_MS);
-
-  chain.dir = dir;
-  chain.child = (dir==='prev')
+  chain.dir = direction;
+  chain.child = (direction==='prev')
     ? { weekSt: targetSt, dayIdx:6, startMin:1380, endMin:1440 }
     : { weekSt: targetSt, dayIdx:0,  startMin:0,    endMin:60   };
 
   await saveChain(chain);
 
-  // Navigate exactly one adjacent week
   visibleWeekFirst = stampToDate(targetSt);
   repaintWeek(); drawSelection();
-
-  pendingEdge=null;
 }
 
 /* ------------------- Month & Day Views (unchanged) ------------------- */
@@ -744,7 +756,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r41</div>
+        <div class="watermark">Chrono build r42</div>
       </div>
     </div>
   `;
@@ -769,7 +781,6 @@ async function init(){
 
 function render(){
   if(activeView==='week'){
-    // keep current visibleWeekFirst; do not reset to “this week”
     buildWeekView();
   } else if(activeView==='day'){
     activeDayISO = toISO(new Date());
