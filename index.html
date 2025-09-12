@@ -100,7 +100,8 @@
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
   /* ---------- Selection UI ---------- */
-  .selHost{ position:fixed; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
+  /* Anchor to the grid (same coordinate space) to avoid viewport drift */
+  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
@@ -186,7 +187,7 @@
   </main>
 
 <script>
-console.info('Chrono build r49 — spillover math fixes, triangle-only, Sunday-first');
+console.info('Chrono build r50 — overlay/viewport fixes, symmetric spillover, edge-create prompts, Sunday-first');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -264,7 +265,7 @@ chain = {
   dir: 'prev'|'next'|null
 }
 */
-const CHAIN_KEY='selChain_v11';
+const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -311,12 +312,11 @@ function buildWeekView(){
           <div class="blocks" id="blocksLayer"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
+          <div class="selHost" id="selHost" aria-hidden="false"></div>
+          <div class="hint" id="weekHint">Tap anywhere to edit</div>
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
-
-      <div class="selHost" id="selHost" aria-hidden="false"></div>
-      <div class="hint" id="weekHint">Tap anywhere to edit</div>
     </div>
   `;
 
@@ -329,12 +329,18 @@ function buildWeekView(){
   repaintWeek();
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
+  // Viewport-drift guards
+  const syncViewport = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSelection(); } }, 32);
+  window.addEventListener('scroll', syncViewport, {passive:true});
+  window.addEventListener('orientationchange', syncViewport, {passive:true});
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', syncViewport, {passive:true});
+
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r49')){
+    if(!localStorage.getItem('hint_week_edit_r50')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r49','1');
+      localStorage.setItem('hint_week_edit_r50','1');
     }
   }catch{}
 }
@@ -467,11 +473,24 @@ async function onWeekGridTap(e){
   createdAt = Date.now(); wasDrag=false;
   await saveChain(chain);
   drawSelection();
+
+  // Auto spillover prompt when created exactly at edges
+  if(startMin===0){
+    pendingEdge={direction:'prev'};
+    showEdgeConfirm('prev', anchorFor(chain.parent,'top'));
+  }else if(endMin===1440){
+    pendingEdge={direction:'next'};
+    showEdgeConfirm('next', anchorFor(chain.parent,'bottom'));
+  }
 }
 
 /* ------------------- Draw selection ------------------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
+function segDowLabel(seg){
+  const d = new Date(seg.weekSt + seg.dayIdx*DAY_MS);
+  return SHORT_DOW[d.getDay()]; // robust label from absolute date
+}
 
 function boundsFromSeg(seg){
   const rect=weekGeom.rect;
@@ -481,8 +500,8 @@ function boundsFromSeg(seg){
   const topY  = minutesToY(seg.startMin);
   const botY  = minutesToY(seg.endMin);
   const height= Math.max(1, botY - topY);
-  const offsetLeft = rect.left + colLeft;
-  const offsetTop  = rect.top;
+  const offsetLeft = colLeft;
+  const offsetTop  = 0;
   return {offsetLeft, offsetTop, colWidth, topY, botY, height};
 }
 
@@ -551,13 +570,13 @@ function drawSelection(){
 
     if(renderTop){
       const topStamp=m.querySelector(`#topStamp_${name}`);
-      topStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.startMin)}`;
+      topStamp.textContent = `${segDowLabel(seg)} ${toHHMM(seg.startMin)}`;
       topStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
-      topStamp.style.top  = `${b.offsetTop + b.topY - (stampH + stampPad)}px`;
+      topStamp.style.top  = `${b.topY - (stampH + stampPad)}px`;
 
       const topHandle=m.querySelector(`#topHandle_${name}`);
       topHandle.style.left  = `${b.offsetLeft}px`;
-      topHandle.style.top   = `${b.offsetTop + b.topY - (stampH + stampPad + triH)}px`;
+      topHandle.style.top   = `${b.topY - (stampH + stampPad + triH)}px`;
       topHandle.style.width = `${b.colWidth}px`;
       topHandle.style.height= `${triH}px`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name));
@@ -565,13 +584,13 @@ function drawSelection(){
 
     if(renderBottom){
       const botStamp=m.querySelector(`#botStamp_${name}`);
-      botStamp.textContent = `${SHORT_DOW[seg.dayIdx]} ${toHHMM(seg.endMin)}`;
+      botStamp.textContent = `${segDowLabel(seg)} ${toHHMM(seg.endMin)}`;
       botStamp.style.left = `${b.offsetLeft + b.colWidth/2}px`;
-      botStamp.style.top  = `${b.offsetTop + b.botY + stampPad}px`;
+      botStamp.style.top  = `${b.botY + stampPad}px`;
 
       const botHandle=m.querySelector(`#botHandle_${name}`);
       botHandle.style.left  = `${b.offsetLeft}px`;
-      botHandle.style.top   = `${b.offsetTop + b.botY + stampPad + stampH}px`;
+      botHandle.style.top   = `${b.botY + stampPad + stampH}px`;
       botHandle.style.width = `${b.colWidth}px`;
       botHandle.style.height= `${triH}px`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name));
@@ -593,51 +612,44 @@ function clampToBudget(seg, which){
     return;
   }
 
-  const parent = chain.parent;
-  const child  = chain.child;
-
   const otherDur = otherDurAtStart;                 // static during this drag
   const maxThisDur = 1440 - otherDur;               // hard 24h budget
   let thisDur = seg.endMin - seg.startMin;
 
   if(chain.dir==='next'){
     if(which==='parent'){
-      // parent can occupy at most maxThisDur; enforce only via dragged endpoint
       thisDur = clamp(thisDur, minGap, maxThisDur);
       if(dragKind==='bottom'){
         seg.endMin = clamp(seg.startMin + thisDur, seg.startMin + minGap, Math.min(1440 - otherDur, 1440));
-      }else{ // top drag
+      }else{
         seg.startMin = clamp(seg.endMin - thisDur, 0, Math.min(seg.endMin - minGap, 1425));
       }
     }else{ // child (starts at 0)
-      if(dragKind==='top'){ seg.startMin = 0; } // child top is not shown for 'next' but keep safe
+      if(dragKind==='top'){ seg.startMin = 0; }
       thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
       seg.endMin   = clamp(thisDur, minGap, maxThisDur);
     }
   }else{ // dir === 'prev'
     if(which==='parent'){
-      // parent starts at 0
       if(dragKind==='top'){ seg.startMin = 0; }
       thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
       seg.endMin   = clamp(thisDur, minGap, maxThisDur);
     }else{ // child (ends at 1440)
       if(dragKind==='bottom'){ seg.endMin = 1440; }
-      // Correct math: child.startMin ≥ parentDurFixed (not 1440 - parentDur)
-      const minStart = otherDur; // parentDur at drag start
+      const minStart = otherDur; // correct lower bound (parentDur at drag start)
       const maxStart = 1425;
       thisDur = clamp(1440 - seg.startMin, minGap, maxThisDur);
-      // Enforce lower bound so we can reach up toward Saturday morning
       seg.startMin = clamp(seg.endMin - thisDur, minStart, maxStart);
       seg.endMin   = 1440;
     }
   }
 
   // Final sanity (only adjust the dragged side)
-  const used = (parent.endMin - parent.startMin) + (child.endMin - child.startMin);
-  if(used > 1440){
-    const over = used - 1440;
+  let usedDur = (chain.parent.endMin - chain.parent.startMin) + (chain.child.endMin - chain.child.startMin);
+  if(usedDur > 1440){
+    const over = usedDur - 1440;
     if(dragKind==='top'){ seg.startMin = clamp(seg.startMin + over, 0, 1425); }
     else { seg.endMin = clamp(seg.endMin - over, seg.startMin + minGap, 1440); }
   }
@@ -712,8 +724,9 @@ function startDrag(ev, kind, which){
 
 function anchorFor(seg, which){
   const b=boundsFromSeg(seg);
-  const x = b.offsetLeft + b.colWidth/2;
-  const y = which==='top' ? (b.offsetTop + b.topY - 56) : (b.offsetTop + b.botY + 56);
+  const grid = document.getElementById('weekGrid').getBoundingClientRect();
+  const x = grid.left + b.offsetLeft + b.colWidth/2;
+  const y = grid.top + (which==='top' ? (b.topY - 56) : (b.botY + 56));
   return {x,y};
 }
 
@@ -770,11 +783,18 @@ async function confirmSpill(direction){
     }else{                              // Sat -> next week Sun
       childDay  = 0;
       childWeek = p.weekSt + 7*DAY_MS;
-      visibleWeekFirst = stampToDate(childWeek);   // hop view AFTER child computed
-      repaintWeek();
     }
     const parentDur = totalDur(p);
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:Math.min(60, 1440 - parentDur) };
+
+    // If week hop occurred, switch chart so user continues editing there
+    if(p.dayIdx === 6){
+      visibleWeekFirst = stampToDate(childWeek);
+      await saveChain(chain);
+      // Defer repaint to next frame to avoid stale geometry
+      requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); });
+      return;
+    }
   }else{ // 'prev'
     if(p.dayIdx > 0){
       childDay  = p.dayIdx - 1;        // same chart
@@ -782,12 +802,17 @@ async function confirmSpill(direction){
     }else{                              // Sun -> prev week Sat
       childDay  = 6;
       childWeek = p.weekSt - 7*DAY_MS;
-      visibleWeekFirst = stampToDate(childWeek);
-      repaintWeek();
     }
     const parentDur = totalDur(p);
     const span = Math.min(60, 1440 - parentDur);
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: Math.max(1440 - span, 0), endMin:1440 };
+
+    if(p.dayIdx === 0){
+      visibleWeekFirst = stampToDate(childWeek);
+      await saveChain(chain);
+      requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); });
+      return;
+    }
   }
 
   await saveChain(chain);
@@ -837,7 +862,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r49</div>
+        <div class="watermark">Chrono build r50</div>
       </div>
     </div>
   `;
@@ -878,6 +903,17 @@ function render(){
   }
 }
 init();
+
+/* ------------------- helpers ------------------- */
+function throttle(fn, ms){
+  let t=0, lastArgs=null;
+  return function(...args){
+    lastArgs=args;
+    if(!t){
+      t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms);
+    }
+  }
+}
 </script>
 
 <!-- Service worker registration (unchanged) -->
