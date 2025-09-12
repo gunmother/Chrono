@@ -28,6 +28,11 @@
     /* Handles */
     --handle-height:48px;
     --handle-stroke:#6f6f6f;
+
+    /* Selector UI buttons */
+    --selbtn-size:36px;
+    --selbtn-gap:8px;
+    --selbtn-nudge:8px; /* min padding from screen edges */
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -100,7 +105,6 @@
   .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
 
   /* ---------- Selection UI ---------- */
-  /* Anchor to the grid (same coordinate space) to avoid viewport drift */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
@@ -131,6 +135,35 @@
   .edgeRow{ display:flex; gap:12px; }
   .edgeBtn{ min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .edgeBtn.ok{ background:#e6e6e6; }
+
+  /* ---------- Selector Buttons (r51) ---------- */
+  .selUIHost{ position:absolute; inset:0; z-index:1100; pointer-events:none; }
+  .selButtons{
+    position:absolute; display:flex; flex-direction:column; gap:var(--selbtn-gap);
+    pointer-events:auto;
+  }
+  .selBtn{
+    width:var(--selbtn-size); height:var(--selbtn-size);
+    border-radius:12px; border:1px solid var(--border); background:#fff; box-shadow:0 6px 12px rgba(0,0,0,.18);
+    display:grid; place-items:center; cursor:pointer;
+    touch-action:manipulation;
+  }
+  .selBtn:active{ transform:translateY(1px); }
+  .selBtn svg{ width:60%; height:60%; display:block; }
+  .selBtn svg *{ fill:none; stroke:#111; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .selButtons[data-side="left"]{ align-items:flex-end; }
+  .selButtons[data-side="right"]{ align-items:flex-start; }
+
+  /* ---------- Settings Panel (mock, r51) ---------- */
+  .settingsPanel{
+    position:absolute; inset:0; background:#fff; z-index:2000; display:grid; grid-template-rows:auto 1fr;
+  }
+  .settingsHead{
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line);
+  }
+  .settingsTitle{ font-weight:900; }
+  .settingsBody{ display:grid; place-items:center; color:#666; font-size:14px; }
+  .chip{ font-size:11px; font-weight:900; padding:2px 6px; border:1px solid var(--grid-line); border-radius:999px; color:#444; }
 </style>
 </head>
 <body>
@@ -187,7 +220,7 @@
   </main>
 
 <script>
-console.info('Chrono build r50 — overlay/viewport fixes, symmetric spillover, edge-create prompts, Sunday-first');
+console.info('Chrono build r51 — selector gear/X buttons, placement rules, mock Settings');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -313,6 +346,7 @@ function buildWeekView(){
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
           <div class="selHost" id="selHost" aria-hidden="false"></div>
+          <div class="selUIHost" id="selUIHost" aria-hidden="false"></div>
           <div class="hint" id="weekHint">Tap anywhere to edit</div>
         </div>
         <div class="hours" id="weekHours"></div>
@@ -337,10 +371,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r50')){
+    if(!localStorage.getItem('hint_week_edit_r51')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r50','1');
+      localStorage.setItem('hint_week_edit_r51','1');
     }
   }catch{}
 }
@@ -355,7 +389,7 @@ function repaintWeek(skipSel=false){
         ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
         : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
     : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  document.getElementById('weekTitle').textContent=title;
+  document.getElementById('weekTitle').innerHTML = \`${title} <span class="chip">r51</span>\`;
 
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
   for(let i=0;i<7;i++){ const d=addDays(first,i); const el=document.createElement('div'); el.className='day-pill'; el.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`; pills.appendChild(el); }
@@ -484,30 +518,28 @@ async function onWeekGridTap(e){
   }
 }
 
-/* ------------------- Draw selection ------------------- */
+/* ------------------- Draw selection + r51 buttons ------------------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 function segDowLabel(seg){
   const d = new Date(seg.weekSt + seg.dayIdx*DAY_MS);
-  return SHORT_DOW[d.getDay()]; // robust label from absolute date
+  return SHORT_DOW[d.getDay()];
 }
-
 function boundsFromSeg(seg){
-  const rect=weekGeom.rect;
   const colLeft = weekGeom.colX[seg.dayIdx];
   const colRight= weekGeom.colX[seg.dayIdx+1];
   const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
   const topY  = minutesToY(seg.startMin);
   const botY  = minutesToY(seg.endMin);
   const height= Math.max(1, botY - topY);
-  const offsetLeft = colLeft;
-  const offsetTop  = 0;
-  return {offsetLeft, offsetTop, colWidth, topY, botY, height};
+  return {offsetLeft:colLeft, colWidth, topY, botY, height};
 }
 
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
+  const uiHost=document.getElementById('selUIHost'); if(uiHost) uiHost.innerHTML='';
+
   if(!chain) return;
 
   const parentHere = segOnThisWeek(chain.parent);
@@ -515,6 +547,7 @@ function drawSelection(){
 
   if(!parentHere && !childHere) return;
 
+  // Build visible segments
   const segs=[];
   if(parentHere) segs.push({seg:chain.parent, name:'parent'});
   if(childHere)  segs.push({seg:chain.child,  name:'child'});
@@ -522,6 +555,7 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
+  // Render selection rectangles + handles (unchanged)
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
@@ -561,7 +595,7 @@ function drawSelection(){
 
     const rectEl = m.querySelector('.marqueeRect');
     rectEl.style.left   = `${b.offsetLeft}px`;
-    rectEl.style.top    = `${b.offsetTop + b.topY}px`;
+    rectEl.style.top    = `${b.topY}px`;
     rectEl.style.width  = `${b.colWidth}px`;
     rectEl.style.height = `${b.height}px`;
 
@@ -596,13 +630,91 @@ function drawSelection(){
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name));
     }
   });
+
+  // -------- r51: Render selector buttons (gear + X) --------
+  // Decide anchor and side per rules
+  const placeButtonsForSeg = (seg, sideHint=null)=>{
+    const uiHost=document.getElementById('selUIHost'); if(!uiHost) return;
+    const b=boundsFromSeg(seg);
+    const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
+    const hostRect=uiHost.getBoundingClientRect();
+
+    const midY = b.topY + (b.height/2);
+    const btnSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-size'))||36;
+    const pad = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-gap'))||8;
+    const nudge = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-nudge'))||8;
+
+    // Default side: right; Saturday forces left
+    let side = sideHint || (seg.dayIdx===6 ? 'left' : 'right');
+
+    // Compute x
+    let x;
+    if(side==='right'){
+      x = b.offsetLeft + b.colWidth + pad;
+      // keep inside grid
+      const maxX = weekGeom.totalW - btnSize - nudge;
+      if(x > maxX){ side='left'; x = Math.max(nudge, b.offsetLeft - btnSize - pad); }
+    }else{
+      x = b.offsetLeft - btnSize - pad;
+      if(x < nudge){ side='right'; x = Math.min(weekGeom.totalW - btnSize - nudge, b.offsetLeft + b.colWidth + pad); }
+    }
+
+    // Compute y (stack of two buttons centered)
+    let y = midY - (btnSize + pad/2);
+    const minY = nudge;
+    const maxY = weekGeom.totalH - (btnSize*2 + pad) - nudge;
+    y = clamp(y, minY, maxY);
+
+    const wrap=document.createElement('div');
+    wrap.className='selButtons';
+    wrap.dataset.side=side;
+    wrap.style.left = `${x}px`;
+    wrap.style.top  = `${y}px`;
+
+    // Gear button
+    const gear=document.createElement('button');
+    gear.className='selBtn'; gear.setAttribute('aria-label','Block settings');
+    gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1 1 0 0 0 .2-1.1l-1-1.7a7.5 7.5 0 0 0 0-2.4l1-1.7a1 1 0 0 0-.2-1.1l-1.1-1.1a1 1 0 0 0-1.1-.2l-1.7 1a7.5 7.5 0 0 0-2.4 0l-1.7-1a1 1 0 0 0-1.1.2L7 5.1a1 1 0 0 0-.2 1.1l1 1.7a7.5 7.5 0 0 0 0 2.4l-1 1.7a1 1 0 0 0 .2 1.1l1.1 1.1a1 1 0 0 0 1.1.2l1.7-1a7.5 7.5 0 0 0 2.4 0l1.7 1a1 1 0 0 0 1.1-.2l1.1-1.1z"></path>
+      </svg>`;
+    gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); openSettingsPanel(); });
+
+    // Exit (X) button
+    const close=document.createElement('button');
+    close.className='selBtn'; close.setAttribute('aria-label','Close selector');
+    close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+        <line x1="5" y1="5" x2="19" y2="19"></line>
+        <line x1="19" y1="5" x2="5" y2="19"></line>
+      </svg>`;
+    close.addEventListener('click', async (ev)=>{ ev.stopPropagation(); chain=null; await saveChain(null); drawSelection(); });
+
+    wrap.appendChild(gear);
+    wrap.appendChild(close);
+    uiHost.appendChild(wrap);
+  };
+
+  if(segs.length===1){
+    // Single segment visible on this chart (either no spillover, or cross-week)
+    placeButtonsForSeg(segs[0].seg);
+  }else{
+    // Same-week spillover: two segments visible → right of rightmost segment,
+    // unless that rightmost is Saturday → left of the leftmost (Friday).
+    const leftmost = segs[0].seg;
+    const rightmost= segs[1].seg;
+    if(rightmost.dayIdx===6){
+      // Anchor to left of leftmost (Friday triangle area)
+      placeButtonsForSeg(leftmost, 'left');
+    }else{
+      placeButtonsForSeg(rightmost, 'right');
+    }
+  }
 }
 
-/* ------------------- Drag logic ------------------- */
+/* ------------------- Drag logic (unchanged from r50) ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 
 function clampToBudget(seg, which){
-  // Use static budget captured at drag start so the other segment never "moves"
   const minGap=15;
   const hasChild = !!chain.child && !!chain.dir;
 
@@ -612,8 +724,8 @@ function clampToBudget(seg, which){
     return;
   }
 
-  const otherDur = otherDurAtStart;                 // static during this drag
-  const maxThisDur = 1440 - otherDur;               // hard 24h budget
+  const otherDur = otherDurAtStart;
+  const maxThisDur = 1440 - otherDur;
   let thisDur = seg.endMin - seg.startMin;
 
   if(chain.dir==='next'){
@@ -624,21 +736,21 @@ function clampToBudget(seg, which){
       }else{
         seg.startMin = clamp(seg.endMin - thisDur, 0, Math.min(seg.endMin - minGap, 1425));
       }
-    }else{ // child (starts at 0)
+    }else{
       if(dragKind==='top'){ seg.startMin = 0; }
       thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
       seg.endMin   = clamp(thisDur, minGap, maxThisDur);
     }
-  }else{ // dir === 'prev'
+  }else{
     if(which==='parent'){
       if(dragKind==='top'){ seg.startMin = 0; }
       thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
       seg.endMin   = clamp(thisDur, minGap, maxThisDur);
-    }else{ // child (ends at 1440)
+    }else{
       if(dragKind==='bottom'){ seg.endMin = 1440; }
-      const minStart = otherDur; // correct lower bound (parentDur at drag start)
+      const minStart = otherDur;
       const maxStart = 1425;
       thisDur = clamp(1440 - seg.startMin, minGap, maxThisDur);
       seg.startMin = clamp(seg.endMin - thisDur, minStart, maxStart);
@@ -646,7 +758,6 @@ function clampToBudget(seg, which){
     }
   }
 
-  // Final sanity (only adjust the dragged side)
   let usedDur = (chain.parent.endMin - chain.parent.startMin) + (chain.child.endMin - chain.child.startMin);
   if(usedDur > 1440){
     const over = usedDur - 1440;
@@ -666,7 +777,6 @@ function startDrag(ev, kind, which){
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
 
   dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
-  // Capture static snapshot of the opposite segment to freeze budget during this drag
   const other = otherSeg(which);
   if(other){
     baseOtherStart = other.startMin; baseOtherEnd = other.endMin;
@@ -685,7 +795,6 @@ function startDrag(ev, kind, which){
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
     const snappedDelta = snap15(deltaMinRaw);
 
-    // Only change the dragged endpoint; never shift the opposite endpoint.
     if(dragKind==='top'){
       seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15);
     } else if(dragKind==='bottom'){
@@ -730,7 +839,7 @@ function anchorFor(seg, which){
   return {x,y};
 }
 
-/* ------------------- Spillover confirm (one-shot, click-safe) ------------------- */
+/* ------------------- Spillover confirm (unchanged) ------------------- */
 function showEdgeConfirm(direction, anchor){
   removeEdgeConfirm(); edgeOpen = true;
 
@@ -766,40 +875,37 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
-/* Spillover creation: same-week if possible; hop only at Sat→Sun or Sun→Sat. Create ONE child endpoint. */
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
-  const p = chain.parent;              // 0=Sun indices
+  const p = chain.parent;
   let childWeek = p.weekSt;
   let childDay  = p.dayIdx;
 
-  chain.dir = direction; // set early
+  chain.dir = direction;
 
   if(direction==='next'){
     if(p.dayIdx < 6){
-      childDay  = p.dayIdx + 1;        // same chart
+      childDay  = p.dayIdx + 1;
       childWeek = p.weekSt;
-    }else{                              // Sat -> next week Sun
+    }else{
       childDay  = 0;
       childWeek = p.weekSt + 7*DAY_MS;
     }
     const parentDur = totalDur(p);
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:Math.min(60, 1440 - parentDur) };
 
-    // If week hop occurred, switch chart so user continues editing there
     if(p.dayIdx === 6){
       visibleWeekFirst = stampToDate(childWeek);
       await saveChain(chain);
-      // Defer repaint to next frame to avoid stale geometry
       requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); });
       return;
     }
-  }else{ // 'prev'
+  }else{
     if(p.dayIdx > 0){
-      childDay  = p.dayIdx - 1;        // same chart
+      childDay  = p.dayIdx - 1;
       childWeek = p.weekSt;
-    }else{                              // Sun -> prev week Sat
+    }else{
       childDay  = 6;
       childWeek = p.weekSt - 7*DAY_MS;
     }
@@ -819,7 +925,29 @@ async function confirmSpill(direction){
   drawSelection();
 }
 
-/* ------------------- Month & Day Views (unchanged) ------------------- */
+/* ------------------- Settings Panel (mock) ------------------- */
+function openSettingsPanel(){
+  const existing=document.getElementById('settingsPanel');
+  if(existing) return;
+
+  const panel=document.createElement('div');
+  panel.className='settingsPanel';
+  panel.id='settingsPanel';
+  panel.innerHTML=`
+    <div class="settingsHead">
+      <button class="chev" id="settingsExitLeft" aria-label="Exit">◀</button>
+      <div class="settingsTitle">Block Settings <span class="chip">r51 mock</span></div>
+      <button class="chev" id="settingsExitRight" aria-label="Exit">✕</button>
+    </div>
+    <div class="settingsBody">Settings UI will live here.</div>
+  `;
+  screenEl.appendChild(panel);
+  const close=()=>{ panel.remove(); };
+  panel.querySelector('#settingsExitLeft').addEventListener('click', close);
+  panel.querySelector('#settingsExitRight').addEventListener('click', close);
+}
+
+/* ------------------- Month & Day Views (unchanged except r51 watermark) ------------------- */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -830,7 +958,7 @@ function buildMonthView(){
     <div class="month-wrap">
       <div class="head">
         <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
-        <div class="title">${label}</div>
+        <div class="title">${label} <span class="chip">r51</span></div>
         <button id="nextMon" class="chev" aria-label="Next month">▶</button>
       </div>
       <div class="month-dow" aria-hidden="false">
@@ -860,9 +988,9 @@ function buildMonthView(){
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
-      <div class="head"><div></div><div class="title">Day</div><div></div></div>
+      <div class="head"><div></div><div class="title">Day <span class="chip">r51</span></div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r50</div>
+        <div class="watermark">Chrono build r51</div>
       </div>
     </div>
   `;
