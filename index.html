@@ -105,7 +105,7 @@
   .marqueeRect{
     position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
     box-shadow: var(--marquee-shadow);
-    border-radius:8px; pointer-events:none; /* BODY IS NOT DRAGGABLE ANYMORE */
+    border-radius:8px; pointer-events:none;
   }
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%); background:#fff; color:#111;
@@ -186,7 +186,7 @@
   </main>
 
 <script>
-console.info('Chrono build r48 — triangle-only adjustment, hard caps, no split/auto-back-adjust');
+console.info('Chrono build r49 — spillover math fixes, triangle-only, Sunday-first');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -194,7 +194,7 @@ const buttons = [...document.querySelectorAll('.btn')];
 
 let activeView = null;
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date()); // 0=Sun week baseline
+let visibleWeekFirst = weekStart(new Date()); // Sunday-first
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
 
@@ -207,7 +207,7 @@ function toHHMM(min){ const mm = ((Math.round(min)|0)+1440)%1440; const h = Math
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function totalDur(a){ return (a.endMin - a.startMin); }
 
-/* numeric week stamps (avoid TZ bugs) */
+/* numeric week stamps */
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
@@ -264,7 +264,7 @@ chain = {
   dir: 'prev'|'next'|null
 }
 */
-const CHAIN_KEY='selChain_v10';
+const CHAIN_KEY='selChain_v11';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
@@ -278,11 +278,8 @@ let pendingEdge=null; // {direction:'prev'|'next'}
 let dragKind=null;               // 'top'|'bottom'
 let dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
+let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false, createdAt=0;
-
-function snapshotState(){ return { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }; }
-async function saveAll(){ await storageSet('state', snapshotState()); await saveChain(chain); }
-let saveTimer=null; function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
 /* ------------------- Controls ------------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -334,10 +331,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r48')){
+    if(!localStorage.getItem('hint_week_edit_r49')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r48','1');
+      localStorage.setItem('hint_week_edit_r49','1');
     }
   }catch{}
 }
@@ -516,7 +513,7 @@ function drawSelection(){
     // Decide which handles to render
     let renderTop=false, renderBottom=false;
     if(!chain.child){
-      renderTop = renderBottom = true; // single box: two triangles, body not draggable
+      renderTop = renderBottom = true; // single box: two triangles
     }else if(bothVisible){
       renderTop = (idx===0);           // only outer edges
       renderBottom = (idx===segs.length-1);
@@ -548,7 +545,6 @@ function drawSelection(){
     rectEl.style.top    = `${b.offsetTop + b.topY}px`;
     rectEl.style.width  = `${b.colWidth}px`;
     rectEl.style.height = `${b.height}px`;
-    // BODY IS NOT DRAGGABLE — no pointer handlers attached
 
     const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||48;
     const stampH=26;
@@ -586,56 +582,64 @@ function drawSelection(){
 /* ------------------- Drag logic ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 
-// Only clamp the dragged endpoint. Do not touch the opposite endpoint. Never exceed shared 24h budget.
-function clampDragged(seg, which){
+function clampToBudget(seg, which){
+  // Use static budget captured at drag start so the other segment never "moves"
   const minGap=15;
-  const child = chain.child;
-  const parent= chain.parent;
+  const hasChild = !!chain.child && !!chain.dir;
 
-  if(!child || !chain.dir){
+  if(!hasChild){
     seg.startMin = clamp(seg.startMin, 0, 1425);
     seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
     return;
   }
 
+  const parent = chain.parent;
+  const child  = chain.child;
+
+  const otherDur = otherDurAtStart;                 // static during this drag
+  const maxThisDur = 1440 - otherDur;               // hard 24h budget
+  let thisDur = seg.endMin - seg.startMin;
+
   if(chain.dir==='next'){
-    // Parent lives on day N, Child on day N+1 (start at 00:00)
-    const parentDur = totalDur(parent);
-    const childDur  = totalDur(child);
     if(which==='parent'){
-      // Parent can end at most 1440 - childDur
-      const maxEnd = 1440 - childDur;
-      seg.endMin = Math.min(seg.endMin, maxEnd);
-      seg.startMin = clamp(seg.startMin, 0, seg.endMin - minGap);
-    }else{
-      // Child starts at 0, can end at most 1440 - parentDur
+      // parent can occupy at most maxThisDur; enforce only via dragged endpoint
+      thisDur = clamp(thisDur, minGap, maxThisDur);
+      if(dragKind==='bottom'){
+        seg.endMin = clamp(seg.startMin + thisDur, seg.startMin + minGap, Math.min(1440 - otherDur, 1440));
+      }else{ // top drag
+        seg.startMin = clamp(seg.endMin - thisDur, 0, Math.min(seg.endMin - minGap, 1425));
+      }
+    }else{ // child (starts at 0)
+      if(dragKind==='top'){ seg.startMin = 0; } // child top is not shown for 'next' but keep safe
+      thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
-      const maxChildEnd = 1440 - parentDur;
-      seg.endMin = clamp(seg.endMin, minGap, maxChildEnd);
+      seg.endMin   = clamp(thisDur, minGap, maxThisDur);
     }
-  }else{
-    // dir === 'prev' (Child is previous day and ends at 24:00)
-    const parentDur = totalDur(parent);
-    const childDur  = totalDur(child);
+  }else{ // dir === 'prev'
     if(which==='parent'){
-      // Parent starts at 0, can end at most 1440 - childDur
+      // parent starts at 0
+      if(dragKind==='top'){ seg.startMin = 0; }
+      thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
       seg.startMin = 0;
-      const maxEnd = 1440 - childDur;
-      seg.endMin = clamp(seg.endMin, minGap, maxEnd);
-    }else{
-      // Child ends at 1440, start cannot be earlier than 1440 - parentDur
-      seg.endMin = 1440;
-      const minStart = 1440 - parentDur;
-      seg.startMin = clamp(seg.startMin, Math.min(1425, minStart), 1425);
-      if(seg.endMin - seg.startMin < minGap) seg.startMin = seg.endMin - minGap;
+      seg.endMin   = clamp(thisDur, minGap, maxThisDur);
+    }else{ // child (ends at 1440)
+      if(dragKind==='bottom'){ seg.endMin = 1440; }
+      // Correct math: child.startMin ≥ parentDurFixed (not 1440 - parentDur)
+      const minStart = otherDur; // parentDur at drag start
+      const maxStart = 1425;
+      thisDur = clamp(1440 - seg.startMin, minGap, maxThisDur);
+      // Enforce lower bound so we can reach up toward Saturday morning
+      seg.startMin = clamp(seg.endMin - thisDur, minStart, maxStart);
+      seg.endMin   = 1440;
     }
   }
 
-  // Final sanity: never allow combined > 1440, but only trim the dragged side if rounding introduced drift
-  const used = totalDur(parent) + totalDur(child);
+  // Final sanity (only adjust the dragged side)
+  const used = (parent.endMin - parent.startMin) + (child.endMin - child.startMin);
   if(used > 1440){
     const over = used - 1440;
-    if(dragKind==='top') seg.startMin += over; else seg.endMin -= over;
+    if(dragKind==='top'){ seg.startMin = clamp(seg.startMin + over, 0, 1425); }
+    else { seg.endMin = clamp(seg.endMin - over, seg.startMin + minGap, 1440); }
   }
 
   seg.startMin = clamp(seg.startMin, 0, 1425);
@@ -650,6 +654,15 @@ function startDrag(ev, kind, which){
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
 
   dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
+  // Capture static snapshot of the opposite segment to freeze budget during this drag
+  const other = otherSeg(which);
+  if(other){
+    baseOtherStart = other.startMin; baseOtherEnd = other.endMin;
+    otherDurAtStart = baseOtherEnd - baseOtherStart;
+  }else{
+    baseOtherStart = 0; baseOtherEnd = 0; otherDurAtStart = 0;
+  }
+
   wasDrag=false; dragPixels=0;
 
   const move=(e)=>{
@@ -667,7 +680,7 @@ function startDrag(ev, kind, which){
       seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440);
     }
 
-    clampDragged(seg, which);
+    clampToBudget(seg, which);
     drawSelection();
   };
 
@@ -740,36 +753,41 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
-/* Spillover creation: same-week if possible; week-hop only at Sun↑ / Sat↓. Create ONE child endpoint. */
+/* Spillover creation: same-week if possible; hop only at Sat→Sun or Sun→Sat. Create ONE child endpoint. */
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
   const p = chain.parent;              // 0=Sun indices
   let childWeek = p.weekSt;
-  let childDay;
+  let childDay  = p.dayIdx;
+
+  chain.dir = direction; // set early
 
   if(direction==='next'){
     if(p.dayIdx < 6){
-      childDay = p.dayIdx + 1;         // same chart
+      childDay  = p.dayIdx + 1;        // same chart
+      childWeek = p.weekSt;
     }else{                              // Sat -> next week Sun
-      childWeek = p.weekSt + 7*DAY_MS;
       childDay  = 0;
-      visibleWeekFirst = stampToDate(childWeek);
+      childWeek = p.weekSt + 7*DAY_MS;
+      visibleWeekFirst = stampToDate(childWeek);   // hop view AFTER child computed
       repaintWeek();
     }
-    chain.dir = 'next';
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:Math.min(60, 1440 - totalDur(p)) };
+    const parentDur = totalDur(p);
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:Math.min(60, 1440 - parentDur) };
   }else{ // 'prev'
     if(p.dayIdx > 0){
-      childDay = p.dayIdx - 1;         // same chart
+      childDay  = p.dayIdx - 1;        // same chart
+      childWeek = p.weekSt;
     }else{                              // Sun -> prev week Sat
-      childWeek = p.weekSt - 7*DAY_MS;
       childDay  = 6;
+      childWeek = p.weekSt - 7*DAY_MS;
       visibleWeekFirst = stampToDate(childWeek);
       repaintWeek();
     }
-    chain.dir = 'prev';
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:Math.max(1440 - Math.min(60, 1440 - totalDur(p)), 0), endMin:1440 };
+    const parentDur = totalDur(p);
+    const span = Math.min(60, 1440 - parentDur);
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: Math.max(1440 - span, 0), endMin:1440 };
   }
 
   await saveChain(chain);
@@ -819,13 +837,17 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r48</div>
+        <div class="watermark">Chrono build r49</div>
       </div>
     </div>
   `;
 }
 
 /* ------------------- Init & render ------------------- */
+function snapshotState(){ return { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }; }
+async function saveAll(){ await storageSet('state', snapshotState()); await saveChain(chain); }
+let saveTimer=null; function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
+
 async function init(){
   try{
     const snap = await storageGet('state');
