@@ -29,10 +29,10 @@
     --handle-height:48px;
     --handle-stroke:#6f6f6f;
 
-    /* Selector UI buttons */
+    /* Selector UI buttons (r51) */
     --selbtn-size:36px;
     --selbtn-gap:8px;
-    --selbtn-nudge:8px; /* min padding from screen edges */
+    --selbtn-nudge:8px;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -145,8 +145,7 @@
   .selBtn{
     width:var(--selbtn-size); height:var(--selbtn-size);
     border-radius:12px; border:1px solid var(--border); background:#fff; box-shadow:0 6px 12px rgba(0,0,0,.18);
-    display:grid; place-items:center; cursor:pointer;
-    touch-action:manipulation;
+    display:grid; place-items:center; cursor:pointer; touch-action:manipulation;
   }
   .selBtn:active{ transform:translateY(1px); }
   .selBtn svg{ width:60%; height:60%; display:block; }
@@ -155,12 +154,8 @@
   .selButtons[data-side="right"]{ align-items:flex-start; }
 
   /* ---------- Settings Panel (mock, r51) ---------- */
-  .settingsPanel{
-    position:absolute; inset:0; background:#fff; z-index:2000; display:grid; grid-template-rows:auto 1fr;
-  }
-  .settingsHead{
-    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line);
-  }
+  .settingsPanel{ position:absolute; inset:0; background:#fff; z-index:2000; display:grid; grid-template-rows:auto 1fr; }
+  .settingsHead{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line); }
   .settingsTitle{ font-weight:900; }
   .settingsBody{ display:grid; place-items:center; color:#666; font-size:14px; }
   .chip{ font-size:11px; font-weight:900; padding:2px 6px; border:1px solid var(--grid-line); border-radius:999px; color:#444; }
@@ -220,15 +215,15 @@
   </main>
 
 <script>
-console.info('Chrono build r51 — selector gear/X buttons, placement rules, mock Settings');
+console.info('Chrono build r51 — selector gear/X buttons + mock settings; screensaver default');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
-let activeView = null;
+let activeView = null;                          // screensaver on load (r50 behavior)
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date()); // Sunday-first
+let visibleWeekFirst = weekStart(new Date());   // Sunday-first
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
 
@@ -315,7 +310,7 @@ let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false, createdAt=0;
 
-/* ------------------- Controls ------------------- */
+/* ------------------- Controls (r50 behavior preserved) ------------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
   const v=b.dataset.view;
@@ -363,7 +358,7 @@ function buildWeekView(){
   repaintWeek();
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
-  // Viewport-drift guards
+  // Viewport guards
   const syncViewport = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSelection(); } }, 32);
   window.addEventListener('scroll', syncViewport, {passive:true});
   window.addEventListener('orientationchange', syncViewport, {passive:true});
@@ -389,7 +384,7 @@ function repaintWeek(skipSel=false){
         ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
         : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
     : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  document.getElementById('weekTitle').innerHTML = \`${title} <span class="chip">r51</span>\`;
+  document.getElementById('weekTitle').textContent=title;
 
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
   for(let i=0;i<7;i++){ const d=addDays(first,i); const el=document.createElement('div'); el.className='day-pill'; el.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`; pills.appendChild(el); }
@@ -508,7 +503,6 @@ async function onWeekGridTap(e){
   await saveChain(chain);
   drawSelection();
 
-  // Auto spillover prompt when created exactly at edges
   if(startMin===0){
     pendingEdge={direction:'prev'};
     showEdgeConfirm('prev', anchorFor(chain.parent,'top'));
@@ -547,7 +541,6 @@ function drawSelection(){
 
   if(!parentHere && !childHere) return;
 
-  // Build visible segments
   const segs=[];
   if(parentHere) segs.push({seg:chain.parent, name:'parent'});
   if(childHere)  segs.push({seg:chain.child,  name:'child'});
@@ -555,7 +548,7 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
-  // Render selection rectangles + handles (unchanged)
+  // Render selection rectangles + handles (unchanged from r50)
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
@@ -563,17 +556,16 @@ function drawSelection(){
     const m=document.createElement('div');
     m.className='marquee';
 
-    // Decide which handles to render
     let renderTop=false, renderBottom=false;
     if(!chain.child){
-      renderTop = renderBottom = true; // single box: two triangles
+      renderTop = renderBottom = true;
     }else if(bothVisible){
-      renderTop = (idx===0);           // only outer edges
+      renderTop = (idx===0);
       renderBottom = (idx===segs.length-1);
     }else{
-      if(chain.dir==='next'){          // parent-week gets top; child-week gets bottom
+      if(chain.dir==='next'){
         if(name==='parent') renderTop=true; else renderBottom=true;
-      }else if(chain.dir==='prev'){    // parent-week gets bottom; child-week gets top
+      }else if(chain.dir==='prev'){
         if(name==='parent') renderBottom=true; else renderTop=true;
       }
     }
@@ -631,27 +623,23 @@ function drawSelection(){
     }
   });
 
-  // -------- r51: Render selector buttons (gear + X) --------
-  // Decide anchor and side per rules
+  // -------- r51: selector buttons (gear + X) --------
   const placeButtonsForSeg = (seg, sideHint=null)=>{
     const uiHost=document.getElementById('selUIHost'); if(!uiHost) return;
     const b=boundsFromSeg(seg);
-    const gridRect=document.getElementById('weekGrid').getBoundingClientRect();
-    const hostRect=uiHost.getBoundingClientRect();
 
     const midY = b.topY + (b.height/2);
     const btnSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-size'))||36;
     const pad = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-gap'))||8;
     const nudge = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-nudge'))||8;
 
-    // Default side: right; Saturday forces left
+    // Default right; Saturday forces left. Respect explicit sideHint for spillover rule.
     let side = sideHint || (seg.dayIdx===6 ? 'left' : 'right');
 
-    // Compute x
+    // Compute horizontal position with edge clamping
     let x;
     if(side==='right'){
       x = b.offsetLeft + b.colWidth + pad;
-      // keep inside grid
       const maxX = weekGeom.totalW - btnSize - nudge;
       if(x > maxX){ side='left'; x = Math.max(nudge, b.offsetLeft - btnSize - pad); }
     }else{
@@ -659,7 +647,7 @@ function drawSelection(){
       if(x < nudge){ side='right'; x = Math.min(weekGeom.totalW - btnSize - nudge, b.offsetLeft + b.colWidth + pad); }
     }
 
-    // Compute y (stack of two buttons centered)
+    // Vertical: two buttons, centered and clamped
     let y = midY - (btnSize + pad/2);
     const minY = nudge;
     const maxY = weekGeom.totalH - (btnSize*2 + pad) - nudge;
@@ -671,7 +659,7 @@ function drawSelection(){
     wrap.style.left = `${x}px`;
     wrap.style.top  = `${y}px`;
 
-    // Gear button
+    // Gear (settings)
     const gear=document.createElement('button');
     gear.className='selBtn'; gear.setAttribute('aria-label','Block settings');
     gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -680,7 +668,7 @@ function drawSelection(){
       </svg>`;
     gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); openSettingsPanel(); });
 
-    // Exit (X) button
+    // Exit (X)
     const close=document.createElement('button');
     close.className='selBtn'; close.setAttribute('aria-label','Close selector');
     close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -695,15 +683,14 @@ function drawSelection(){
   };
 
   if(segs.length===1){
-    // Single segment visible on this chart (either no spillover, or cross-week)
+    // Single segment visible on this chart (no spillover or cross-week spill)
     placeButtonsForSeg(segs[0].seg);
   }else{
-    // Same-week spillover: two segments visible → right of rightmost segment,
-    // unless that rightmost is Saturday → left of the leftmost (Friday).
+    // Same-week spillover visible on both days:
+    // Anchor to right of rightmost segment unless that is Saturday → left of leftmost (Friday triangle).
     const leftmost = segs[0].seg;
     const rightmost= segs[1].seg;
     if(rightmost.dayIdx===6){
-      // Anchor to left of leftmost (Friday triangle area)
       placeButtonsForSeg(leftmost, 'left');
     }else{
       placeButtonsForSeg(rightmost, 'right');
@@ -711,7 +698,7 @@ function drawSelection(){
   }
 }
 
-/* ------------------- Drag logic (unchanged from r50) ------------------- */
+/* ------------------- Drag logic (unchanged) ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 
 function clampToBudget(seg, which){
@@ -925,7 +912,7 @@ async function confirmSpill(direction){
   drawSelection();
 }
 
-/* ------------------- Settings Panel (mock) ------------------- */
+/* ------------------- Settings Panel (mock, r51) ------------------- */
 function openSettingsPanel(){
   const existing=document.getElementById('settingsPanel');
   if(existing) return;
@@ -947,7 +934,7 @@ function openSettingsPanel(){
   panel.querySelector('#settingsExitRight').addEventListener('click', close);
 }
 
-/* ------------------- Month & Day Views (unchanged except r51 watermark) ------------------- */
+/* ------------------- Month & Day Views (unchanged) ------------------- */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -958,7 +945,7 @@ function buildMonthView(){
     <div class="month-wrap">
       <div class="head">
         <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
-        <div class="title">${label} <span class="chip">r51</span></div>
+        <div class="title">${label}</div>
         <button id="nextMon" class="chev" aria-label="Next month">▶</button>
       </div>
       <div class="month-dow" aria-hidden="false">
@@ -988,7 +975,7 @@ function buildMonthView(){
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
-      <div class="head"><div></div><div class="title">Day <span class="chip">r51</span></div><div></div></div>
+      <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
         <div class="watermark">Chrono build r51</div>
       </div>
