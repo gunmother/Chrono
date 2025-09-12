@@ -188,7 +188,7 @@
   </main>
 
 <script>
-console.info('Chrono build r32');
+console.info('Chrono build r33');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
@@ -268,7 +268,7 @@ A week record stores 0-2 segments that belong to that week.
   id,
   dir: 'prev'|'next'|null,
   segments: [ { dayIdx,startMin,endMin,isParent:boolean } ],
-  parentTimes?: { startMin,endMin } // present only on child week for clamping
+  parentTimes?: { startMin,endMin } // child week only
 }
 ---------------------------------------------------- */
 
@@ -280,23 +280,22 @@ async function readWeekRecord(weekDate){
   return await storageGet(weekKey(getWeekISO(weekDate)));
 }
 
-/* In-memory selection for the CURRENT week only */
+/* In-memory selection for CURRENT week only */
 let chain = null;
 
-/* Keep pending edge intent so ✓ always works */
-let pendingEdge = null; // {direction:'prev'|'next', weekISO:string, parentSnapshot, parentWeekISO}
+/* Edge intent (so ✓ works reliably) */
+let pendingEdge = null; // {direction, parentSnapshot, parentWeekISO}
 
-/* Utils */
 function snapshotState(){ return { activeView, activeDayISO }; }
 async function saveAll(){
   await storageSet('state', snapshotState());
   await persistChainForWeek(visibleWeekFirst, chain);
 }
 let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ save All().catch(()=>{}); }, ms); } // eslint-disable-line
-// quick fix for minifiers without eslint: rewrite:
-function saveAllWrapper(){ saveAll().catch(()=>{}); }
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(saveAllWrapper, ms); }
+function saveSoon(ms=600){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms);
+}
 
 /* Controls */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -356,14 +355,10 @@ function buildWeekView(){
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
   loadChainForCurrentWeek().catch(()=>{});
-
   try{
     if(!localStorage.getItem('hint_week_edit_v9')){
       const hint=document.getElementById('weekHint');
-      requestAnimationFrame(()=>{
-        hint.classList.add('show');
-        setTimeout(()=>{ hint.classList.remove('show'); }, 2200);
-      });
+      requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
       localStorage.setItem('hint_week_edit_v9','1');
     }
   }catch{}
@@ -482,16 +477,15 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ---------- Loading current week's chain ---------- */
+/* ---------- Load chain for current week ---------- */
 async function loadChainForCurrentWeek(){
   const rec = await readWeekRecord(visibleWeekFirst);
   if(!rec){ chain=null; drawSelection(); return; }
-
   chain = { id:rec.id, dir:rec.dir||null, segments:(rec.segments||[]).slice(), parentTimes: rec.parentTimes||null };
   drawSelection();
 }
 
-/* ---------- Tap to create new 1h block (clears chain in this week only) ---------- */
+/* ---------- Tap to create new 1h block ---------- */
 function onWeekGridTap(e){
   const grid=document.getElementById('weekGrid');
   const host=document.getElementById('selHost');
@@ -602,17 +596,18 @@ function drawSelection(){
   });
 }
 
-/* ---------- Drag with child-only clamp & robust edge intent ---------- */
+/* ---------- Drag with child-only clamp & edge intent ---------- */
 function startDrag(ev, kind, segIdx){
   if(!chain) return;
+  const segsSorted = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
+  const seg = segsSorted[segIdx];
+
   dragKind = kind;
   dragSegIndex = segIdx;
   ev.preventDefault();
   ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
-  const segsSorted = chain.segments.slice().sort((a,b)=>a.dayIdx-b.dayIdx);
-  const seg = segsSorted[segIdx];
   const isParent = !!seg.isParent;
 
   dragStartY = ev.clientY;
@@ -650,12 +645,10 @@ function startDrag(ev, kind, segIdx){
       }
     }
 
-    // live edge hint (don’t stack boxes)
-    const nearTop = seg.startMin<=0;
-    const nearBottom = seg.endMin>=1440;
+    // live edge hint
     if(chain.segments.length===1){
-      if(dragKind==='top' && nearTop){ setPendingAndShow('prev', seg, isParent); }
-      else if(dragKind==='bottom' && nearBottom){ setPendingAndShow('next', seg, isParent); }
+      if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
+      else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
     }
 
     drawSelection();
@@ -666,10 +659,9 @@ function startDrag(ev, kind, segIdx){
     seg.endMin   = snap15(seg.endMin);
     drawSelection();
 
-    // also set pending if user released exactly on edge
     if(chain.segments.length===1){
-      if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg, isParent); }
-      else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg, isParent); }
+      if(dragKind==='top' && seg.startMin===0){ setPendingAndShow('prev', seg); }
+      else if(dragKind==='bottom' && seg.endMin===1440){ setPendingAndShow('next', seg); }
     }
 
     await persistChainForWeek(visibleWeekFirst, chain).catch(()=>{});
@@ -685,10 +677,9 @@ function startDrag(ev, kind, segIdx){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-function setPendingAndShow(direction, seg, isParent){
+function setPendingAndShow(direction, seg){
   pendingEdge = {
     direction,
-    weekISO: getWeekISO(visibleWeekFirst),
     parentSnapshot: { ...seg, isParent:true },
     parentWeekISO: getWeekISO(visibleWeekFirst)
   };
@@ -733,21 +724,27 @@ function showEdgeConfirm(direction, anchorX, anchorY){
 }
 function removeEdgeConfirm(){ document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove()); }
 
-/* ---------- Confirm spill using pendingEdge (always fires) ---------- */
+/* ---------- Confirm spill ---------- */
 async function confirmSpillFromPending(){
   if(!pendingEdge || !chain || chain.segments.length!==1) { pendingEdge=null; return; }
 
-  const direction = pendingEdge.direction;
-  const parent = pendingEdge.parentSnapshot;
+  const {direction, parentSnapshot, parentWeekISO} = pendingEdge;
   const id = chain.id;
+  const parent = parentSnapshot;
+
+  // Ensure we're on the parent week when writing parent side
+  const curWeekISO = getWeekISO(visibleWeekFirst);
+  if(curWeekISO !== parentWeekISO){
+    // write child first if user navigated oddly
+  }
 
   if(direction==='prev'){
     if(parent.dayIdx===0){
-      // Persist parent in current week
-      await persistChainForWeek(visibleWeekFirst, { id, dir:'prev', segments:[{...parent, isParent:true}] });
+      // Persist parent in current (Sunday) week
+      await persistChainForWeek(weekStart(new Date(parentWeekISO)), { id, dir:'prev', segments:[{...parent, isParent:true}] });
 
-      // Switch to previous week and create child there
-      visibleWeekFirst = addDays(visibleWeekFirst, -7);
+      // Switch to previous week, create child on Saturday 23:00–24:00
+      visibleWeekFirst = addDays(weekStart(new Date(parentWeekISO)), -7);
       repaintWeek();
 
       chain = {
@@ -758,7 +755,7 @@ async function confirmSpillFromPending(){
       await persistChainForWeek(visibleWeekFirst, chain);
       drawSelection();
     } else {
-      // Same week child on previous day 23:00–24:00
+      // Same week child on previous day
       chain.dir = 'prev';
       chain.segments = [
         { dayIdx:parent.dayIdx-1, startMin:1380, endMin:1440, isParent:false },
@@ -770,9 +767,9 @@ async function confirmSpillFromPending(){
     }
   } else { // next
     if(parent.dayIdx===6){
-      await persistChainForWeek(visibleWeekFirst, { id, dir:'next', segments:[{...parent, isParent:true}] });
+      await persistChainForWeek(weekStart(new Date(parentWeekISO)), { id, dir:'next', segments:[{...parent, isParent:true}] });
 
-      visibleWeekFirst = addDays(visibleWeekFirst, 7);
+      visibleWeekFirst = addDays(weekStart(new Date(parentWeekISO)), 7);
       repaintWeek();
 
       chain = {
@@ -841,7 +838,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r32</div>
+        <div class="watermark">Chrono build r33</div>
       </div>
     </div>
   `;
