@@ -4,62 +4,53 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Chrono</title>
-
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
 
 <style>
   :root{
-    /* ===== Neumorphic theme ===== */
-    --bg:#e3eaf2;                          /* canvas */
-    --ink:#42586d;                         /* global text (gray-blue) */
+    --bg:#e3eaf2;
+    --ink:#42586d;
 
-    --icon-inactive:#42586d;               /* matches text */
-    --icon-active:#4ff7ff;                 /* turquoise LED */
-    --pressed-navy:#355169;                /* dark navy surface for pressed / selector windows */
+    --icon-inactive:#42586d;
+    --icon-active:#4ff7ff;
+    --pressed-navy:#355169;
     --turq-glow: rgba(79,247,255,.75);
 
-    /* Softened shadows */
     --off:5px;
     --blur:9px;
     --hi:#ffffff;
     --lo:#b7c3d1;
 
-    /* Layout */
     --gap:24px;
     --radius:12px;
 
-    /* App tokens */
     --r-lg:12px; --r-pill:999px;
     --border:#c6cfda;
     --grid-line:#cfd9e5;
 
-    /* Chart tones */
     --chart-bg:#d1dce8;
     --mask-surface: var(--bg);
 
     --hour-col:64px;
     --dow-h:32px;
     --label-size:12px;
-
     --panelW:520px;
 
-    /* Marquee: thick white outline + outside glow only */
+    /* marquee: thick white border + outer glow only */
     --marquee-border:5px;
     --marquee-shadow:0 0 12px 6px var(--turq-glow);
 
-    /* Handles */
     --handle-height:48px;
   }
 
   html,body{
     height:100%; margin:0; background:var(--bg); color:var(--ink);
     font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
-    -webkit-tap-highlight-color: transparent;  /* kill blue tap flash */
+    -webkit-tap-highlight-color: transparent; /* kill blue flash */
   }
   *{box-sizing:border-box}
 
-  /* Frame */
   .app{
     width:clamp(320px, 96vw, 520px);
     height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
@@ -67,7 +58,6 @@
     display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
   }
 
-  /* Neumorphic screen */
   #screen{
     flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
     box-shadow:
@@ -76,7 +66,6 @@
     position:relative; overflow:hidden;
   }
 
-  /* Controls row */
   .controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
   .neu-btn{
     --btn-d: calc((100% - (3 * var(--gap))) / 4);
@@ -89,10 +78,9 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
-  /* Larger icons + thinner strokes + extra detail */
   .neu-btn svg{
     width:86%; height:auto;
-    stroke:var(--icon-inactive); stroke-width:1.25;
+    stroke:var(--icon-inactive); stroke-width:1.25; /* thinner strokes */
     fill:none; stroke-linecap:round; stroke-linejoin:round;
     transition:stroke .2s ease, filter .2s ease;
   }
@@ -109,9 +97,8 @@
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
   }
   .neu-btn:active{ transform:scale(.985); }
-  .neu-btn:focus { outline:none; }
+  .neu-btn:focus{ outline:none; }
 
-  /* Small neu (chevrons + selector buttons) */
   .neu-btn--sm{
     width:44px; height:44px; border-radius:12px; flex:0 0 auto;
     display:grid; place-items:center; background:var(--bg); border:none; cursor:pointer;
@@ -155,15 +142,14 @@
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
   .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
 
-  /* Selection rectangles live inside grid; handles/stamps live in overlay */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marqueeRect{
     position:absolute; box-sizing:border-box;
     background:transparent;
-    border:var(--marquee-border) solid #fff;     /* thick white border */
+    border:var(--marquee-border) solid #fff;   /* thick white border */
     border-radius:10px;
     pointer-events:none;
-    box-shadow: var(--marquee-shadow);          /* turquoise glow OUTSIDE only */
+    box-shadow: var(--marquee-shadow);        /* turquoise glow OUTSIDE only */
   }
 
   .hint{ position:absolute; left:50%; top:calc(var(--dow-h) + 8px); transform:translateX(-50%);
@@ -171,11 +157,10 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* Body overlay: allow handle drags; triangles and stamps sit above grid effects */
-  .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:auto; }
+  /* Overlay: pass-through except handles; handles set to pointer-events:auto */
+  .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
 
-  /* LED stamps */
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
@@ -185,16 +170,16 @@
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
 
-  /* Triangular handles: neuromorphic, no stroke, size = single hour row */
-  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; }
+  /* triangular handles, one-hour tall, neuromorphic (no stroke) */
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
   .tri{
     display:block; margin:0 auto;
-    width:64px; height:40px; /* JS will size to row height */
+    width:64px; height:40px; /* JS resizes */
     filter: drop-shadow(-3px -3px 6px var(--hi)) drop-shadow(3px 3px 6px var(--lo));
   }
   .tri path{ fill:var(--bg); }
 
-  /* Selector floating buttons (week-only) */
+  /* floating buttons */
   .selBtns{ position:fixed; z-index:2050; display:grid; gap:8px; pointer-events:auto; }
   .selBtns > button{ touch-action:manipulation; }
   .selBtnHidden{ display:none !important; }
@@ -222,18 +207,18 @@
   }
   .mcell{
     position:relative; background:var(--bg); color:var(--ink); border-radius:8px;
-    /* Beveled border: white top/left, dark bottom/right (reversed from previous) */
+    /* white top/left; dark bottom/right (your request) */
     box-shadow:
       -1px -1px 0 0 var(--hi),
        1px  1px 0 0 var(--lo);
   }
   .mcell .date{
-    position:absolute; top:8px; right:10px;   /* date in top-right */
+    position:absolute; top:8px; right:10px; /* date top-right */
     font-weight:800; z-index:2;
   }
   .mcell.muted{ color:#8da0b3 }
 
-  /* Today tile: raised neuomorph, NO border; navy circle top-right, inset from edges */
+  /* Today tile: raised neuomorph, no stroke border; navy oval top-right */
   .mcell.today{
     box-shadow:
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
@@ -241,7 +226,7 @@
   }
   .mcell.today::before{
     content:""; position:absolute; top:6px; right:6px;
-    width:28px; height:22px; border-radius:999px;
+    width:30px; height:22px; border-radius:999px;
     background:var(--pressed-navy);
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
@@ -253,7 +238,6 @@
     <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
     <nav class="controls" role="group" aria-label="Primary views">
-      <!-- Day -->
       <button class="neu-btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="5.5"/>
@@ -268,7 +252,6 @@
         </svg>
       </button>
 
-      <!-- Week -->
       <button class="neu-btn is-pressed" aria-label="Week view" aria-pressed="true" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
@@ -282,7 +265,6 @@
         </svg>
       </button>
 
-      <!-- Month -->
       <button class="neu-btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
@@ -295,7 +277,6 @@
         </svg>
       </button>
 
-      <!-- To-Do -->
       <button class="neu-btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="3"/>
@@ -307,17 +288,16 @@
   </main>
 
 <script>
-console.info('Chrono build r59 — fix blank page (no duplicate declarations), triangles = one-row neuromorph + drag, marquee white + glow, month bevel reversed, today date/circle top-right aligned');
+console.info('Chrono r60 — fix freeze (bad IDs + SVG), overlay pass-through, one-hour draggable triangles, marquee white+glow, month bevel reversed, today pill top-right.');
 
-/* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = 'week';                           /* default to Week so something renders */
+let activeView = 'week';
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());      // Sunday-first
+let visibleWeekFirst = weekStart(new Date());
 
-const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -330,19 +310,17 @@ function totalDur(a){ return (a.endMin - a.startMin); }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
 function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 
-/* numeric week stamps */
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
-/* Width sync */
 new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
 }).observe(screenEl);
 
-/* ------------------- Storage ------------------- */
+/* storage */
 const DB_NAME='chronoDB', DB_VERSION=24;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
@@ -378,32 +356,22 @@ async function storageGet(k){
   });
 }
 
-/* ------------------- Selector chain (single) ------------------- */
+/* selection chain */
 const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
 let chain = null;
-
-/* Spillover confirm state */
-let edgeOpen=false;
-let pendingEdge=null; // {direction:'prev'|'next'}
-
-/* Drag gesture state */
-let dragKind=null;               // 'top'|'bottom'
-let dragTarget='parent';
+let edgeOpen=false, pendingEdge=null;
+let dragKind=null, dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false, createdAt=0;
-
-/* Boundary-cross tracking */
 let crossedTop=false, crossedBottom=false, prevStartMin=0, prevEndMin=0;
-/* User drag flag */
 let userDragActive=false;
-/* Lock after opening settings once */
 let selectionLockId=null;
 
-/* ------------------- Controls ------------------- */
+/* controls */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
@@ -421,9 +389,9 @@ document.querySelector('.controls').addEventListener('click', e=>{
   saveSoon(200);
 });
 
-/* ------------------- Week View ------------------- */
+/* week view */
 let weekGeom=null;
-let overlayRoot=null; // body-level overlay (triangles, stamps)
+let overlayRoot=null;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -451,17 +419,19 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick = async ()=>{
-    pressFlash(prevWeekBtn);
+  const prev = document.getElementById('prevWeekBtn');
+  const next = document.getElementById('nextWeekBtn');
+  prev.onclick = async ()=>{
+    pressFlash(prev);
     visibleWeekFirst=addDays(visibleWeekFirst,-7);
     repaintWeek(); await loadAndDraw(); saveSoon(200);
-    unpressFlash(prevWeekBtn);
+    unpressFlash(prev);
   };
-  document.getElementById('nextWeekBtn').onclick = async ()=>{
-    pressFlash(nextWeekBtn);
+  next.onclick = async ()=>{
+    pressFlash(next);
     visibleWeekFirst=addDays(visibleWeekFirst, 7);
     repaintWeek(); await loadAndDraw(); saveSoon(200);
-    unpressFlash(nextWeekBtn);
+    unpressFlash(next);
   };
 
   const grid=document.getElementById('weekGrid');
@@ -605,11 +575,9 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* ------------------- Tap to create parent ------------------- */
+/* tap to create */
 async function onWeekGridTap(e){
-  if(e.target.closest('#overlayRoot') || e.target.closest('.selBtns')) return;
   if(edgeOpen || !weekGeom) return;
-  removeEdgeConfirm(); pendingEdge=null;
 
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
@@ -629,7 +597,7 @@ async function onWeekGridTap(e){
   drawSelection();
 }
 
-/* ------------------- Selection drawing ------------------- */
+/* draw selection */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 function boundsFromSeg(seg){
@@ -691,7 +659,7 @@ function drawSelection(){
     }
 
     const oneHourH = weekGeom.rowH[0] || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height')) || 48;
-    const triH = Math.max(28, Math.min(oneHourH-4, 64));
+    const triH = Math.max(28, Math.min(oneHourH-4, 72));
     const triW = Math.min(b.colWidth-12, Math.round(triH*1.2));
     const stampPad=6, stampH=26;
 
@@ -742,7 +710,7 @@ function triangleSVG(w=80,h=48){
   `;
 }
 
-/* ------------------- Drag logic ------------------- */
+/* drag */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -782,7 +750,6 @@ function startDrag(ev, kind, which){
   const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return;
 
   userDragActive=true;
-
   dragKind = kind; dragTarget = which;
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
 
@@ -856,40 +823,39 @@ function anchorFor(seg, which){
   return {x,y};
 }
 
-/* ------------------- Spillover confirm ------------------- */
+/* simple confirm */
 function showEdgeConfirm(direction, anchor){
   removeEdgeConfirm(); edgeOpen = true;
 
   const veil=document.createElement('div');
-  veil.className='edgeVeil';
-  veil.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); }, {capture:true});
+  veil.className='settingsVeil';
+  veil.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); removeEdgeConfirm(); }, {capture:true});
   document.body.appendChild(veil);
 
   const box=document.createElement('div');
-  box.className='edgeConfirm';
-  box.style.left = Math.max(12, Math.min(window.innerWidth-172, Math.round(anchor.x-80)))+'px';
-  box.style.top  = Math.max(12, Math.min(window.innerHeight-90, Math.round(anchor.y-20)))+'px';
+  box.className='settingsModal';
+  box.style.width='min(92vw, 260px)';
   box.innerHTML=`
-    <div>${direction==='prev' ? 'Spill into previous day?' : 'Spill into next day?'}</div>
-    <div class="edgeRow">
-      <button class="edgeBtn" data-act="cancel" aria-label="Cancel">✕</button>
-      <button class="edgeBtn ok" data-act="ok" aria-label="Confirm">✓</button>
+    <div class="settingsHead"><div>${direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?'}</div></div>
+    <div class="settingsBody"></div>
+    <div class="settingsFoot">
+      <button class="closeBtn" data-act="cancel">Cancel</button>
+      <button class="closeBtn ok" data-act="ok">OK</button>
     </div>
   `;
   document.body.appendChild(box);
 
-  box.addEventListener('pointerdown', ev=>ev.stopPropagation());
-  box.addEventListener('click', ev=>ev.stopPropagation());
   box.addEventListener('click', async (e)=>{
     const b=e.target.closest('button'); if(!b) return;
     const act=b.dataset.act;
-    if(act==='cancel'){ removeEdgeConfirm(); pendingEdge=null; return; }
+    if(act==='cancel'){ removeEdgeConfirm(); return; }
     if(act==='ok'){ await confirmSpill(direction); removeEdgeConfirm(); }
   });
 }
-function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
-  document.querySelectorAll('.edgeConfirm').forEach(n=>n.remove());
-  document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
+function removeEdgeConfirm(){
+  edgeOpen=false; pendingEdge=null;
+  document.querySelectorAll('.settingsModal').forEach(n=>n.remove());
+  document.querySelectorAll('.settingsVeil').forEach(n=>n.remove());
 }
 
 async function confirmSpill(direction){
@@ -922,7 +888,7 @@ async function confirmSpill(direction){
   repositionSelButtons();
 }
 
-/* ------------------- Month View ------------------- */
+/* month view */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -946,12 +912,14 @@ function buildMonthView(){
     </div>
   `;
 
-  document.getElementById('prevMon').onclick=()=>{ pressFlash(prevMon); renderMonth(base, -1); unpressFlash(prevMon); };
-  document.getElementById('nextMon').onclick=()=>{ pressFlash(nextMon); renderMonth(base, +1); unpressFlash(nextMon); };
+  const prev=document.getElementById('prevMon');
+  const next=document.getElementById('nextMon');
+  prev.onclick=()=>{ pressFlash(prev); renderMonth(base, -1); unpressFlash(prev); };
+  next.onclick=()=>{ pressFlash(next); renderMonth(base, +1); unpressFlash(next); };
 
   renderMonth(base, 0);
 
-  destroySelButtons(); destroyOverlay(); // strict: not in Month
+  destroySelButtons(); destroyOverlay();
 }
 
 function renderMonth(base, delta){
@@ -988,20 +956,20 @@ function renderMonth(base, delta){
   }
 }
 
-/* ------------------- Day View ------------------- */
+/* day view */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r59</div>
+        <div class="watermark">Chrono r60</div>
       </div>
     </div>
   `;
   destroySelButtons(); destroyOverlay();
 }
 
-/* ------------------- Init & render ------------------- */
+/* init */
 function snapshotState(){ return { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }; }
 async function saveAll(){ await storageSet('state', snapshotState()); await saveChain(chain); }
 let saveTimer=null;
@@ -1016,9 +984,7 @@ async function init(){
       if('visibleWeekFirst' in snap && typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
     }
   }catch{}
-
   render();
-
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 }
@@ -1039,7 +1005,7 @@ function render(){
 }
 init();
 
-/* ------------------- helpers ------------------- */
+/* helpers */
 function throttle(fn, ms){
   let t=0, lastArgs=null;
   return function(...args){
@@ -1050,7 +1016,7 @@ function throttle(fn, ms){
   }
 }
 
-/* ===== Week-only floating buttons + modal ===== */
+/* floating controls */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
   if(window.__selBtns && document.body.contains(window.__selBtns)){ window.__selBtns.classList.remove('selBtnHidden'); return; }
@@ -1059,17 +1025,18 @@ function ensureSelButtons(){
   wrap.className='selBtns';
   wrap.id='selBtns';
 
-  // Settings (gear)
   const gear = document.createElement('button');
   gear.className='neu-btn--sm';
   gear.setAttribute('aria-label', 'Settings');
+  /* simple gear icon to avoid parse glitches */
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
-    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52 .42 1.1 .78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-\66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+  </svg>`;
+  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.4'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
   gear.addEventListener('click', onGearTap, {passive:true});
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
 
-  // Clear (X)
   const close = document.createElement('button');
   close.className='neu-btn--sm';
   close.setAttribute('aria-label', 'Clear selection');
@@ -1120,28 +1087,6 @@ function repositionSelButtons(){
   pair.style.top  = `${Math.round(top)}px`;
 }
 
-function onGearTap(ev){
-  ev.stopPropagation();
-  if(!chain) return;
-  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
-
-  const veil = document.createElement('div'); veil.className='settingsVeil';
-  const modal = document.createElement('div'); modal.className='settingsModal';
-  modal.innerHTML = `
-    <div class="settingsHead">
-      <div>Settings</div>
-      <button class="closeBtn" aria-label="Close">✕</button>
-    </div>
-    <div class="settingsBody"><em>Blank settings window</em></div>
-    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
-  `;
-  const closeAll = ()=>{ veil.remove(); modal.remove(); };
-  veil.addEventListener('click', closeAll);
-  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
-  document.body.appendChild(veil);
-  document.body.appendChild(modal);
-}
-
 function alignSelectionToButtons(){
   if(!chain || !window.__selBtns || activeView!=='week') return;
 
@@ -1174,6 +1119,25 @@ function alignSelectionToButtons(){
   drawSelection();
 }
 
+function onGearTap(ev){
+  ev.stopPropagation();
+  if(!chain) return;
+  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
+
+  const veil = document.createElement('div'); veil.className='settingsVeil';
+  const modal = document.createElement('div'); modal.className='settingsModal';
+  modal.innerHTML = `
+    <div class="settingsHead"><div>Settings</div><button class="closeBtn" aria-label="Close">✕</button></div>
+    <div class="settingsBody"><em>Blank settings window</em></div>
+    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
+  `;
+  const closeAll = ()=>{ veil.remove(); modal.remove(); };
+  veil.addEventListener('click', closeAll);
+  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
+  document.body.appendChild(veil);
+  document.body.appendChild(modal);
+}
+
 async function onXTap(ev){
   ev.stopPropagation();
   if(!chain) return;
@@ -1188,7 +1152,6 @@ async function onXTap(ev){
 }
 </script>
 
-<!-- Service worker registration (unchanged) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
