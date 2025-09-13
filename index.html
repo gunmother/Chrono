@@ -28,11 +28,6 @@
     /* Handles */
     --handle-height:48px;
     --handle-stroke:#6f6f6f;
-
-    /* Selector UI buttons (r51) */
-    --selbtn-size:36px;
-    --selbtn-gap:8px;
-    --selbtn-nudge:8px;
   }
 
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
@@ -136,29 +131,28 @@
   .edgeBtn{ min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .edgeBtn.ok{ background:#e6e6e6; }
 
-  /* ---------- Selector Buttons (r51) ---------- */
-  .selUIHost{ position:absolute; inset:0; z-index:1100; pointer-events:none; }
-  .selButtons{
-    position:absolute; display:flex; flex-direction:column; gap:var(--selbtn-gap);
-    pointer-events:auto;
-  }
+  /* ---------- Selector Floating Buttons (NEW) ---------- */
+  .selBtns{ position:fixed; z-index:1450; display:grid; gap:8px; pointer-events:auto; }
   .selBtn{
-    width:var(--selbtn-size); height:var(--selbtn-size);
-    border-radius:12px; border:1px solid var(--border); background:#fff; box-shadow:0 6px 12px rgba(0,0,0,.18);
-    display:grid; place-items:center; cursor:pointer; touch-action:manipulation;
+    width:44px; height:44px; border-radius:12px; border:1px solid var(--border); background:#fff;
+    display:grid; place-items:center; box-shadow:0 6px 14px rgba(0,0,0,.18); cursor:pointer;
+    touch-action:manipulation;
   }
-  .selBtn:active{ transform:translateY(1px); }
-  .selBtn svg{ width:60%; height:60%; display:block; }
-  .selBtn svg *{ fill:none; stroke:#111; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  .selButtons[data-side="left"]{ align-items:flex-end; }
-  .selButtons[data-side="right"]{ align-items:flex-start; }
+  .selBtn svg{ width:22px; height:22px; }
+  .selBtn:active{ transform:scale(.98); }
 
-  /* ---------- Settings Panel (mock, r51) ---------- */
-  .settingsPanel{ position:absolute; inset:0; background:#fff; z-index:2000; display:grid; grid-template-rows:auto 1fr; }
-  .settingsHead{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line); }
-  .settingsTitle{ font-weight:900; }
-  .settingsBody{ display:grid; place-items:center; color:#666; font-size:14px; }
-  .chip{ font-size:11px; font-weight:900; padding:2px 6px; border:1px solid var(--grid-line); border-radius:999px; color:#444; }
+  /* ---------- Settings Modal (NEW) ---------- */
+  .settingsVeil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1600; }
+  .settingsModal{
+    position:fixed; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 440px); background:#fff; color:#111; border:1px solid var(--border);
+    border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,.28); z-index:1700; display:grid; grid-template-rows:auto 1fr auto;
+  }
+  .settingsHead{ padding:12px 14px; border-bottom:1px solid var(--grid-line); font-weight:800; display:flex; justify-content:space-between; align-items:center; }
+  .settingsBody{ padding:16px; color:#555; font-size:14px; }
+  .settingsFoot{ padding:10px 14px; border-top:1px solid var(--grid-line); display:flex; justify-content:flex-end; gap:10px; }
+  .closeBtn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
+  .closeBtn.ok{ background:#e6e6e6; }
 </style>
 </head>
 <body>
@@ -215,15 +209,15 @@
   </main>
 
 <script>
-console.info('Chrono build r51 — selector gear/X buttons + mock settings; screensaver default');
+console.info('Chrono build r51 — selector buttons (settings + clear), modal, tethered & viewport-safe');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.btn')];
 
-let activeView = null;                          // screensaver on load (r50 behavior)
+let activeView = null;
 let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());   // Sunday-first
+let visibleWeekFirst = weekStart(new Date()); // Sunday-first
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
 
@@ -285,14 +279,6 @@ async function storageGet(k){
 }
 
 /* ------------------- Selector chain (single) ------------------- */
-/*
-chain = {
-  id: number,
-  parent: { weekSt:number, dayIdx:0..6, startMin:number, endMin:number },
-  child:  { weekSt:number, dayIdx:0..6, startMin:number, endMin:number } | null,
-  dir: 'prev'|'next'|null
-}
-*/
 const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
@@ -310,12 +296,13 @@ let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false, createdAt=0;
 
-/* ------------------- Controls (r50 behavior preserved) ------------------- */
+/* ------------------- Controls ------------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.btn'); if(!b) return;
   const v=b.dataset.view;
   if(activeView===v){
     activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+    destroySelButtons(); // cleanup if view closed
   }else{
     activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
   }
@@ -341,7 +328,6 @@ function buildWeekView(){
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
           <div class="selHost" id="selHost" aria-hidden="false"></div>
-          <div class="selUIHost" id="selUIHost" aria-hidden="false"></div>
           <div class="hint" id="weekHint">Tap anywhere to edit</div>
         </div>
         <div class="hours" id="weekHours"></div>
@@ -358,7 +344,6 @@ function buildWeekView(){
   repaintWeek();
   new ResizeObserver(()=>{ repaintWeek(true); drawSelection(); }).observe(grid);
 
-  // Viewport guards
   const syncViewport = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSelection(); } }, 32);
   window.addEventListener('scroll', syncViewport, {passive:true});
   window.addEventListener('orientationchange', syncViewport, {passive:true});
@@ -366,10 +351,10 @@ function buildWeekView(){
 
   loadAndDraw().catch(()=>{});
   try{
-    if(!localStorage.getItem('hint_week_edit_r51')){
+    if(!localStorage.getItem('hint_week_edit_r50')){
       const hint=document.getElementById('weekHint');
       requestAnimationFrame(()=>{ hint.classList.add('show'); setTimeout(()=>hint.classList.remove('show'), 2200); });
-      localStorage.setItem('hint_week_edit_r51','1');
+      localStorage.setItem('hint_week_edit_r50','1');
     }
   }catch{}
 }
@@ -512,13 +497,14 @@ async function onWeekGridTap(e){
   }
 }
 
-/* ------------------- Draw selection + r51 buttons ------------------- */
+/* ------------------- Draw selection ------------------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 function segDowLabel(seg){
   const d = new Date(seg.weekSt + seg.dayIdx*DAY_MS);
   return SHORT_DOW[d.getDay()];
 }
+
 function boundsFromSeg(seg){
   const colLeft = weekGeom.colX[seg.dayIdx];
   const colRight= weekGeom.colX[seg.dayIdx+1];
@@ -526,13 +512,15 @@ function boundsFromSeg(seg){
   const topY  = minutesToY(seg.startMin);
   const botY  = minutesToY(seg.endMin);
   const height= Math.max(1, botY - topY);
-  return {offsetLeft:colLeft, colWidth, topY, botY, height};
+  const offsetLeft = colLeft;
+  const offsetTop  = 0;
+  return {offsetLeft, offsetTop, colWidth, topY, botY, height};
 }
 
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) return;
   host.innerHTML='';
-  const uiHost=document.getElementById('selUIHost'); if(uiHost) uiHost.innerHTML='';
+  destroySelButtons(); // reset floating buttons
 
   if(!chain) return;
 
@@ -548,7 +536,6 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
-  // Render selection rectangles + handles (unchanged from r50)
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
@@ -587,7 +574,7 @@ function drawSelection(){
 
     const rectEl = m.querySelector('.marqueeRect');
     rectEl.style.left   = `${b.offsetLeft}px`;
-    rectEl.style.top    = `${b.topY}px`;
+    rectEl.style.top    = `${b.offsetTop + b.topY}px`;
     rectEl.style.width  = `${b.colWidth}px`;
     rectEl.style.height = `${b.height}px`;
 
@@ -621,84 +608,17 @@ function drawSelection(){
       botHandle.style.height= `${triH}px`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name));
     }
+
+    /* NEW: floating buttons for this segment */
+    ensureSelButtons(name);
+    positionSelButtons(name);
   });
 
-  // -------- r51: selector buttons (gear + X) --------
-  const placeButtonsForSeg = (seg, sideHint=null)=>{
-    const uiHost=document.getElementById('selUIHost'); if(!uiHost) return;
-    const b=boundsFromSeg(seg);
-
-    const midY = b.topY + (b.height/2);
-    const btnSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-size'))||36;
-    const pad = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-gap'))||8;
-    const nudge = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--selbtn-nudge'))||8;
-
-    // Default right; Saturday forces left. Respect explicit sideHint for spillover rule.
-    let side = sideHint || (seg.dayIdx===6 ? 'left' : 'right');
-
-    // Compute horizontal position with edge clamping
-    let x;
-    if(side==='right'){
-      x = b.offsetLeft + b.colWidth + pad;
-      const maxX = weekGeom.totalW - btnSize - nudge;
-      if(x > maxX){ side='left'; x = Math.max(nudge, b.offsetLeft - btnSize - pad); }
-    }else{
-      x = b.offsetLeft - btnSize - pad;
-      if(x < nudge){ side='right'; x = Math.min(weekGeom.totalW - btnSize - nudge, b.offsetLeft + b.colWidth + pad); }
-    }
-
-    // Vertical: two buttons, centered and clamped
-    let y = midY - (btnSize + pad/2);
-    const minY = nudge;
-    const maxY = weekGeom.totalH - (btnSize*2 + pad) - nudge;
-    y = clamp(y, minY, maxY);
-
-    const wrap=document.createElement('div');
-    wrap.className='selButtons';
-    wrap.dataset.side=side;
-    wrap.style.left = `${x}px`;
-    wrap.style.top  = `${y}px`;
-
-    // Gear (settings)
-    const gear=document.createElement('button');
-    gear.className='selBtn'; gear.setAttribute('aria-label','Block settings');
-    gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1 1 0 0 0 .2-1.1l-1-1.7a7.5 7.5 0 0 0 0-2.4l1-1.7a1 1 0 0 0-.2-1.1l-1.1-1.1a1 1 0 0 0-1.1-.2l-1.7 1a7.5 7.5 0 0 0-2.4 0l-1.7-1a1 1 0 0 0-1.1.2L7 5.1a1 1 0 0 0-.2 1.1l1 1.7a7.5 7.5 0 0 0 0 2.4l-1 1.7a1 1 0 0 0 .2 1.1l1.1 1.1a1 1 0 0 0 1.1.2l1.7-1a7.5 7.5 0 0 0 2.4 0l1.7 1a1 1 0 0 0 1.1-.2l1.1-1.1z"></path>
-      </svg>`;
-    gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); openSettingsPanel(); });
-
-    // Exit (X)
-    const close=document.createElement('button');
-    close.className='selBtn'; close.setAttribute('aria-label','Close selector');
-    close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
-        <line x1="5" y1="5" x2="19" y2="19"></line>
-        <line x1="19" y1="5" x2="5" y2="19"></line>
-      </svg>`;
-    close.addEventListener('click', async (ev)=>{ ev.stopPropagation(); chain=null; await saveChain(null); drawSelection(); });
-
-    wrap.appendChild(gear);
-    wrap.appendChild(close);
-    uiHost.appendChild(wrap);
-  };
-
-  if(segs.length===1){
-    // Single segment visible on this chart (no spillover or cross-week spill)
-    placeButtonsForSeg(segs[0].seg);
-  }else{
-    // Same-week spillover visible on both days:
-    // Anchor to right of rightmost segment unless that is Saturday → left of leftmost (Friday triangle).
-    const leftmost = segs[0].seg;
-    const rightmost= segs[1].seg;
-    if(rightmost.dayIdx===6){
-      placeButtonsForSeg(leftmost, 'left');
-    }else{
-      placeButtonsForSeg(rightmost, 'right');
-    }
-  }
+  // keep buttons in place on viewport changes
+  attachViewportRepositioners();
 }
 
-/* ------------------- Drag logic (unchanged) ------------------- */
+/* ------------------- Drag logic ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 
 function clampToBudget(seg, which){
@@ -790,6 +710,7 @@ function startDrag(ev, kind, which){
 
     clampToBudget(seg, which);
     drawSelection();
+    positionSelButtons(which); // lock buttons to marquee during drag
   };
 
   const up=async (e)=>{
@@ -826,7 +747,7 @@ function anchorFor(seg, which){
   return {x,y};
 }
 
-/* ------------------- Spillover confirm (unchanged) ------------------- */
+/* ------------------- Spillover confirm ------------------- */
 function showEdgeConfirm(direction, anchor){
   removeEdgeConfirm(); edgeOpen = true;
 
@@ -912,29 +833,7 @@ async function confirmSpill(direction){
   drawSelection();
 }
 
-/* ------------------- Settings Panel (mock, r51) ------------------- */
-function openSettingsPanel(){
-  const existing=document.getElementById('settingsPanel');
-  if(existing) return;
-
-  const panel=document.createElement('div');
-  panel.className='settingsPanel';
-  panel.id='settingsPanel';
-  panel.innerHTML=`
-    <div class="settingsHead">
-      <button class="chev" id="settingsExitLeft" aria-label="Exit">◀</button>
-      <div class="settingsTitle">Block Settings <span class="chip">r51 mock</span></div>
-      <button class="chev" id="settingsExitRight" aria-label="Exit">✕</button>
-    </div>
-    <div class="settingsBody">Settings UI will live here.</div>
-  `;
-  screenEl.appendChild(panel);
-  const close=()=>{ panel.remove(); };
-  panel.querySelector('#settingsExitLeft').addEventListener('click', close);
-  panel.querySelector('#settingsExitRight').addEventListener('click', close);
-}
-
-/* ------------------- Month & Day Views (unchanged) ------------------- */
+/* ------------------- Month & Day Views ------------------- */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -958,7 +857,7 @@ function buildMonthView(){
   document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
 
   const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay(); // 0=Sun
+  const firstWeekday = first.getDay();
   const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
   for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
   for(let day=1; day<=last.getDate(); day++){
@@ -1015,6 +914,7 @@ function render(){
     buildMonthView();
   } else {
     screenEl.innerHTML='';
+    destroySelButtons();
   }
 }
 init();
@@ -1029,6 +929,120 @@ function throttle(fn, ms){
     }
   }
 }
+
+/* =================== NEW: Selector Floating Buttons + Settings Modal =================== */
+function ensureSelButtons(name){
+  const id = `selBtns_${name}`;
+  if(document.getElementById(id)) return;
+
+  const wrap = document.createElement('div');
+  wrap.className='selBtns';
+  wrap.id=id;
+
+  const gear = document.createElement('button');
+  gear.className='selBtn';
+  gear.setAttribute('aria-label', 'Settings');
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/><path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  gear.addEventListener('click', openSettingsModal);
+
+  const close = document.createElement('button');
+  close.className='selBtn';
+  close.setAttribute('aria-label', 'Clear selection');
+  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  close.addEventListener('click', clearSelection);
+
+  wrap.appendChild(gear);
+  wrap.appendChild(close);
+  document.body.appendChild(wrap);
+}
+
+function destroySelButtons(){
+  document.querySelectorAll('.selBtns').forEach(n=>n.remove());
+}
+
+function getRectForSegName(name){
+  const host=document.getElementById('selHost'); if(!host) return null;
+  const rectEl = host.querySelector(`.marqueeRect[data-name="${name}"]`);
+  if(!rectEl) return null;
+  return rectEl.getBoundingClientRect();
+}
+
+function positionSelButtons(name){
+  const pair = document.getElementById(`selBtns_${name}`); if(!pair) return;
+  const r = getRectForSegName(name); if(!r){ pair.style.display='none'; return; }
+  pair.style.display='grid';
+
+  const margin=8;
+  const btnW=44, btnH=44;
+  let left = r.right + margin;
+  let top  = r.top + margin;
+
+  // If near right edge, dock to left side of marquee
+  if(left + btnW > window.innerWidth - margin){
+    left = Math.max(margin, r.left - margin - btnW);
+  }
+
+  // Keep fully on screen vertically; stack two buttons (total height = 44*2 + gap 8)
+  const totalH = btnH*2 + 8;
+  if(top + totalH > window.innerHeight - margin){
+    top = Math.max(margin, window.innerHeight - margin - totalH);
+  }
+
+  if(top < margin) top = margin;
+
+  pair.style.left = `${Math.round(left)}px`;
+  pair.style.top  = `${Math.round(top)}px`;
+}
+
+function positionAllSelButtons(){
+  positionSelButtons('parent');
+  positionSelButtons('child');
+}
+
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ positionAllSelButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+}
+
+/* Settings modal */
+function openSettingsModal(){
+  const veil = document.createElement('div'); veil.className='settingsVeil';
+  const modal = document.createElement('div'); modal.className='settingsModal';
+  modal.innerHTML = `
+    <div class="settingsHead">
+      <div>Settings</div>
+      <button class="closeBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="settingsBody">
+      <!-- Blank settings content for now -->
+    </div>
+    <div class="settingsFoot">
+      <button class="closeBtn ok">Exit</button>
+    </div>
+  `;
+  const closeAll = ()=>{ veil.remove(); modal.remove(); };
+  veil.addEventListener('click', closeAll);
+  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
+  document.body.appendChild(veil);
+  document.body.appendChild(modal);
+}
+
+/* Clear selection */
+async function clearSelection(){
+  removeEdgeConfirm();
+  chain = null;
+  await saveChain(null).catch(()=>{});
+  const host=document.getElementById('selHost'); if(host) host.innerHTML='';
+  destroySelButtons();
+}
+
+/* =================== END NEW =================== */
 </script>
 
 <!-- Service worker registration (unchanged) -->
