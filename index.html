@@ -10,14 +10,31 @@
 
 <style>
   :root{
+    /* ===== Neumorphic theme ===== */
+    --bg:#e3eaf2;
+    --ink:#222;
+
+    --icon-inactive:#42586d;
+    --icon-active:#27e6f2;
+    --pressed-navy:#355169;
+    --turq-glow: rgba(39,230,242,.55);
+
+    --off:8px;
+    --blur:12px;
+    --hi:#ffffff;
+    --lo:#b3bfcd;
+
+    --gap:24px;
+    --radius:24px;
+
+    /* App tokens preserved */
     --r-lg:12px; --r-pill:999px;
     --border:#bdbdbd; --grid-line:#e1e1e1;
-    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
+    --chart-bg:#f3f3f3;
 
     --hour-col:56px;
     --dow-h:32px;
     --label-size:12px;
-    --btn:60px;
 
     --panelW:520px;
 
@@ -34,33 +51,68 @@
     font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
   *{box-sizing:border-box}
 
+  /* Frame uses even padding + gap */
   .app{
     width:clamp(320px, 96vw, 520px);
     height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
-    margin: max(16px, env(safe-area-inset-top)) auto;
-    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
+    margin:max(16px, env(safe-area-inset-top)) auto;
+    display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
   }
 
+  /* Neumorphic screen panel */
   #screen{
-    border:1px solid var(--border);
-    border-radius:var(--r-lg);
-    background:#fff;
-    position:relative; overflow:hidden; min-height:420px;
+    flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    position:relative; overflow:hidden;
   }
 
-  .controls{ display:flex; justify-content:space-between; align-items:center; }
-  .btn{
-    width:var(--btn); height:var(--btn); border-radius:50%;
-    border:1px solid var(--border); background:#fff; color:#000;
-    display:grid; place-items:center; cursor:pointer; padding:0;
+  /* Neumorphic buttons row */
+  .controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
+  .neu-btn{
+    --btn-d: calc((100% - (3 * var(--gap))) / 4);
+    flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
+    border-radius:50%; border:none; outline:none; cursor:pointer;
+    background:var(--bg);
+    display:grid; place-items:center;
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
-  .btn[aria-pressed="true"]{ background:#e6e6e6; }
+  .neu-btn svg{ width:44%; height:auto; stroke:var(--icon-inactive); stroke-width:1.9; fill:none; stroke-linecap:round; stroke-linejoin:round; transition:stroke .2s ease, filter .2s ease; }
+  .neu-btn.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(39,230,242,.10) 0%, rgba(39,230,242,.05) 34%, rgba(39,230,242,0) 60%),
+      var(--pressed-navy);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+  .neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 1px var(--turq-glow)) drop-shadow(0 0 6px var(--turq-glow)); }
+  .neu-btn:active{ transform:scale(.98); }
 
-  .icon{ width:60%; height:60% }
-  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
+  /* Small neu variant (for chevrons + selector pair) */
+  .neu-btn--sm{
+    width:44px; height:44px; border-radius:12px; flex:0 0 auto;
+    display:grid; place-items:center; background:var(--bg); border:none; cursor:pointer;
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
+  }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .neu-btn--sm.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(39,230,242,.10) 0%, rgba(39,230,242,.05) 34%, rgba(39,230,242,0) 60%),
+      var(--pressed-navy);
+  }
+  .neu-btn--sm.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 1px var(--turq-glow)) drop-shadow(0 0 6px var(--turq-glow)); }
+  .neu-btn--sm:active{ transform:scale(.98); }
 
   .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
-  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
   .grid-area{ position:relative; overflow:hidden }
@@ -70,7 +122,6 @@
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
   .top-row.day{ grid-template-columns:1fr; padding:0 4px }
-
   .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
 
   .grid{
@@ -84,9 +135,6 @@
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
   .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
 
-  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
-  .chev:disabled{ opacity:.5; cursor:not-allowed }
-
   /* Month */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
@@ -96,10 +144,7 @@
   .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
   .mcell.muted{ color:#9c9c9c }
 
-  /* Day watermark */
-  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
-
-  /* ---------- Selection UI ---------- */
+  /* Selection UI */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marquee{ position:absolute; pointer-events:none; }
   .marqueeRect{
@@ -120,7 +165,7 @@
     opacity:0; transition:opacity .25s ease, transform .25s ease; z-index:50; pointer-events:none; }
   .hint.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- Edge confirm ---------- */
+  /* Edge confirm */
   .edgeVeil{ position:fixed; inset:0; z-index:1400; background:transparent; pointer-events:auto; }
   .edgeConfirm{
     position:fixed; background:#fff; color:#111; border:1px solid var(--border); border-radius:10px;
@@ -131,25 +176,19 @@
   .edgeBtn{ min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .edgeBtn.ok{ background:#e6e6e6; }
 
-  /* ---------- Selector Floating Buttons (NEW) ---------- */
+  /* Selector floating buttons (week-only) */
   .selBtns{ position:fixed; z-index:1450; display:grid; gap:8px; pointer-events:auto; }
-  .selBtn{
-    width:44px; height:44px; border-radius:12px; border:1px solid var(--border); background:#fff;
-    display:grid; place-items:center; box-shadow:0 6px 14px rgba(0,0,0,.18); cursor:pointer;
-    touch-action:manipulation;
-  }
-  .selBtn svg{ width:22px; height:22px; }
-  .selBtn:active{ transform:scale(.98); }
+  .selBtn{ composes: neu-btn--sm; } /* (for editors: logical grouping) */
 
-  /* ---------- Settings Modal (NEW) ---------- */
+  /* Settings modal */
   .settingsVeil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1600; }
   .settingsModal{
-    position:fixed; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     width:min(92vw, 440px); background:#fff; color:#111; border:1px solid var(--border);
     border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,.28); z-index:1700; display:grid; grid-template-rows:auto 1fr auto;
   }
   .settingsHead{ padding:12px 14px; border-bottom:1px solid var(--grid-line); font-weight:800; display:flex; justify-content:space-between; align-items:center; }
-  .settingsBody{ padding:16px; color:#555; font-size:14px; }
+  .settingsBody{ padding:16px; color:#555; font-size:14px; min-height:140px; }
   .settingsFoot{ padding:10px 14px; border-top:1px solid var(--grid-line); display:flex; justify-content:flex-end; gap:10px; }
   .closeBtn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
   .closeBtn.ok{ background:#e6e6e6; }
@@ -160,8 +199,9 @@
     <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
     <nav class="controls" role="group" aria-label="Primary views">
-      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <!-- Day -->
+      <button class="neu-btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="4"/>
           <line x1="12" y1="2"  x2="12" y2="5"/>
           <line x1="12" y1="19" x2="12" y2="22"/>
@@ -174,8 +214,9 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <!-- Week -->
+      <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
           <line x1="6" y1="10" x2="6" y2="18"/>
@@ -188,8 +229,9 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <!-- Month -->
+      <button class="neu-btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
           <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
@@ -198,8 +240,9 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+      <!-- To-Do -->
+      <button class="neu-btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
           <polyline points="7,14 10,17 17,10"/>
@@ -209,11 +252,11 @@
   </main>
 
 <script>
-console.info('Chrono build r51 — selector buttons (settings + clear), modal, tethered & viewport-safe');
+console.info('Chrono build r52 — neuromorphic UI, week-only selector buttons, boundary-cross confirm, 24h contiguous span');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
-const buttons = [...document.querySelectorAll('.btn')];
+const buttons = [...document.querySelectorAll('.neu-btn')];
 
 let activeView = null;
 let activeDayISO = toISO(new Date());
@@ -296,15 +339,26 @@ let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false, createdAt=0;
 
+/* Boundary-cross tracking (to avoid mid-row popups) */
+let crossedTop=false, crossedBottom=false, prevStartMin=0, prevEndMin=0;
+
+/* Lock after opening settings once */
+let selectionLockId=null;
+
 /* ------------------- Controls ------------------- */
 document.querySelector('.controls').addEventListener('click', e=>{
-  const b=e.target.closest('.btn'); if(!b) return;
+  const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
+
+  const wasPressed = b.classList.contains('is-pressed');
+  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+  if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
+
   if(activeView===v){
     activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
-    destroySelButtons(); // cleanup if view closed
+    destroySelButtons();
   }else{
-    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
+    activeView=v; render();
   }
   saveSoon(200);
 });
@@ -316,9 +370,13 @@ function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head">
-        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg>
+        </button>
         <div class="title" id="weekTitle"></div>
-        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
+        <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg>
+        </button>
       </div>
 
       <div class="grid-area">
@@ -484,17 +542,10 @@ async function onWeekGridTap(e){
     child: null,
     dir: null
   };
+  selectionLockId=null;
   createdAt = Date.now(); wasDrag=false;
   await saveChain(chain);
   drawSelection();
-
-  if(startMin===0){
-    pendingEdge={direction:'prev'};
-    showEdgeConfirm('prev', anchorFor(chain.parent,'top'));
-  }else if(endMin===1440){
-    pendingEdge={direction:'next'};
-    showEdgeConfirm('next', anchorFor(chain.parent,'bottom'));
-  }
 }
 
 /* ------------------- Draw selection ------------------- */
@@ -518,16 +569,13 @@ function boundsFromSeg(seg){
 }
 
 function drawSelection(){
-  const host=document.getElementById('selHost'); if(!host) return;
+  const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   host.innerHTML='';
-  destroySelButtons(); // reset floating buttons
-
-  if(!chain) return;
+  if(!chain){ destroySelButtons(); return; }
 
   const parentHere = segOnThisWeek(chain.parent);
   const childHere  = segOnThisWeek(chain.child);
-
-  if(!parentHere && !childHere) return;
+  if(!parentHere && !childHere){ destroySelButtons(); return; }
 
   const segs=[];
   if(parentHere) segs.push({seg:chain.parent, name:'parent'});
@@ -608,72 +656,50 @@ function drawSelection(){
       botHandle.style.height= `${triH}px`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name));
     }
-
-    /* NEW: floating buttons for this segment */
-    ensureSelButtons(name);
-    positionSelButtons(name);
   });
 
-  // keep buttons in place on viewport changes
+  ensureSelButtons();                 // week-only singleton
+  repositionSelButtons();             // follow
   attachViewportRepositioners();
 }
 
-/* ------------------- Drag logic ------------------- */
+/* ------------------- Drag logic (no wrong-end jumps; contiguous 24h) ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
+function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
 function clampToBudget(seg, which){
   const minGap=15;
   const hasChild = !!chain.child && !!chain.dir;
 
+  // Only constrain the edge being dragged; keep the opposite edge frozen.
   if(!hasChild){
     seg.startMin = clamp(seg.startMin, 0, 1425);
     seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
-    return;
-  }
-
-  const otherDur = otherDurAtStart;
-  const maxThisDur = 1440 - otherDur;
-  let thisDur = seg.endMin - seg.startMin;
-
-  if(chain.dir==='next'){
-    if(which==='parent'){
-      thisDur = clamp(thisDur, minGap, maxThisDur);
-      if(dragKind==='bottom'){
-        seg.endMin = clamp(seg.startMin + thisDur, seg.startMin + minGap, Math.min(1440 - otherDur, 1440));
-      }else{
-        seg.startMin = clamp(seg.endMin - thisDur, 0, Math.min(seg.endMin - minGap, 1425));
-      }
-    }else{
-      if(dragKind==='top'){ seg.startMin = 0; }
-      thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
-      seg.startMin = 0;
-      seg.endMin   = clamp(thisDur, minGap, maxThisDur);
-    }
   }else{
-    if(which==='parent'){
-      if(dragKind==='top'){ seg.startMin = 0; }
-      thisDur = clamp(seg.endMin - 0, minGap, maxThisDur);
-      seg.startMin = 0;
-      seg.endMin   = clamp(thisDur, minGap, maxThisDur);
-    }else{
-      if(dragKind==='bottom'){ seg.endMin = 1440; }
-      const minStart = otherDur;
-      const maxStart = 1425;
-      thisDur = clamp(1440 - seg.startMin, minGap, maxThisDur);
-      seg.startMin = clamp(seg.endMin - thisDur, minStart, maxStart);
-      seg.endMin   = 1440;
+    const other = otherSeg(which);
+    const otherDuration = dur(other);
+    const maxThisDur = 1440 - otherDuration;
+
+    // Respect fixed edges for cross-midnight continuity:
+    if(chain.dir==='next' && which==='child'){ seg.startMin = 0; }
+    if(chain.dir==='prev' && which==='child'){ seg.endMin   = 1440; }
+
+    // Apply limit only through the dragged edge
+    let thisDur = seg.endMin - seg.startMin;
+    thisDur = clamp(thisDur, minGap, Math.max(minGap, maxThisDur));
+    if(dragKind==='top'){ seg.startMin = seg.endMin - thisDur; }
+    else if(dragKind==='bottom'){ seg.endMin = seg.startMin + thisDur; }
+
+    seg.startMin = clamp(seg.startMin, 0, 1425);
+    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
+
+    // If full 24h used, force a clean join at midnight
+    const used = dur(chain.parent) + dur(chain.child);
+    if(used===1440){
+      if(chain.dir==='next'){ chain.parent.endMin = 1440; chain.child.startMin = 0; }
+      if(chain.dir==='prev'){ chain.parent.startMin = 0;  chain.child.endMin   = 1440; }
     }
   }
-
-  let usedDur = (chain.parent.endMin - chain.parent.startMin) + (chain.child.endMin - chain.child.startMin);
-  if(usedDur > 1440){
-    const over = usedDur - 1440;
-    if(dragKind==='top'){ seg.startMin = clamp(seg.startMin + over, 0, 1425); }
-    else { seg.endMin = clamp(seg.endMin - over, seg.startMin + minGap, 1440); }
-  }
-
-  seg.startMin = clamp(seg.startMin, 0, 1425);
-  seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
 }
 
 function startDrag(ev, kind, which){
@@ -692,6 +718,10 @@ function startDrag(ev, kind, which){
     baseOtherStart = 0; baseOtherEnd = 0; otherDurAtStart = 0;
   }
 
+  // boundary-cross tracking
+  crossedTop=crossedBottom=false;
+  prevStartMin=seg.startMin; prevEndMin=seg.endMin;
+
   wasDrag=false; dragPixels=0;
 
   const move=(e)=>{
@@ -702,15 +732,25 @@ function startDrag(ev, kind, which){
     const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
     const snappedDelta = snap15(deltaMinRaw);
 
+    // Move only the dragged edge
     if(dragKind==='top'){
       seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15);
     } else if(dragKind==='bottom'){
       seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440);
     }
 
+    // Freeze opposite edge; apply contiguous 24h budget via dragged edge only
     clampToBudget(seg, which);
+
+    // Track boundary crossing for confirm (only when no child yet)
+    if(!chain.child){
+      if(prevStartMin>0 && seg.startMin===0) crossedTop=true;
+      if(prevEndMin<1440 && seg.endMin===1440) crossedBottom=true;
+      prevStartMin=seg.startMin; prevEndMin=seg.endMin;
+    }
+
     drawSelection();
-    positionSelButtons(which); // lock buttons to marquee during drag
+    repositionSelButtons(); // follow during drag
   };
 
   const up=async (e)=>{
@@ -720,10 +760,10 @@ function startDrag(ev, kind, which){
       else if(dragKind==='bottom'){ seg.endMin = seg.startMin + 15; }
     }
 
-    const justCreated = (Date.now() - createdAt) < 350;
-    if(!edgeOpen && !pendingEdge && !chain.child && which==='parent' && wasDrag && !justCreated){
-      if(seg.startMin===0){ pendingEdge={direction:'prev'}; showEdgeConfirm('prev', anchorFor(seg,'top')); }
-      else if(seg.endMin===1440){ pendingEdge={direction:'next'}; showEdgeConfirm('next', anchorFor(seg,'bottom')); }
+    // Only prompt when a boundary was crossed in this drag, no child yet
+    if(!edgeOpen && !pendingEdge && !chain.child && wasDrag){
+      if(crossedTop){ pendingEdge={direction:'prev'}; showEdgeConfirm('prev', anchorFor(seg,'top')); }
+      else if(crossedBottom){ pendingEdge={direction:'next'}; showEdgeConfirm('next', anchorFor(seg,'bottom')); }
     }
 
     await saveChain(chain).catch(()=>{});
@@ -783,6 +823,7 @@ function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null;
   document.querySelectorAll('.edgeVeil').forEach(n=>n.remove());
 }
 
+/* Spillover creation: consecutive across midnight, 24h budget safe */
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
 
@@ -793,40 +834,20 @@ async function confirmSpill(direction){
   chain.dir = direction;
 
   if(direction==='next'){
-    if(p.dayIdx < 6){
-      childDay  = p.dayIdx + 1;
-      childWeek = p.weekSt;
-    }else{
-      childDay  = 0;
-      childWeek = p.weekSt + 7*DAY_MS;
-    }
+    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
+    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
     const parentDur = totalDur(p);
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:Math.min(60, 1440 - parentDur) };
-
-    if(p.dayIdx === 6){
-      visibleWeekFirst = stampToDate(childWeek);
-      await saveChain(chain);
-      requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); });
-      return;
-    }
-  }else{
-    if(p.dayIdx > 0){
-      childDay  = p.dayIdx - 1;
-      childWeek = p.weekSt;
-    }else{
-      childDay  = 6;
-      childWeek = p.weekSt - 7*DAY_MS;
-    }
+    const rem = Math.max(15, Math.min(60, 1440 - parentDur));
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:rem };
+    // If hop, move view so edit continues there
+    if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); await saveChain(chain); requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); }); return; }
+  }else{ // 'prev'
+    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
+    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
     const parentDur = totalDur(p);
-    const span = Math.min(60, 1440 - parentDur);
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: Math.max(1440 - span, 0), endMin:1440 };
-
-    if(p.dayIdx === 0){
-      visibleWeekFirst = stampToDate(childWeek);
-      await saveChain(chain);
-      requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); });
-      return;
-    }
+    const rem = Math.max(15, Math.min(60, 1440 - parentDur));
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:1440 - rem, endMin:1440 };
+    if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); await saveChain(chain); requestAnimationFrame(()=>{ repaintWeek(); drawSelection(); }); return; }
   }
 
   await saveChain(chain);
@@ -843,9 +864,13 @@ function buildMonthView(){
   screenEl.innerHTML = `
     <div class="month-wrap">
       <div class="head">
-        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
+        <button id="prevMon" class="neu-btn--sm" aria-label="Prev month" title="Prev">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg>
+        </button>
         <div class="title">${label}</div>
-        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
+        <button id="nextMon" class="neu-btn--sm" aria-label="Next month" title="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg>
+        </button>
       </div>
       <div class="month-dow" aria-hidden="false">
         <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
@@ -869,6 +894,8 @@ function buildMonthView(){
   const used = firstWeekday + last.getDate();
   const rem = (Math.ceil(used/7)*7) - used;
   for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
+
+  destroySelButtons(); // strict: not in Month
 }
 
 function buildDayView(){
@@ -876,10 +903,11 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r51</div>
+        <div class="watermark">Chrono build r52</div>
       </div>
     </div>
   `;
+  destroySelButtons(); // strict: not in Day
 }
 
 /* ------------------- Init & render ------------------- */
@@ -930,88 +958,134 @@ function throttle(fn, ms){
   }
 }
 
-/* =================== NEW: Selector Floating Buttons + Settings Modal =================== */
-function ensureSelButtons(name){
-  const id = `selBtns_${name}`;
-  if(document.getElementById(id)) return;
+/* ===== Week-only floating buttons + modal ===== */
+function ensureSelButtons(){
+  if(activeView!=='week') { destroySelButtons(); return; }
+  if(window.__selBtns) { window.__selBtns.style.display='grid'; return; }
 
   const wrap = document.createElement('div');
   wrap.className='selBtns';
-  wrap.id=id;
+  wrap.id='selBtns';
 
+  // Settings (gear)
   const gear = document.createElement('button');
-  gear.className='selBtn';
+  gear.className='neu-btn--sm';
   gear.setAttribute('aria-label', 'Settings');
-  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/><path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
-  gear.addEventListener('click', openSettingsModal);
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/>
+    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  gear.addEventListener('click', onGearTap);
 
+  // Clear (X)
   const close = document.createElement('button');
-  close.className='selBtn';
+  close.className='neu-btn--sm';
   close.setAttribute('aria-label', 'Clear selection');
   close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-  close.addEventListener('click', clearSelection);
+  close.addEventListener('click', onXTap);
 
   wrap.appendChild(gear);
   wrap.appendChild(close);
   document.body.appendChild(wrap);
+  window.__selBtns = wrap;
 }
 
-function destroySelButtons(){
-  document.querySelectorAll('.selBtns').forEach(n=>n.remove());
-}
+function destroySelButtons(){ window.__selBtns?.remove(); window.__selBtns=null; }
+function hideSelButtons(){ if(window.__selBtns) window.__selBtns.style.display='none'; }
 
+function visibleSegName(){
+  if(!chain) return null;
+  if(dragTarget && segOnThisWeek(chain[dragTarget])) return dragTarget;
+  if(segOnThisWeek(chain.parent)) return 'parent';
+  if(segOnThisWeek(chain.child))  return 'child';
+  return null;
+}
 function getRectForSegName(name){
-  const host=document.getElementById('selHost'); if(!host) return null;
+  const host=document.getElementById('selHost'); if(!host || !name) return null;
   const rectEl = host.querySelector(`.marqueeRect[data-name="${name}"]`);
-  if(!rectEl) return null;
-  return rectEl.getBoundingClientRect();
+  return rectEl ? rectEl.getBoundingClientRect() : null;
 }
 
-function positionSelButtons(name){
-  const pair = document.getElementById(`selBtns_${name}`); if(!pair) return;
-  const r = getRectForSegName(name); if(!r){ pair.style.display='none'; return; }
+function repositionSelButtons(){
+  const pair = window.__selBtns; if(!pair){ return; }
+  const name = visibleSegName(); const r = getRectForSegName(name);
+  if(!r){ hideSelButtons(); return; }
   pair.style.display='grid';
 
-  const margin=8;
-  const btnW=44, btnH=44;
+  const margin=8, btnW=44, totalH=(44*2)+8;
   let left = r.right + margin;
   let top  = r.top + margin;
 
-  // If near right edge, dock to left side of marquee
   if(left + btnW > window.innerWidth - margin){
     left = Math.max(margin, r.left - margin - btnW);
   }
-
-  // Keep fully on screen vertically; stack two buttons (total height = 44*2 + gap 8)
-  const totalH = btnH*2 + 8;
   if(top + totalH > window.innerHeight - margin){
     top = Math.max(margin, window.innerHeight - margin - totalH);
   }
-
   if(top < margin) top = margin;
 
   pair.style.left = `${Math.round(left)}px`;
   pair.style.top  = `${Math.round(top)}px`;
 }
 
-function positionAllSelButtons(){
-  positionSelButtons('parent');
-  positionSelButtons('child');
-}
-
 let _vpAttached=false;
 function attachViewportRepositioners(){
   if(_vpAttached) return;
   _vpAttached=true;
-  const handler = throttle(()=>{ positionAllSelButtons(); }, 16);
+  const handler = throttle(()=>{ repositionSelButtons(); }, 16);
   window.addEventListener('scroll', handler, {passive:true});
   window.addEventListener('resize', handler, {passive:true});
   window.addEventListener('orientationchange', handler, {passive:true});
   if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
 }
 
+/* Align selection edge to the vertical center of the button stack (first tap) */
+function alignSelectionToButtons(){
+  if(!chain || !window.__selBtns || activeView!=='week') return;
+
+  // Skip if already locked for this selection
+  // (only Gear sets lock; X still aligns then clears)
+  const selId = chain.id;
+
+  const btnRect = window.__selBtns.getBoundingClientRect();
+  const targetY = btnRect.top + (btnRect.height/2);
+
+  const gridRect = weekGeom.rect;
+  const relY = clamp(targetY - gridRect.top, 0, weekGeom.totalH);
+  const minuteFloat = (relY / weekGeom.totalH) * 1440;
+  const snapped = snap15(minuteFloat);
+
+  const name = visibleSegName();
+  if(!name) return;
+  const seg = name==='parent'? chain.parent : chain.child;
+
+  // Choose the edge that is exposed for this visible segment
+  const parentHere = segOnThisWeek(chain.parent);
+  const childHere = segOnThisWeek(chain.child);
+  let edge='bottom';
+  if(!chain.child){ edge = (snapped < (seg.startMin + seg.endMin)/2) ? 'top' : 'bottom'; }
+  else if(parentHere && childHere){
+    // outer edges only
+    if(name==='parent') edge='top'; else edge='bottom';
+  }else{
+    if(chain.dir==='next'){ edge = (name==='parent') ? 'top' : 'bottom'; }
+    if(chain.dir==='prev'){ edge = (name==='parent') ? 'bottom' : 'top'; }
+  }
+
+  if(edge==='top'){ seg.startMin = clamp(snap15(snapped), 0, seg.endMin - 15); dragKind='top'; }
+  else { seg.endMin = clamp(snap15(snapped), seg.startMin + 15, 1440); dragKind='bottom'; }
+
+  clampToBudget(seg, name);
+  dragKind=null;
+  drawSelection();
+}
+
 /* Settings modal */
-function openSettingsModal(){
+function onGearTap(){
+  if(!chain) return;
+
+  // First gear tap on this selection → align once
+  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
+
   const veil = document.createElement('div'); veil.className='settingsVeil';
   const modal = document.createElement('div'); modal.className='settingsModal';
   modal.innerHTML = `
@@ -1019,12 +1093,8 @@ function openSettingsModal(){
       <div>Settings</div>
       <button class="closeBtn" aria-label="Close">✕</button>
     </div>
-    <div class="settingsBody">
-      <!-- Blank settings content for now -->
-    </div>
-    <div class="settingsFoot">
-      <button class="closeBtn ok">Exit</button>
-    </div>
+    <div class="settingsBody"><em>Blank settings window</em></div>
+    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
   `;
   const closeAll = ()=>{ veil.remove(); modal.remove(); };
   veil.addEventListener('click', closeAll);
@@ -1034,15 +1104,16 @@ function openSettingsModal(){
 }
 
 /* Clear selection */
-async function clearSelection(){
+async function onXTap(){
+  if(!chain) return;
+  alignSelectionToButtons(); // snap first (per spec), then clear
   removeEdgeConfirm();
   chain = null;
+  selectionLockId=null;
   await saveChain(null).catch(()=>{});
-  const host=document.getElementById('selHost'); if(host) host.innerHTML='';
+  document.getElementById('selHost')?.replaceChildren();
   destroySelButtons();
 }
-
-/* =================== END NEW =================== */
 </script>
 
 <!-- Service worker registration (unchanged) -->
