@@ -20,14 +20,14 @@
     --turq-glow: rgba(79,247,255,.75);
 
     /* Softened shadows */
-    --off:5px;                             /* smaller than r53 */
+    --off:5px;
     --blur:9px;
     --hi:#ffffff;
     --lo:#b7c3d1;
 
     /* Layout */
     --gap:24px;
-    --radius:12px;                         /* even less rounded (r54/r57) */
+    --radius:12px;
 
     /* App tokens */
     --r-lg:12px; --r-pill:999px;
@@ -35,8 +35,8 @@
     --grid-line:#cfd9e5;
 
     /* Chart tones */
-    --chart-bg:#d1dce8;                    /* darker than r53 for better contrast */
-    --mask-surface: var(--bg);             /* mask tiles = bg tint */
+    --chart-bg:#d1dce8;
+    --mask-surface: var(--bg);
 
     --hour-col:64px;
     --dow-h:32px;
@@ -44,12 +44,12 @@
 
     --panelW:520px;
 
-    /* Marquee (r57: no border, outer glow only) */
-    --marquee-shadow: 0 0 14px 6px var(--turq-glow);
+    /* Marquee (r58: thick white ring + outer glow) */
+    --marquee-border:5px;
+    --marquee-shadow:0 0 12px 6px var(--turq-glow);
 
-    /* Handles */
-    --handle-height:52px;                  /* slightly taller to fit triangle SVG */
-    --handle-stroke:#5e7286;
+    /* Handles (dynamic height in JS; keep a fallback) */
+    --handle-height:48px;
   }
 
   html,body{
@@ -90,7 +90,12 @@
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
   /* Bigger icons + thinner strokes + a bit more detail */
-  .neu-btn svg{ width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; transition:stroke .2s ease, filter .2s ease; }
+  .neu-btn svg{
+    width:86%; height:auto;
+    stroke:var(--icon-inactive); stroke-width:1.25;
+    fill:none; stroke-linecap:round; stroke-linejoin:round;
+    transition:stroke .2s ease, filter .2s ease;
+  }
   .neu-btn.is-pressed{
     background:
       radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
@@ -131,7 +136,6 @@
 
   .grid-area{ position:relative; overflow:hidden }
   .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
-  /* Right-align hours to chart edge; AM/PM labels */
   .hour-stamp{
     position:absolute; right:8px; transform:translateY(-50%);
     font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right;
@@ -140,8 +144,6 @@
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
   .top-row.day{ grid-template-columns:1fr; padding:0 4px }
-
-  /* DOW-only, centered per column */
   .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink); white-space:nowrap }
 
   .grid{
@@ -159,10 +161,11 @@
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marqueeRect{
     position:absolute; box-sizing:border-box;
-    border:none; background:transparent;
-    border-radius:8px; pointer-events:none;
-    /* r57: OUTER glow only; interior remains clear */
-    box-shadow: var(--marquee-shadow);
+    background:transparent;
+    border:var(--marquee-border) solid #fff;     /* thick white border */
+    border-radius:10px;                          /* subtle rounding to match UI */
+    pointer-events:none;
+    box-shadow: var(--marquee-shadow);          /* turquoise glow OUTSIDE */
   }
 
   .hint{ position:absolute; left:50%; top:calc(var(--dow-h) + 8px); transform:translateX(-50%);
@@ -181,29 +184,30 @@
   .edgeBtn{ min-width:56px; height:36px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:#fff; font-weight:900; cursor:pointer; }
   .edgeBtn.ok{ background:#e6e6e6; }
 
-  /* ===== Body-level overlay so triangles never get clipped, and block tap-through ===== */
-  .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:none; }
+  /* ===== Body-level overlay — allow handle drags ===== */
+  .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:auto; }  /* <— changed from none */
   .ov-group{ position:absolute; pointer-events:none; } /* container for one segment’s UI */
 
-  /* Stamps: r57 — ensure above effects */
+  /* LED stamps (above effects) */
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
     border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-    pointer-events:none; z-index:3; /* above handles */
+    pointer-events:none; z-index:3;
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
 
-  /* Handles: true triangular SVG with rounded corners look */
-  .handle{ position:absolute; left:0; width:100%; height:var(--handle-height); pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; }
-  .handle .tri{
-    width:82px; height:48px; display:block; margin:0 auto;
-    filter: drop-shadow(-3px -3px 6px var(--hi)) drop-shadow(3px 3px 6px var(--lo));
+  /* ===== Triangular handles (neuromorphic, no stroke) ===== */
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; }
+  .tri{
+    display:block; margin:0 auto;
+    width:64px; height:40px;     /* JS will override size to match single row */
+    filter:
+      drop-shadow(-3px -3px 6px var(--hi))   /* top-left highlight */
+      drop-shadow( 3px  3px 6px var(--lo));  /* bottom-right shadow */
   }
-  .handle .tri path{ fill:var(--bg); stroke:#7a8ba0; stroke-width:1.2; stroke-linejoin:round; }
-  .handle.top  .tri{ transform:translateY(0) rotate(0deg); }
-  .handle.bottom .tri{ transform:translateY(0) rotate(180deg); }
+  .tri path{ fill:var(--bg); }   /* no stroke */
 
   /* Selector floating buttons (week-only) */
   .selBtns{ position:fixed; z-index:2050; display:grid; gap:8px; pointer-events:auto; }
@@ -223,7 +227,7 @@
   .closeBtn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
   .closeBtn.ok{ background:#e6e6e6; }
 
-  /* ===== Month view (r57: uniform tiles w/ beveled stroked border; today raised, no border) ===== */
+  /* ===== Month view (uniform tiles; outer beveled stroke; today raised; top-right date/circle) ===== */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr; }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:var(--ink) }
   .month-dow span{ text-align:center }
@@ -232,33 +236,31 @@
     gap:8px; padding:10px;
   }
   .mcell{
-    position:relative;
-    background:var(--bg);
-    color:var(--ink);
-    border-radius:8px;
-    /* beveled stroked border (white TL, dark BR) */
+    position:relative; background:var(--bg); color:var(--ink); border-radius:8px;
+    /* Outer bevel stroke: white top/left, dark bottom/right (reversed from prior) */
     box-shadow:
-      inset -1px -1px 0 0 var(--hi),
-      inset  1px  1px 0 0 var(--lo);
-    display:flex; align-items:flex-start; justify-content:flex-start;
-    padding:8px; font-size:12px;
+      -1px -1px 0 0 var(--hi),
+       1px  1px 0 0 var(--lo);
   }
-  .mcell .date{ font-weight:800; }
+  .mcell .date{
+    position:absolute; top:8px; right:10px;   /* date in top-right */
+    font-weight:800; z-index:2;
+  }
   .mcell.muted{ color:#8da0b3 }
-  /* Today: raised like a button, no border; LED circle + turquoise date */
+
+  /* Today tile: raised neuomorph, NO border; navy circle top-right, not touching edges */
   .mcell.today{
     box-shadow:
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        var(--off)         var(--off)         var(--blur) var(--lo);
   }
   .mcell.today::before{
-    content:""; position:absolute; left:8px; top:8px; width:30px; height:22px;
-    background:var(--pressed-navy); border-radius:999px;
+    content:""; position:absolute; top:6px; right:6px;
+    width:28px; height:22px; border-radius:999px;
+    background:var(--pressed-navy);
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
-  .mcell.today .date{
-    position:relative; color:var(--icon-active); padding-left:6px; z-index:1;
-  }
+  .mcell.today .date{ color:var(--icon-active); }
 </style>
 </head>
 <body>
@@ -286,10 +288,12 @@
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
-          <!-- finer columns -->
-          <line x1="6" y1="10" x2="6" y2="18.5"/><line x1="8.5" y1="10" x2="8.5" y2="18.5"/>
-          <line x1="11" y1="10" x2="11" y2="18.5"/><line x1="13.5" y1="10" x2="13.5" y2="18.5"/>
-          <line x1="16" y1="10" x2="16" y2="18.5"/><line x1="18.5" y1="10" x2="18.5" y2="18.5"/>
+          <line x1="6" y1="10" x2="6" y2="18.5"/>
+          <line x1="8.5" y1="10" x2="8.5" y2="18.5"/>
+          <line x1="11" y1="10" x2="11" y2="18.5"/>
+          <line x1="13.5" y1="10" x2="13.5" y2="18.5"/>
+          <line x1="16" y1="10" x2="16" y2="18.5"/>
+          <line x1="18.5" y1="10" x2="18.5" y2="18.5"/>
         </svg>
       </button>
 
@@ -298,7 +302,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
-          <!-- dot matrix -->
           <g>
             <circle cx="7" cy="11" r="0.8"/><circle cx="11" cy="11" r="0.8"/><circle cx="15" cy="11" r="0.8"/>
             <circle cx="7" cy="14" r="0.8"/><circle cx="11" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/>
@@ -319,7 +322,7 @@
   </main>
 
 <script>
-console.info('Chrono build r57 — full index: icons refined, no blue tap flash, week range title, triangular draggable handles, outer turquoise glow, month tiles restored, r53/54 fixes preserved');
+console.info('Chrono build r58 — triangles sized to one row, neuromorphic (no stroke), draggable enabled, marquee thick white + glow, month bevel stroke reversed, today circle/date top-right aligned');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -391,14 +394,6 @@ async function storageGet(k){
 }
 
 /* ------------------- Selector chain (single) ------------------- */
-/*
-chain = {
-  id: number,
-  parent: { weekSt:number, dayIdx:0..6, startMin:number, endMin:number },
-  child:  { weekSt:number, dayIdx:0..6, startMin:number, endMin:number } | null,
-  dir: 'prev'|'next'|null
-}
-*/
 const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
@@ -592,7 +587,6 @@ function buildMask(geom, cols){
   const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
   const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
 
-  /* Slightly darker gaps drawn by the grid itself; mask uses bg */
   sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24));
   sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300));
   sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
@@ -692,7 +686,7 @@ function drawSelection(){
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
 
-    /* Rectangles inside grid (outer glow only) */
+    /* Rectangles inside grid (white ring + glow) */
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=name;
@@ -719,8 +713,12 @@ function drawSelection(){
       if(chain.dir==='prev'){ if(name==='parent') renderBottom=true; else renderTop=true; }
     }
 
-    const stampPad=6, triH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height'))||52;
-    const stampH=26;
+    /* height of a single hour row — keep triangles within one row */
+    const oneHourH = weekGeom.rowH[0] || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-height')) || 48;
+    const triH = Math.max(28, Math.min(oneHourH-4, 64));
+    const triW = Math.min(b.colWidth-12, Math.round(triH*1.2));
+
+    const stampPad=6, stampH=26;
 
     if(renderTop){
       const topStamp=document.createElement('div'); topStamp.className='stamp';
@@ -732,11 +730,8 @@ function drawSelection(){
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px'; topHandle.style.top = (- (stampH + stampPad + triH))+'px';
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=triH+'px';
-      topHandle.innerHTML = triangleSVG();
-      /* make handles draggable */
+      topHandle.innerHTML = triangleSVG(triW, triH);
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
-      topHandle.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
-      topHandle.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
       group.appendChild(topHandle);
     }
 
@@ -750,10 +745,8 @@ function drawSelection(){
       const botHandle=document.createElement('div'); botHandle.className='handle bottom';
       botHandle.style.left='0px'; botHandle.style.top = (b.height + stampPad + stampH)+'px';
       botHandle.style.width=b.colWidth+'px'; botHandle.style.height=triH+'px';
-      botHandle.innerHTML = triangleSVG();
+      botHandle.innerHTML = triangleSVG(triW, triH);
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
-      botHandle.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
-      botHandle.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
       group.appendChild(botHandle);
     }
   });
@@ -763,16 +756,19 @@ function drawSelection(){
   attachViewportRepositioners();
 }
 
-function triangleSVG(){
-  /* rounded-corner look via stroke-linejoin=round + drop shadows from CSS */
+function triangleSVG(w=80,h=48){
+  /* rounded look via drop-shadows; no stroke; size set by w/h */
+  const mid = Math.round(w/2);
+  const top = 6;
+  const bottom = h-6;
   return `
-    <svg class="tri" viewBox="0 0 100 60" aria-hidden="true" focusable="false">
-      <path d="M50 6 L8 54 L92 54 Z" />
+    <svg class="tri" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true" focusable="false" style="width:${w}px;height:${h}px;">
+      <path d="M ${mid} ${top} L ${w-6} ${bottom} L 6 ${bottom} Z" />
     </svg>
   `;
 }
 
-/* ------------------- Drag logic (r53 fixes preserved; ensure handles functional) ------------------- */
+/* ------------------- Drag logic ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -952,7 +948,7 @@ async function confirmSpill(direction){
   repositionSelButtons();
 }
 
-/* ------------------- Month View (uniform tiles + today raised) ------------------- */
+/* ------------------- Month View ------------------- */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -1027,7 +1023,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r57</div>
+        <div class="watermark">Chrono build r58</div>
       </div>
     </div>
   `;
@@ -1082,7 +1078,7 @@ function throttle(fn, ms){
   }
 }
 
-/* ===== Week-only floating buttons + modal (no double render; no tap-through) ===== */
+/* ===== Week-only floating buttons + modal ===== */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
   if(window.__selBtns && document.body.contains(window.__selBtns)){ window.__selBtns.classList.remove('selBtnHidden'); return; }
@@ -1097,7 +1093,7 @@ function ensureSelButtons(){
   gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
-    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52 .42 1.1 .78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
   gear.addEventListener('click', onGearTap, {passive:true});
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
 
@@ -1152,18 +1148,31 @@ function repositionSelButtons(){
   pair.style.top  = `${Math.round(top)}px`;
 }
 
-let _vpAttached=false;
-function attachViewportRepositioners(){
-  if(_vpAttached) return;
-  _vpAttached=true;
-  const handler = throttle(()=>{ repositionSelButtons(); }, 16);
-  window.addEventListener('scroll', handler, {passive:true});
-  window.addEventListener('resize', handler, {passive:true});
-  window.addEventListener('orientationchange', handler, {passive:true});
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+/* Settings modal */
+function onGearTap(ev){
+  ev.stopPropagation();
+  if(!chain) return;
+
+  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
+
+  const veil = document.createElement('div'); veil.className='settingsVeil';
+  const modal = document.createElement('div'); modal.className='settingsModal';
+  modal.innerHTML = `
+    <div class="settingsHead">
+      <div>Settings</div>
+      <button class="closeBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="settingsBody"><em>Blank settings window</em></div>
+    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
+  `;
+  const closeAll = ()=>{ veil.remove(); modal.remove(); };
+  veil.addEventListener('click', closeAll);
+  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
+  document.body.appendChild(veil);
+  document.body.appendChild(modal);
 }
 
-/* Align selection edge to the vertical center of the button stack (first gear tap) */
+/* Align selection edge to button center (first gear tap) */
 function alignSelectionToButtons(){
   if(!chain || !window.__selBtns || activeView!=='week') return;
 
@@ -1196,31 +1205,6 @@ function alignSelectionToButtons(){
   drawSelection();
 }
 
-/* Settings modal */
-function onGearTap(ev){
-  ev.stopPropagation();
-
-  if(!chain) return;
-
-  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
-
-  const veil = document.createElement('div'); veil.className='settingsVeil';
-  const modal = document.createElement('div'); modal.className='settingsModal';
-  modal.innerHTML = `
-    <div class="settingsHead">
-      <div>Settings</div>
-      <button class="closeBtn" aria-label="Close">✕</button>
-    </div>
-    <div class="settingsBody"><em>Blank settings window</em></div>
-    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
-  `;
-  const closeAll = ()=>{ veil.remove(); modal.remove(); };
-  veil.addEventListener('click', closeAll);
-  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
-  document.body.appendChild(veil);
-  document.body.appendChild(modal);
-}
-
 /* Clear selection */
 async function onXTap(ev){
   ev.stopPropagation();
@@ -1234,6 +1218,40 @@ async function onXTap(ev){
   destroySelButtons();
   overlayRoot && (overlayRoot.innerHTML='');
 }
+
+/* View routing */
+function render(){
+  if(activeView==='week'){
+    buildWeekView();
+  } else if(activeView==='day'){
+    activeDayISO = toISO(new Date());
+    buildDayView();
+  } else if(activeView==='month'){
+    activeDayISO = toISO(new Date());
+    buildMonthView();
+  } else {
+    screenEl.innerHTML='';
+    destroySelButtons(); destroyOverlay();
+  }
+}
+
+async function init(){
+  try{
+    const snap = await storageGet('state');
+    if(snap && typeof snap==='object'){
+      if('activeView' in snap) activeView = snap.activeView;
+      if('activeDayISO' in snap) activeDayISO = snap.activeDayISO;
+      if('visibleWeekFirst' in snap && typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
+    }
+  }catch{}
+  render();
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+}
+function snapshotState(){ return { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }; }
+async function saveAll(){ await storageSet('state', snapshotState()); await saveChain(chain); }
+let saveTimer=null; function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
+init();
 </script>
 
 <!-- Service worker registration (unchanged) -->
