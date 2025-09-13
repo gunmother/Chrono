@@ -27,7 +27,7 @@
 
     /* Layout */
     --gap:24px;
-    --radius:12px;                         /* even less rounded (r54) */
+    --radius:12px;                         /* even less rounded (r54/r57) */
 
     /* App tokens */
     --r-lg:12px; --r-pill:999px;
@@ -44,18 +44,18 @@
 
     --panelW:520px;
 
-    /* Marquee */
-    --marquee-border:4px;
-    --marquee-shadow:0 0 0 3px rgba(0,0,0,.10), 0 8px 16px rgba(0,0,0,.15);
+    /* Marquee (r57: no border, outer glow only) */
+    --marquee-shadow: 0 0 14px 6px var(--turq-glow);
 
     /* Handles */
-    --handle-height:52px;                  /* slightly taller to fit rounded tris */
+    --handle-height:52px;                  /* slightly taller to fit triangle SVG */
     --handle-stroke:#5e7286;
   }
 
   html,body{
     height:100%; margin:0; background:var(--bg); color:var(--ink);
     font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
+    -webkit-tap-highlight-color: transparent;  /* remove blue tap flash on Android */
   }
   *{box-sizing:border-box}
 
@@ -89,8 +89,8 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
-  /* Larger icons (fill comfortably) */
-  .neu-btn svg{ width:72%; height:auto; stroke:var(--icon-inactive); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round; transition:stroke .2s ease, filter .2s ease; }
+  /* Bigger icons + thinner strokes + a bit more detail */
+  .neu-btn svg{ width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; transition:stroke .2s ease, filter .2s ease; }
   .neu-btn.is-pressed{
     background:
       radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
@@ -104,6 +104,7 @@
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
   }
   .neu-btn:active{ transform:scale(.985); }
+  .neu-btn:focus { outline:none; }
 
   /* Small neu (chevrons + selector buttons) */
   .neu-btn--sm{
@@ -113,8 +114,9 @@
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        var(--off)         var(--off)         var(--blur) var(--lo);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; }
   .neu-btn--sm.is-pressed{
     background:
       radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
@@ -156,9 +158,11 @@
   /* Selection rectangles live inside grid; handles/stamps live in overlay */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
   .marqueeRect{
-    position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff;
-    box-shadow: var(--marquee-shadow);
+    position:absolute; box-sizing:border-box;
+    border:none; background:transparent;
     border-radius:8px; pointer-events:none;
+    /* r57: OUTER glow only; interior remains clear */
+    box-shadow: var(--marquee-shadow);
   }
 
   .hint{ position:absolute; left:50%; top:calc(var(--dow-h) + 8px); transform:translateX(-50%);
@@ -181,32 +185,25 @@
   .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; } /* container for one segment’s UI */
 
-  /* Stamps: r54 — navy background + LED text + HH:MM */
+  /* Stamps: r57 — ensure above effects */
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
     border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-    pointer-events:none; z-index:1;
+    pointer-events:none; z-index:3; /* above handles */
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
 
-  /* Handles: triangles styled like buttons (rounded tips, neumorph) */
+  /* Handles: true triangular SVG with rounded corners look */
   .handle{ position:absolute; left:0; width:100%; height:var(--handle-height); pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; }
   .handle .tri{
-    width:100%; height:100%; border:none; background:var(--bg); border-radius:10px; /* rounded corners */
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
-    display:block; position:relative; overflow:hidden;
+    width:82px; height:48px; display:block; margin:0 auto;
+    filter: drop-shadow(-3px -3px 6px var(--hi)) drop-shadow(3px 3px 6px var(--lo));
   }
-  .handle .tri::before{
-    /* draw the triangle arrow inside the rounded card */
-    content:""; position:absolute; left:50%; transform:translateX(-50%);
-    width:0; height:0; border-left:22px solid transparent; border-right:22px solid transparent;
-  }
-  .handle.top .tri::before{ bottom:8px; border-bottom:26px solid var(--bg); }
-  .handle.bottom .tri::before{ top:8px;    border-top:26px solid var(--bg); }
+  .handle .tri path{ fill:var(--bg); stroke:#7a8ba0; stroke-width:1.2; stroke-linejoin:round; }
+  .handle.top  .tri{ transform:translateY(0) rotate(0deg); }
+  .handle.bottom .tri{ transform:translateY(0) rotate(180deg); }
 
   /* Selector floating buttons (week-only) */
   .selBtns{ position:fixed; z-index:2050; display:grid; gap:8px; pointer-events:auto; }
@@ -226,7 +223,7 @@
   .closeBtn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
   .closeBtn.ok{ background:#e6e6e6; }
 
-  /* ===== Month view (restored & rebuilt) ===== */
+  /* ===== Month view (r57: uniform tiles w/ beveled stroked border; today raised, no border) ===== */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr; }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:var(--ink) }
   .month-dow span{ text-align:center }
@@ -234,34 +231,33 @@
     height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr;
     gap:8px; padding:10px;
   }
-  /* Flat tiles with etched borders (no blurry shadows). */
   .mcell{
     position:relative;
     background:var(--bg);
     color:var(--ink);
     border-radius:8px;
-    /* etched border using inner highlights (TL light, BR dark) */
+    /* beveled stroked border (white TL, dark BR) */
     box-shadow:
-      inset calc(-1*var(--off)) calc(-1*var(--off)) 0 0 var(--lo),
-      inset var(--off) var(--off) 0 0 var(--hi);
+      inset -1px -1px 0 0 var(--hi),
+      inset  1px  1px 0 0 var(--lo);
     display:flex; align-items:flex-start; justify-content:flex-start;
     padding:8px; font-size:12px;
   }
+  .mcell .date{ font-weight:800; }
   .mcell.muted{ color:#8da0b3 }
-  /* Today: raised like a button + navy ring around number */
+  /* Today: raised like a button, no border; LED circle + turquoise date */
   .mcell.today{
-    background:var(--bg);
     box-shadow:
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        var(--off)         var(--off)         var(--blur) var(--lo);
   }
-  .mcell .date{
-    position:relative; font-weight:800; z-index:1;
+  .mcell.today::before{
+    content:""; position:absolute; left:8px; top:8px; width:30px; height:22px;
+    background:var(--pressed-navy); border-radius:999px;
+    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
   .mcell.today .date{
-    padding:4px 8px; border-radius:999px; color:var(--icon-active);
-    background:var(--pressed-navy);
-    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    position:relative; color:var(--icon-active); padding-left:6px; z-index:1;
   }
 </style>
 </head>
@@ -273,7 +269,7 @@
       <!-- Day -->
       <button class="neu-btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="6"/>
+          <circle cx="12" cy="12" r="5.5"/>
           <line x1="12" y1="2"  x2="12" y2="5"/>
           <line x1="12" y1="19" x2="12" y2="22"/>
           <line x1="2"  y1="12" x2="5"  y2="12"/>
@@ -288,27 +284,26 @@
       <!-- Week -->
       <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="5" width="18" height="14" rx="3"/>
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
-          <line x1="5" y1="10" x2="5" y2="18"/>
-          <line x1="7" y1="10" x2="7" y2="18"/>
-          <line x1="9" y1="10" x2="9" y2="18"/>
-          <line x1="11" y1="10" x2="11" y2="18"/>
-          <line x1="13" y1="10" x2="13" y2="18"/>
-          <line x1="15" y1="10" x2="15" y2="18"/>
-          <line x1="17" y1="10" x2="17" y2="18"/>
-          <line x1="19" y1="10" x2="19" y2="18"/>
+          <!-- finer columns -->
+          <line x1="6" y1="10" x2="6" y2="18.5"/><line x1="8.5" y1="10" x2="8.5" y2="18.5"/>
+          <line x1="11" y1="10" x2="11" y2="18.5"/><line x1="13.5" y1="10" x2="13.5" y2="18.5"/>
+          <line x1="16" y1="10" x2="16" y2="18.5"/><line x1="18.5" y1="10" x2="18.5" y2="18.5"/>
         </svg>
       </button>
 
       <!-- Month -->
       <button class="neu-btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="3" y="5" width="18" height="14" rx="3"/>
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
-          <circle cx="6"  cy="11" r="0.9"/><circle cx="10" cy="11" r="0.9"/><circle cx="14" cy="11" r="0.9"/><circle cx="18" cy="11" r="0.9"/>
-          <circle cx="6"  cy="14" r="0.9"/><circle cx="10" cy="14" r="0.9"/><circle cx="14" cy="14" r="0.9"/><circle cx="18" cy="14" r="0.9"/>
-          <circle cx="6"  cy="17" r="0.9"/><circle cx="10" cy="17" r="0.9"/><circle cx="14" cy="17" r="0.9"/><circle cx="18" cy="17" r="0.9"/>
+          <!-- dot matrix -->
+          <g>
+            <circle cx="7" cy="11" r="0.8"/><circle cx="11" cy="11" r="0.8"/><circle cx="15" cy="11" r="0.8"/>
+            <circle cx="7" cy="14" r="0.8"/><circle cx="11" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/>
+            <circle cx="7" cy="17" r="0.8"/><circle cx="11" cy="17" r="0.8"/><circle cx="15" cy="17" r="0.8"/>
+          </g>
         </svg>
       </button>
 
@@ -324,7 +319,7 @@
   </main>
 
 <script>
-console.info('Chrono build r54 — UI polish, smaller radius, LED HH:MM selector stamps, neumorphic triangles, darker mask, month rebuilt, r53 selector fixes preserved');
+console.info('Chrono build r57 — full index: icons refined, no blue tap flash, week range title, triangular draggable handles, outer turquoise glow, month tiles restored, r53/54 fixes preserved');
 
 /* ------------------- Utilities ------------------- */
 const screenEl = document.getElementById('screen');
@@ -335,6 +330,7 @@ let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date()); // Sunday-first
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; // 0..6
+const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
@@ -534,12 +530,7 @@ async function loadAndDraw(){ chain = await loadChain(); drawSelection(); }
 
 function repaintWeek(skipSel=false){
   const first=visibleWeekFirst, last=addDays(first,6);
-  const m=new Intl.DateTimeFormat(undefined,{month:'short'});
-  const title = (first.getFullYear()===last.getFullYear())
-    ? (first.getMonth()===last.getMonth()
-        ? `${m.format(first)} ${first.getFullYear()}`
-        : `${m.format(first)} – ${m.format(last)} ${first.getFullYear()}`)
-    : `${m.format(first)} ${first.getFullYear()} – ${m.format(last)} ${last.getFullYear()}`;
+  const title = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
   document.getElementById('weekTitle').textContent=title;
 
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
@@ -701,7 +692,7 @@ function drawSelection(){
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
 
-    /* Rectangles inside grid */
+    /* Rectangles inside grid (outer glow only) */
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=name;
@@ -741,7 +732,8 @@ function drawSelection(){
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px'; topHandle.style.top = (- (stampH + stampPad + triH))+'px';
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=triH+'px';
-      topHandle.innerHTML = `<div class="tri"></div>`;
+      topHandle.innerHTML = triangleSVG();
+      /* make handles draggable */
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
       topHandle.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
       topHandle.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
@@ -758,7 +750,7 @@ function drawSelection(){
       const botHandle=document.createElement('div'); botHandle.className='handle bottom';
       botHandle.style.left='0px'; botHandle.style.top = (b.height + stampPad + stampH)+'px';
       botHandle.style.width=b.colWidth+'px'; botHandle.style.height=triH+'px';
-      botHandle.innerHTML = `<div class="tri"></div>`;
+      botHandle.innerHTML = triangleSVG();
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
       botHandle.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
       botHandle.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); }, {capture:true});
@@ -771,7 +763,16 @@ function drawSelection(){
   attachViewportRepositioners();
 }
 
-/* ------------------- Drag logic (r53 fixes preserved) ------------------- */
+function triangleSVG(){
+  /* rounded-corner look via stroke-linejoin=round + drop shadows from CSS */
+  return `
+    <svg class="tri" viewBox="0 0 100 60" aria-hidden="true" focusable="false">
+      <path d="M50 6 L8 54 L92 54 Z" />
+    </svg>
+  `;
+}
+
+/* ------------------- Drag logic (r53 fixes preserved; ensure handles functional) ------------------- */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -951,7 +952,7 @@ async function confirmSpill(direction){
   repositionSelButtons();
 }
 
-/* ------------------- Month View (rebuilt) ------------------- */
+/* ------------------- Month View (uniform tiles + today raised) ------------------- */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -1002,11 +1003,11 @@ function renderMonth(base, delta){
     el.innerHTML = `<span class="date">${prevLast - i}</span>`;
     g.appendChild(el);
   }
+  const todayISO = toISO(new Date());
   for(let day=1; day<=last.getDate(); day++){
     const tile=document.createElement('div');
     tile.className='mcell';
     const iso = toISO(new Date(d.getFullYear(), d.getMonth(), day));
-    const todayISO = toISO(new Date());
     if(iso===todayISO) tile.classList.add('today');
     tile.innerHTML = `<span class="date">${day}</span>`;
     g.appendChild(tile);
@@ -1026,7 +1027,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r54</div>
+        <div class="watermark">Chrono build r57</div>
       </div>
     </div>
   `;
@@ -1095,8 +1096,8 @@ function ensureSelButtons(){
   gear.className='neu-btn--sm';
   gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
-    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+    <path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M19 12a7 7 0 0 0-.09-1l2.02-1.56-2-3.46-2.39.73a7.1 7.1 0 0 0-1.73-1l-.36-2.45h-4l-.36 2.45a7.1 7.1 0 0 0-1.73 1l-2.39-.73-2 3.46L5.09 11a7 7 0 0 0 0 2l-2.02 1.56 2 3.46 2.39-.73c.52.42 1.1.78 1.73 1l.36 2.45h4l.36-2.45c.63-.22 1.21-.58 1.73-1l2.39.73 2-3.46L18.91 13c.06-.33.09-.66.09-1Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
   gear.addEventListener('click', onGearTap, {passive:true});
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
 
@@ -1104,7 +1105,7 @@ function ensureSelButtons(){
   const close = document.createElement('button');
   close.className='neu-btn--sm';
   close.setAttribute('aria-label', 'Clear selection');
-  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   close.addEventListener('click', onXTap, {passive:true});
   close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
 
