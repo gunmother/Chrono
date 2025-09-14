@@ -22,12 +22,17 @@
 
     --marquee-border:5px;
     --marquee-shadow:0 0 12px 6px var(--turq-glow);
+
+    /* chevrons */
+    --handle-stroke:#5e7286;         /* dark bluish stroke */
+    --handle-w-pad:8px;              /* inner pad from column edge */
+    --chev-stroke-w:2.2;             /* chevron line weight */
   }
 
   html,body{
     height:100%; margin:0; background:var(--bg); color:var(--ink);
     font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
-    -webkit-tap-highlight-color: transparent; /* kill blue flash */
+    -webkit-tap-highlight-color: transparent;
   }
   *{box-sizing:border-box}
 
@@ -99,10 +104,7 @@
 
   .grid-area{ position:relative; overflow:hidden }
   .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
-  .hour-stamp{
-    position:absolute; right:8px; transform:translateY(-50%);
-    font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right;
-  }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
@@ -137,10 +139,21 @@
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
 
-  /* Triangular handles (full column width, tall, rounded corners, neuromorphic) */
+  /* Chevron handles: full-column width, tall, rounded chip with neuromorph; inside: triple chevrons */
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
-  .tri{ display:block; margin:0 auto; filter: drop-shadow(-3px -3px 6px var(--hi)) drop-shadow(3px 3px 6px var(--lo)); }
-  .tri path{ fill:var(--bg); }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px;
+    background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    display:grid; place-items:center;
+  }
+  .chev svg{ display:block; }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-1px -1px 0 var(--hi)) drop-shadow(1px 1px 0 var(--lo));
+  }
 
   /* Floating buttons */
   .selBtns{ position:fixed; z-index:2050; display:grid; gap:8px; pointer-events:auto; }
@@ -224,7 +237,7 @@
   </main>
 
 <script>
-console.info('Chrono r62 — rounded full-width triangles, spillover hardened, hint removed.');
+console.info('Chrono r63 — triple chevron handles (neuromorph), week/month polish intact.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -533,39 +546,26 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, offsetTop:0, colWidth, topY, botY, height};
 }
 
-/* Rounded-corner triangle path (up/down) spanning full column width */
-function triangleSVG(dir, colW, rowH){
-  // pad inside the column; height ~ 1.5 rows
-  const padX = 8;
+/* SVG triple chevrons (up/down) sized to column */
+function chevronsSVG(dir, colW, rowH){
+  const padX = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-w-pad'))||8;
   const w = Math.max(24, colW - padX*2);
-  const h = Math.max(40, Math.floor(rowH*1.5));
-  const r = Math.min(10, Math.floor(w*0.12)); // corner radius
-  const mid = Math.floor(w/2);
-  let d;
-  if(dir==='up'){
-    // rounded triangle pointing up
-    d = `M ${mid} ${r}
-         Q ${mid} 0 ${mid+r} ${r}
-         L ${w-r} ${h-r}
-         Q ${w} ${h} ${w-r} ${h}
-         L ${r} ${h}
-         Q 0 ${h} ${r} ${h-r}
-         L ${mid-r} ${r}
-         Q ${mid} 0 ${mid} ${r}
-         Z`;
-  }else{
-    // rounded triangle pointing down
-    d = `M ${r} 0
-         L ${w-r} 0
-         Q ${w} 0 ${w-r} ${r}
-         L ${mid+r} ${h-r}
-         Q ${mid} ${h} ${mid} ${h-r}
-         L ${mid} ${h-r}
-         L ${r} ${r}
-         Q 0 0 ${r} 0
-         Z`;
-  }
-  return `<svg class="tri" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}"/></svg>`;
+  const h = Math.max(44, Math.floor(rowH*1.6));
+  const mid = w/2;
+  const gap = h/6;               // vertical spacing
+  const span = Math.min(w*0.42, h/4); // half-width of each chevron
+
+  const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const d1 = (dir==='up'? up(gap) : dn(gap));
+  const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
+  const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
+
+  return `<div class="chev">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+      <path d="${d1}"/><path d="${d2}"/><path d="${d3}"/>
+    </svg>
+  </div>`;
 }
 
 /* Draw selection */
@@ -628,7 +628,7 @@ function drawSelection(){
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px'; topHandle.style.top = (- (rowH*1.6))+'px';
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=(rowH*1.5)+'px';
-      topHandle.innerHTML = triangleSVG('up', b.colWidth, rowH);
+      topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
       group.appendChild(topHandle);
     }
@@ -643,7 +643,7 @@ function drawSelection(){
       const botHandle=document.createElement('div'); botHandle.className='handle bottom';
       botHandle.style.left='0px'; botHandle.style.top = (b.height + 36)+'px';
       botHandle.style.width=b.colWidth+'px'; botHandle.style.height=(rowH*1.5)+'px';
-      botHandle.innerHTML = triangleSVG('down', b.colWidth, rowH);
+      botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
       group.appendChild(botHandle);
     }
@@ -654,7 +654,7 @@ function drawSelection(){
   attachViewportRepositioners();
 }
 
-/* Drag logic */
+/* Drag logic (unchanged) */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -702,9 +702,7 @@ function startDrag(ev, kind, which){
   if(other){ baseOtherStart = other.startMin; baseOtherEnd = other.endMin; otherDurAtStart = baseOtherEnd - baseOtherStart; }
   else { baseOtherStart = 0; baseOtherEnd = 0; otherDurAtStart = 0; }
 
-  crossedTop=crossedBottom=false;
-  prevStartMin=seg.startMin; prevEndMin=seg.endMin;
-
+  crossedTop=false; crossedBottom=false; prevStartMin=seg.startMin; prevEndMin=seg.endMin;
   wasDrag=false; dragPixels=0;
 
   const move=(e)=>{
@@ -754,7 +752,7 @@ function startDrag(ev, kind, which){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* spillover confirm + logic */
+/* spillover confirm + logic (unchanged from r62) */
 function showEdgeConfirm(direction){
   removeEdgeConfirm(); edgeOpen = true;
   const veil=document.createElement('div'); veil.className='settingsVeil';
@@ -797,7 +795,7 @@ async function confirmSpill(direction){
     else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
     const rem = clamp(60, 15, 1440 - totalDur(p));
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:rem };
-    chain.parent.endMin = 1440; // hard outer edge
+    chain.parent.endMin = 1440;
     if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
   }else{
     if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
@@ -813,7 +811,6 @@ async function confirmSpill(direction){
   repaintWeek(true); drawSelection(); repositionSelButtons();
 }
 
-/* guard against same-day child due to any race */
 function sanitizeChain(){
   if(!chain || !chain.child) return;
   const p=chain.parent, c=chain.child;
@@ -821,15 +818,13 @@ function sanitizeChain(){
     if(c.dayIdx===p.dayIdx && c.weekSt===p.weekSt){
       if(p.dayIdx<6){ c.dayIdx=p.dayIdx+1; c.weekSt=p.weekSt; } else { c.dayIdx=0; c.weekSt=p.weekSt+7*DAY_MS; }
     }
-    p.endMin = Math.max(p.endMin, 1440);
-    c.startMin = 0;
+    p.endMin = 1440; c.startMin = 0;
   }
   if(chain.dir==='prev'){
     if(c.dayIdx===p.dayIdx && c.weekSt===p.weekSt){
       if(p.dayIdx>0){ c.dayIdx=p.dayIdx-1; c.weekSt=p.weekSt; } else { c.dayIdx=6; c.weekSt=p.weekSt-7*DAY_MS; }
     }
-    p.startMin = Math.min(p.startMin, 0);
-    c.endMin = 1440;
+    p.startMin = 0; c.endMin = 1440;
   }
 }
 
@@ -907,7 +902,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r62</div>
+        <div class="watermark">Chrono r63</div>
       </div>
     </div>
   `;
@@ -955,9 +950,7 @@ function throttle(fn, ms){
   let t=0, lastArgs=null;
   return function(...args){
     lastArgs=args;
-    if(!t){
-      t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms);
-    }
+    if(!t){ t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms); }
   }
 }
 
