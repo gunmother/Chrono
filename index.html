@@ -26,10 +26,11 @@
     /* handles & stamps */
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px;          /* stamp ↔ handle gap */
+    --handle-gap:10px;          /* stamp ↔ handle gap (both ends) */
+    --top-handle-extra:4px;      /* tiny optical lift so top never looks jammed */
     --handle-height-mult:1.6;
 
-    --stamp-gap:6px;            /* selection ↔ stamp gap */
+    --stamp-gap:6px;             /* selection ↔ stamp gap */
     --stamp-h:26px;
   }
 
@@ -236,8 +237,8 @@
         </svg>
       </button>
 
-      <!-- Week -->
-      <button class="neu-btn is-pressed" aria-label="Week view" aria-pressed="true" data-view="week" title="Week">
+      <!-- Week (not active by default) -->
+      <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
@@ -274,12 +275,12 @@
   </main>
 
 <script>
-console.info('Chrono r67 — symmetric chevrons, single cluster, full-hour present lens, edge tap spillover.');
+console.info('Chrono r68 — top chevron margin, screensaver default, quick-nav flash, cluster avoids handles.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = 'week';
+let activeView = null; // screensaver by default
 let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
@@ -359,11 +360,11 @@ document.querySelector('.controls').addEventListener('click', e=>{
   const v=b.dataset.view;
 
   const wasPressed = b.classList.contains('is-pressed');
-  [...document.querySelectorAll('.neu-btn')].forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
   if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
 
   if(activeView===v){
-    activeView=null; [...document.querySelectorAll('.neu-btn')].forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
     destroySelButtons(); destroyOverlay();
   }else{
     activeView=v; render();
@@ -428,11 +429,12 @@ function buildWeekView(){
   loadAndDraw().catch(()=>{});
 }
 
+/* quick flash */
 function pressFlash(btn){
   btn.classList.add('is-pressed');
   btn.querySelector('svg').style.filter = 'drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow))';
 }
-function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter='drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo))'; }, 800); }
+function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter='drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo))'; }, 160); }
 
 function ensureOverlay(){
   if(overlayRoot && document.body.contains(overlayRoot)) return;
@@ -542,7 +544,6 @@ function paintNowMagnifier(geom){
   const left=colX[dow];
   const width=(colX[dow+1]-colX[dow] - (dow===6?1:0));
 
-  /* expand by half border so interior matches a full hour block */
   nowEl.style.left=(left - border/2)+'px';
   nowEl.style.top=(hourTop - border/2)+'px';
   nowEl.style.width=(width + border)+'px';
@@ -550,10 +551,10 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* create on tap — also prompt if the new selection touches top/bottom */
+/* create on tap — prompt if new selection touches edges */
 async function onWeekGridTap(e){
   if(!weekGeom) return;
-  destroySelButtons(); // cleanup any prior cluster
+  destroySelButtons();
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
@@ -568,7 +569,6 @@ async function onWeekGridTap(e){
   chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin, endMin }, child: null, dir: null };
   await saveChain(chain); drawSelection();
 
-  // If the created block touches an edge, ask to spill immediately
   if(!_modalOpen){
     if(chain.parent.startMin===0){ await spilloverConfirm('prev'); }
     else if(chain.parent.endMin===1440){ await spilloverConfirm('next'); }
@@ -611,7 +611,7 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* draw selection + single side cluster */
+/* draw selection + side cluster (that avoids handles) */
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   if(!overlayRoot) ensureOverlay();
@@ -631,7 +631,8 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
-  // Draw both rectangles / handles as before
+  const handleCenters=[]; // for avoidance
+
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
@@ -664,6 +665,7 @@ function drawSelection(){
     const rowH = weekGeom.rowH[0] || 48;
     const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
     const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
+    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
     const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
     const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
 
@@ -676,11 +678,13 @@ function drawSelection(){
 
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px';
-      topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';
+      topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
       topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
       group.appendChild(topHandle);
+
+      handleCenters.push(weekGeom.rect.top + b.topY - (sGap + sH + hGap + (hH/2) + topExtra));
     }
 
     if(renderBottom){
@@ -697,20 +701,19 @@ function drawSelection(){
       botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
       group.appendChild(botHandle);
+
+      handleCenters.push(weekGeom.rect.top + b.topY + b.height + sGap + sH + hGap + (hH/2));
     }
   });
 
-  // Single side cluster per view:
   ensureSelButtons();
 
-  // Position cluster at the vertical midpoint of the *union* of visible segments this week,
-  // and to the right of whichever segment center is nearest viewport center.
+  // Position cluster using union bounds, then nudge to avoid handle overlap
   const visibleBounds = segs.map(s=>({name:s.name, b:boundsFromSeg(s.seg)}));
   const topMin = Math.min(...visibleBounds.map(v=>v.b.topY));
   const botMax = Math.max(...visibleBounds.map(v=>v.b.botY));
   const heightUnion = botMax - topMin;
 
-  // choose segment closer to viewport center for horizontal anchor
   const vpCenter = (window.scrollY + window.innerHeight/2) - weekGeom.rect.top;
   let anchor = visibleBounds[0];
   let best = Math.abs(((anchor.b.topY+anchor.b.botY)/2) - vpCenter);
@@ -720,13 +723,45 @@ function drawSelection(){
     if(d < best){ best=d; anchor=v; }
   }
 
-  positionSelButtons({
+  const rect = {
     left: weekGeom.rect.left + anchor.b.offsetLeft,
     right: weekGeom.rect.left + anchor.b.offsetLeft + anchor.b.colWidth,
     top: weekGeom.rect.top + topMin,
     height: heightUnion
-  });
+  };
 
+  // Avoid handles: if cluster vertical span overlaps a handle center ±30px, nudge above/below
+  function positionWithAvoidance(r){
+    const margin=8, btnW=44, totalH=(44*2)+8;
+    let left = r.right + margin;
+    let top  = r.top + (r.height/2) - (totalH/2);
+
+    // side swap if off-screen
+    if(left + btnW > window.innerWidth - margin){
+      left = Math.max(margin, r.left - margin - btnW);
+    }
+
+    // vertical avoidance
+    const clearance = 30;
+    const spanTop = top, spanBot = top + totalH;
+    for(const hc of handleCenters){
+      if(spanTop - clearance < hc && hc < spanBot + clearance){
+        // If handle is below center, move up; else move down
+        if(hc >= (spanTop+spanBot)/2) top = Math.max(margin, hc - clearance - totalH);
+        else top = Math.min(window.innerHeight - margin - totalH, hc + clearance);
+      }
+    }
+
+    // clamp into viewport
+    if(top + totalH > window.innerHeight - margin){
+      top = Math.max(margin, window.innerHeight - margin - totalH);
+    }
+    if(top < margin) top = margin;
+
+    positionSelButtons({left, top});
+  }
+
+  positionWithAvoidance(rect);
   attachViewportRepositioners();
 }
 
@@ -957,7 +992,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r67</div>
+        <div class="watermark">Chrono r68</div>
       </div>
     </div>
   `;
@@ -974,9 +1009,14 @@ async function init(){
   try{
     const snap = await storageGet('state');
     if(snap && typeof snap==='object'){
-      if('activeView' in snap) activeView = snap.activeView || 'week';
+      if('activeView' in snap) activeView = snap.activeView ?? null;
       if('activeDayISO' in snap) activeDayISO = snap.activeDayISO;
       if('visibleWeekFirst' in snap && typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
+      // reflect restored button state
+      if(activeView){
+        const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`);
+        btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true');
+      }
     }
   }catch{}
   render();
@@ -994,6 +1034,7 @@ function render(){
     activeDayISO = toISO(new Date());
     buildMonthView();
   } else {
+    // screensaver: empty panel
     screenEl.innerHTML='';
     destroySelButtons(); destroyOverlay();
   }
@@ -1009,7 +1050,7 @@ function throttle(fn, ms){
   }
 }
 
-/* Single side-cluster */
+/* Side cluster plumbing */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
   if(window.__selBtns && document.body.contains(window.__selBtns)) return;
@@ -1039,24 +1080,12 @@ function ensureSelButtons(){
 }
 function destroySelButtons(){ if(window.__selBtns){ window.__selBtns.remove(); window.__selBtns=null; } }
 
-function positionSelButtons(rect){
+function positionSelButtons({left, top}){
   const wrap = window.__selBtns; if(!wrap) return;
-  const margin=8, btnW=44, totalH=(44*2)+8;
-
-  let left = rect.right + margin;
-  let top  = rect.top + (rect.height/2) - (totalH/2);
-
-  if(left + btnW > window.innerWidth - margin){
-    left = Math.max(margin, rect.left - margin - btnW);
-  }
-  if(top + totalH > window.innerHeight - margin){
-    top = Math.max(margin, window.innerHeight - margin - totalH);
-  }
-  if(top < margin) top = margin;
-
   wrap.style.left = `${Math.round(left)}px`;
   wrap.style.top  = `${Math.round(top)}px`;
 }
+
 function repositionSelButtons(){
   if(!chain || !weekGeom || !window.__selBtns) return;
 
@@ -1067,17 +1096,23 @@ function repositionSelButtons(){
 
   const topMin = Math.min(...inWeek.map(b=>b.topY));
   const botMax = Math.max(...inWeek.map(b=>b.botY));
-  // anchor horizontally to the segment whose vertical middle is nearest viewport middle
+
   const vpCenter = (window.scrollY + window.innerHeight/2) - weekGeom.rect.top;
   let anchor=inWeek[0]; let best=Math.abs(((anchor.topY+anchor.botY)/2) - vpCenter);
   for(const b of inWeek){ const mid=(b.topY+b.botY)/2, d=Math.abs(mid - vpCenter); if(d<best){best=d; anchor=b;} }
 
-  positionSelButtons({
-    left: weekGeom.rect.left + anchor.offsetLeft,
-    right: weekGeom.rect.left + anchor.offsetLeft + anchor.colWidth,
-    top: weekGeom.rect.top + topMin,
-    height: botMax - topMin
-  });
+  const margin=8, btnW=44, totalH=(44*2)+8;
+  let left = weekGeom.rect.left + anchor.offsetLeft + anchor.colWidth + margin;
+  if(left + btnW > window.innerWidth - margin){
+    left = Math.max(margin, weekGeom.rect.left + anchor.offsetLeft - margin - btnW);
+  }
+  let top  = weekGeom.rect.top + topMin + ((botMax-topMin)/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){
+    top = Math.max(margin, window.innerHeight - margin - totalH);
+  }
+  if(top < margin) top = margin;
+
+  positionSelButtons({left, top});
 }
 
 function onGearTap(ev){
