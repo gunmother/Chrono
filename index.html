@@ -24,9 +24,10 @@
     --marquee-shadow:0 0 12px 6px var(--turq-glow);
 
     /* chevrons */
-    --handle-stroke:#5e7286;         /* dark bluish stroke */
-    --handle-w-pad:8px;              /* inner pad from column edge */
-    --chev-stroke-w:2.2;             /* chevron line weight */
+    --handle-stroke:#5e7286;
+    --chev-stroke-w:2.2;
+    --handle-gap:10px;                 /* min clearance between stamp & handle */
+    --handle-height-mult:1.6;          /* handle height vs row height */
   }
 
   html,body{
@@ -66,7 +67,8 @@
   .neu-btn svg{
     width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
     fill:none; stroke-linecap:round; stroke-linejoin:round;
-    transition:stroke .2s ease, filter .2s ease;
+    /* Emboss highlight like chevrons */
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
   .neu-btn.is-pressed{
     background:
@@ -76,7 +78,11 @@
        var(--off)         var(--off)         var(--blur) var(--hi),
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
   }
-  .neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
+  /* LED state: remove emboss, add turquoise glow */
+  .neu-btn.is-pressed svg{
+    stroke:var(--icon-active);
+    filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
+  }
   .neu-btn:active{ transform:scale(.985); }
   .neu-btn:focus{ outline:none; }
 
@@ -89,7 +95,10 @@
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .neu-btn--sm svg{
+    width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
   .neu-btn--sm.is-pressed{
     background:
       radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
@@ -116,18 +125,18 @@
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
   }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:1 }
 
   /* Selection */
-  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:1000; }
+  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; background:transparent;
     border:var(--marquee-border) solid #fff; border-radius:12px;
     pointer-events:none; box-shadow: var(--marquee-shadow);
   }
 
-  .overlayRoot{ position:fixed; inset:0; z-index:2000; pointer-events:none; }
+  .overlayRoot{ position:fixed; inset:0; z-index:3; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
 
   .stamp{
@@ -135,11 +144,11 @@
     background:var(--pressed-navy); color:var(--icon-active);
     border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-    pointer-events:none; z-index:3;
+    pointer-events:none; z-index:5;   /* <— stamps always above handles/effects */
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
   }
 
-  /* Chevron handles: full-column width, tall, rounded chip with neuromorph; inside: triple chevrons */
+  /* Chevron handles: column-width, tall, rounded chip */
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
@@ -149,14 +158,14 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     display:grid; place-items:center;
   }
-  .chev svg{ display:block; }
   .chev path{
     fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
-    filter: drop-shadow(-1px -1px 0 var(--hi)) drop-shadow(1px 1px 0 var(--lo));
+    /* Same embossed kiss as icons */
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
   /* Floating buttons */
-  .selBtns{ position:fixed; z-index:2050; display:grid; gap:8px; pointer-events:auto; }
+  .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
   .selBtns > button{ touch-action:manipulation; }
   .selBtnHidden{ display:none !important; }
 
@@ -181,6 +190,18 @@
   .mcell.today .date{
     top:6px; right:6px; width:24px; height:24px; display:grid; place-items:center; color:var(--icon-active);
   }
+
+  /* Simple modal reused for spillover confirm */
+  .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
+  .modal{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 280px); background:#fff; color:#111; border:1px solid var(--border);
+    border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,.28); z-index:11; display:grid; grid-template-rows:auto 1fr auto;
+  }
+  .modal .head{ padding:12px 14px; border-bottom:1px solid var(--grid-line); font-weight:800; }
+  .modal .foot{ padding:10px 14px; border-top:1px solid var(--grid-line); display:flex; justify-content:flex-end; gap:10px; }
+  .btn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
+  .btn.ok{ background:#e6e6e6; }
 </style>
 </head>
 <body>
@@ -188,6 +209,7 @@
     <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
     <nav class="controls" role="group" aria-label="Primary views">
+      <!-- Day -->
       <button class="neu-btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="5.5"/>
@@ -202,6 +224,7 @@
         </svg>
       </button>
 
+      <!-- Week -->
       <button class="neu-btn is-pressed" aria-label="Week view" aria-pressed="true" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
@@ -214,6 +237,7 @@
         </svg>
       </button>
 
+      <!-- Month -->
       <button class="neu-btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
@@ -226,6 +250,7 @@
         </svg>
       </button>
 
+      <!-- To-Do -->
       <button class="neu-btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="3"/>
@@ -237,7 +262,7 @@
   </main>
 
 <script>
-console.info('Chrono r63 — triple chevron handles (neuromorph), week/month polish intact.');
+console.info('Chrono r64 — embossed icons, layer-safe stamps, robust spillover.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -311,14 +336,12 @@ async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
 let chain = null;
-let edgeOpen=false, pendingEdge=null;
+let edgeOpen=false;
 let dragKind=null, dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
-let dragPixels=0, wasDrag=false, createdAt=0;
+let dragPixels=0, wasDrag=false;
 let crossedTop=false, crossedBottom=false, prevStartMin=0, prevEndMin=0;
-let userDragActive=false;
-let selectionLockId=null;
 
 /* controls */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -370,16 +393,12 @@ function buildWeekView(){
   const prev = document.getElementById('prevWeekBtn');
   const next = document.getElementById('nextWeekBtn');
   prev.onclick = async ()=>{
-    pressFlash(prev);
-    visibleWeekFirst=addDays(visibleWeekFirst,-7);
-    repaintWeek(); await loadAndDraw(); saveSoon(200);
-    unpressFlash(prev);
+    pressFlash(prev); visibleWeekFirst=addDays(visibleWeekFirst,-7);
+    repaintWeek(); await loadAndDraw(); saveSoon(200); unpressFlash(prev);
   };
   next.onclick = async ()=>{
-    pressFlash(next);
-    visibleWeekFirst=addDays(visibleWeekFirst, 7);
-    repaintWeek(); await loadAndDraw(); saveSoon(200);
-    unpressFlash(next);
+    pressFlash(next); visibleWeekFirst=addDays(visibleWeekFirst, 7);
+    repaintWeek(); await loadAndDraw(); saveSoon(200); unpressFlash(next);
   };
 
   const grid=document.getElementById('weekGrid');
@@ -402,7 +421,7 @@ function pressFlash(btn){
   btn.classList.add('is-pressed');
   btn.querySelector('svg').style.filter = 'drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow))';
 }
-function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter=''; }, 800); }
+function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter='drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo))'; }, 800); }
 
 function ensureOverlay(){
   if(overlayRoot && document.body.contains(overlayRoot)) return;
@@ -516,7 +535,7 @@ function paintNowMagnifier(geom){
 
 /* create on tap */
 async function onWeekGridTap(e){
-  if(edgeOpen || !weekGeom) return;
+  if(!weekGeom) return;
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
@@ -529,7 +548,6 @@ async function onWeekGridTap(e){
   const endMin   = clamp(startMin + 60, 0, 1440);
 
   chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin, endMin }, child: null, dir: null };
-  selectionLockId=null; createdAt = Date.now(); wasDrag=false;
   await saveChain(chain); drawSelection();
 }
 
@@ -548,12 +566,12 @@ function boundsFromSeg(seg){
 
 /* SVG triple chevrons (up/down) sized to column */
 function chevronsSVG(dir, colW, rowH){
-  const padX = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-w-pad'))||8;
+  const padX = 8;
   const w = Math.max(24, colW - padX*2);
-  const h = Math.max(44, Math.floor(rowH*1.6));
+  const h = Math.max(44, Math.floor(rowH*parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6));
   const mid = w/2;
-  const gap = h/6;               // vertical spacing
-  const span = Math.min(w*0.42, h/4); // half-width of each chevron
+  const gap = h/6;
+  const span = Math.min(w*0.42, h/4);
 
   const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
   const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
@@ -591,6 +609,7 @@ function drawSelection(){
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
 
+    /* Selection outline/glow */
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=name;
@@ -600,6 +619,7 @@ function drawSelection(){
     rectEl.style.height = `${b.height}px`;
     host.appendChild(rectEl);
 
+    /* Overlay group */
     const group=document.createElement('div');
     group.className='ov-group';
     group.style.left = (weekGeom.rect.left + b.offsetLeft) + 'px';
@@ -617,17 +637,22 @@ function drawSelection(){
     }
 
     const rowH = weekGeom.rowH[0] || 48;
+    const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
+    const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
 
     if(renderTop){
+      /* Time stamp (always above) */
       const topStamp=document.createElement('div'); topStamp.className='stamp';
       topStamp.textContent = HHMM(seg.startMin);
       topStamp.style.left = (b.colWidth/2)+'px';
-      topStamp.style.top  = (-32)+'px';
+      topStamp.style.top  = (- (gap + 26))+'px';
       group.appendChild(topStamp);
 
+      /* Handle chip below the stamp, respecting gap */
       const topHandle=document.createElement('div'); topHandle.className='handle top';
-      topHandle.style.left='0px'; topHandle.style.top = (- (rowH*1.6))+'px';
-      topHandle.style.width=b.colWidth+'px'; topHandle.style.height=(rowH*1.5)+'px';
+      topHandle.style.left='0px';
+      topHandle.style.top = (- (gap + hH))+'px';
+      topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
       topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
       group.appendChild(topHandle);
@@ -637,12 +662,13 @@ function drawSelection(){
       const botStamp=document.createElement('div'); botStamp.className='stamp';
       botStamp.textContent = HHMM(seg.endMin);
       botStamp.style.left = (b.colWidth/2)+'px';
-      botStamp.style.top  = (b.height + 6)+'px';
+      botStamp.style.top  = (b.height + gap)+'px';
       group.appendChild(botStamp);
 
       const botHandle=document.createElement('div'); botHandle.className='handle bottom';
-      botHandle.style.left='0px'; botHandle.style.top = (b.height + 36)+'px';
-      botHandle.style.width=b.colWidth+'px'; botHandle.style.height=(rowH*1.5)+'px';
+      botHandle.style.left='0px';
+      botHandle.style.top = (b.height + gap + 26)+'px';
+      botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
       botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
       botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
       group.appendChild(botHandle);
@@ -654,7 +680,7 @@ function drawSelection(){
   attachViewportRepositioners();
 }
 
-/* Drag logic (unchanged) */
+/* Drag logic + spillover */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -693,16 +719,15 @@ function startDrag(ev, kind, which){
   if(!chain) return;
   const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return;
 
-  userDragActive=true;
-  dragKind = kind; dragTarget = which;
   ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
 
+  dragKind = kind; dragTarget = which;
   dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
   const other = otherSeg(which);
   if(other){ baseOtherStart = other.startMin; baseOtherEnd = other.endMin; otherDurAtStart = baseOtherEnd - baseOtherStart; }
   else { baseOtherStart = 0; baseOtherEnd = 0; otherDurAtStart = 0; }
 
-  crossedTop=false; crossedBottom=false; prevStartMin=seg.startMin; prevEndMin=seg.endMin;
+  crossedTop=crossedBottom=false; prevStartMin=seg.startMin; prevEndMin=seg.endMin;
   wasDrag=false; dragPixels=0;
 
   const move=(e)=>{
@@ -734,52 +759,42 @@ function startDrag(ev, kind, which){
       else { seg.endMin = seg.startMin + 15; }
     }
 
-    if(userDragActive && !edgeOpen && !pendingEdge && !chain.child && wasDrag){
-      if(crossedTop){ pendingEdge={direction:'prev'}; showEdgeConfirm('prev'); }
-      else if(crossedBottom){ pendingEdge={direction:'next'}; showEdgeConfirm('next'); }
+    if(!chain.child && wasDrag){
+      if(crossedTop){ await spilloverConfirm('prev'); }
+      else if(crossedBottom){ await spilloverConfirm('next'); }
     }
 
     await saveChain(chain).catch(()=>{});
-    saveSoon(200);
-
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
-    dragKind=null; userDragActive=false;
+    dragKind=null;
   };
 
   window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* spillover confirm + logic (unchanged from r62) */
-function showEdgeConfirm(direction){
-  removeEdgeConfirm(); edgeOpen = true;
-  const veil=document.createElement('div'); veil.className='settingsVeil';
-  veil.addEventListener('click', removeEdgeConfirm, {capture:true});
-  document.body.appendChild(veil);
+/* Better spillover: modal confirm, then create proper child on adjacent day */
+async function spilloverConfirm(direction){
+  const res = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
+  if(!res) return;
+  await confirmSpill(direction);
+}
 
-  const box=document.createElement('div');
-  box.className='settingsModal';
-  box.style.width='min(92vw, 260px)';
-  box.innerHTML=`
-    <div class="settingsHead"><div>${direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?'}</div></div>
-    <div class="settingsBody"></div>
-    <div class="settingsFoot">
-      <button class="closeBtn" data-act="cancel">Cancel</button>
-      <button class="closeBtn ok" data-act="ok">OK</button>
-    </div>
-  `;
-  document.body.appendChild(box);
-
-  box.addEventListener('click', async (e)=>{
-    const b=e.target.closest('button'); if(!b) return;
-    const act=b.dataset.act;
-    if(act==='cancel'){ removeEdgeConfirm(); return; }
-    if(act==='ok'){ await confirmSpill(direction); removeEdgeConfirm(); }
+function modalConfirm(text){
+  return new Promise((resolve)=>{
+    const veil=document.createElement('div'); veil.className='veil';
+    const modal=document.createElement('div'); modal.className='modal';
+    modal.innerHTML=`<div class="head">${text}</div><div></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    document.body.appendChild(veil); document.body.appendChild(modal);
+    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
+    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
+      b.dataset.a==='yes'? close(true):close(false);
+    });
+    veil.addEventListener('click', ()=>close(false));
   });
 }
-function removeEdgeConfirm(){ edgeOpen=false; pendingEdge=null; document.querySelectorAll('.settingsModal').forEach(n=>n.remove()); document.querySelectorAll('.settingsVeil').forEach(n=>n.remove()); }
 
 async function confirmSpill(direction){
   if(!chain || !chain.parent) return;
@@ -795,14 +810,14 @@ async function confirmSpill(direction){
     else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
     const rem = clamp(60, 15, 1440 - totalDur(p));
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:rem };
-    chain.parent.endMin = 1440;
+    p.endMin = 1440;
     if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
   }else{
     if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
     else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
     const rem = clamp(60, 15, 1440 - totalDur(p));
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:1440 - rem, endMin:1440 };
-    chain.parent.startMin = 0;
+    p.startMin = 0;
     if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); }
   }
 
@@ -811,21 +826,12 @@ async function confirmSpill(direction){
   repaintWeek(true); drawSelection(); repositionSelButtons();
 }
 
+/* Keep parent/child anchored to day edges properly */
 function sanitizeChain(){
   if(!chain || !chain.child) return;
   const p=chain.parent, c=chain.child;
-  if(chain.dir==='next'){
-    if(c.dayIdx===p.dayIdx && c.weekSt===p.weekSt){
-      if(p.dayIdx<6){ c.dayIdx=p.dayIdx+1; c.weekSt=p.weekSt; } else { c.dayIdx=0; c.weekSt=p.weekSt+7*DAY_MS; }
-    }
-    p.endMin = 1440; c.startMin = 0;
-  }
-  if(chain.dir==='prev'){
-    if(c.dayIdx===p.dayIdx && c.weekSt===p.weekSt){
-      if(p.dayIdx>0){ c.dayIdx=p.dayIdx-1; c.weekSt=p.weekSt; } else { c.dayIdx=6; c.weekSt=p.weekSt-7*DAY_MS; }
-    }
-    p.startMin = 0; c.endMin = 1440;
-  }
+  if(chain.dir==='next'){ p.endMin=1440; c.startMin=0; }
+  if(chain.dir==='prev'){ p.startMin=0; c.endMin=1440; }
 }
 
 /* month view */
@@ -902,7 +908,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r63</div>
+        <div class="watermark">Chrono r64</div>
       </div>
     </div>
   `;
@@ -968,7 +974,7 @@ function ensureSelButtons(){
     <circle cx="12" cy="12" r="3.5" />
     <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
   </svg>`;
-  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.4'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
+  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
   gear.addEventListener('click', onGearTap, {passive:true});
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
 
@@ -987,7 +993,6 @@ function hideSelButtons(){ if(window.__selBtns) window.__selBtns.classList.add('
 
 function visibleSegName(){
   if(!chain) return null;
-  if(dragTarget && segOnThisWeek(chain[dragTarget])) return dragTarget;
   if(segOnThisWeek(chain.parent)) return 'parent';
   if(segOnThisWeek(chain.child))  return 'child';
   return null;
@@ -1020,70 +1025,44 @@ function repositionSelButtons(){
   pair.style.top  = `${Math.round(top)}px`;
 }
 
-function alignSelectionToButtons(){
-  if(!chain || !window.__selBtns || activeView!=='week') return;
-
-  const btnRect = window.__selBtns.getBoundingClientRect();
-  const targetY = btnRect.top + (btnRect.height/2);
-
-  const gridRect = weekGeom.rect;
-  const relY = clamp(targetY - gridRect.top, 0, weekGeom.totalH);
-  const minuteFloat = (relY / weekGeom.totalH) * 1440;
-  const snapped = snap15(minuteFloat);
-
-  const name = visibleSegName(); if(!name) return;
-  const seg = name==='parent'? chain.parent : chain.child;
-
-  const parentHere = segOnThisWeek(chain.parent);
-  const childHere = segOnThisWeek(chain.child);
-  let edge='bottom';
-  if(!chain.child){ edge = (snapped < (seg.startMin + seg.endMin)/2) ? 'top' : 'bottom'; }
-  else if(parentHere && childHere){
-    if(name==='parent') edge='top'; else edge='bottom';
-  }else{
-    if(chain.dir==='next'){ edge = (name==='parent') ? 'top' : 'bottom'; }
-    if(chain.dir==='prev'){ edge = (name==='parent') ? 'bottom' : 'top'; }
-  }
-
-  if(edge==='top'){ seg.startMin = clamp(snap15(snapped), 0, seg.endMin - 15); }
-  else { seg.endMin = clamp(snap15(snapped), seg.startMin + 15, 1440); }
-  clampToBudget(seg, name);
-  drawSelection();
-}
-
 function onGearTap(ev){
   ev.stopPropagation();
-  if(!chain) return;
-  if(selectionLockId !== chain.id){ alignSelectionToButtons(); selectionLockId = chain.id; }
-
-  const veil = document.createElement('div'); veil.className='settingsVeil';
-  const modal = document.createElement('div'); modal.className='settingsModal';
+  const veil = document.createElement('div'); veil.className='veil';
+  const modal = document.createElement('div'); modal.className='modal';
   modal.innerHTML = `
-    <div class="settingsHead"><div>Settings</div><button class="closeBtn" aria-label="Close">✕</button></div>
-    <div class="settingsBody"><em>Blank settings window</em></div>
-    <div class="settingsFoot"><button class="closeBtn ok">Exit</button></div>
+    <div class="head">Settings</div>
+    <div style="padding:16px;color:#555;font-size:14px;"><em>Blank settings window</em></div>
+    <div class="foot"><button class="btn ok">Close</button></div>
   `;
   const closeAll = ()=>{ veil.remove(); modal.remove(); };
   veil.addEventListener('click', closeAll);
-  modal.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click', closeAll));
-  document.body.appendChild(veil);
-  document.body.appendChild(modal);
+  modal.querySelector('.ok').addEventListener('click', closeAll);
+  document.body.appendChild(veil); document.body.appendChild(modal);
 }
 
 async function onXTap(ev){
   ev.stopPropagation();
   if(!chain) return;
-  alignSelectionToButtons();
-  removeEdgeConfirm();
   chain = null;
-  selectionLockId=null;
   await saveChain(null).catch(()=>{});
   document.getElementById('selHost')?.replaceChildren();
   destroySelButtons();
   overlayRoot && (overlayRoot.innerHTML='');
 }
+
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ repositionSelButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+}
 </script>
 
+<!-- Service worker registration -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
