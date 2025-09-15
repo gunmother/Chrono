@@ -32,6 +32,14 @@
 
     --stamp-gap:6px;             /* selection ↔ stamp gap */
     --stamp-h:26px;
+
+    /* neumorphic pieces */
+    --neu-shadow-outer:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    --neu-shadow-inner:
+       inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       inset var(--off)         var(--off)         var(--blur) var(--lo);
   }
 
   html,body{
@@ -50,9 +58,7 @@
 
   #screen{
     flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
+    box-shadow: var(--neu-shadow-outer);
     position:relative; overflow:hidden;
   }
 
@@ -63,9 +69,7 @@
     flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
     border-radius:50%; border:none; outline:none; cursor:pointer;
     background:var(--bg); display:grid; place-items:center;
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
+    box-shadow: var(--neu-shadow-outer);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
   .neu-btn svg{
@@ -91,9 +95,7 @@
   .neu-btn--sm{
     width:44px; height:44px; border-radius:12px; flex:0 0 auto;
     display:grid; place-items:center; background:var(--bg); border:none; cursor:pointer;
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
+    box-shadow: var(--neu-shadow-outer);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
     -webkit-tap-highlight-color: transparent;
   }
@@ -150,8 +152,9 @@
   }
   .blockRect{
     position:absolute; box-sizing:border-box; border-radius:10px;
-    background:rgba(53,81,105,.15); border:1px solid rgba(53,81,105,.35);
     pointer-events:none;
+    box-shadow: var(--neu-shadow-outer);
+    border:1px solid rgba(53,81,105,.25);
   }
 
   .overlayRoot{ position:fixed; inset:0; z-index:3; pointer-events:none; }
@@ -172,9 +175,7 @@
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
     background:var(--bg);
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
+    box-shadow: var(--neu-shadow-outer);
     display:grid; place-items:center;
   }
   .chev path{
@@ -182,7 +183,7 @@
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
-  /* Side buttons (Settings / X) — single cluster per view, outside & centered) */
+  /* Side buttons (Settings / X) */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
   .selBtns > button{ touch-action:manipulation; }
   .selBtnHidden{ display:none !important; }
@@ -196,9 +197,7 @@
   .mcell .date{ position:absolute; top:8px; right:8px; font-weight:800; z-index:2; line-height:1; }
   .mcell.muted{ color:#8da0b3 }
   .mcell.today{
-    box-shadow:
-      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-       var(--off)         var(--off)         var(--blur) var(--lo);
+    box-shadow: var(--neu-shadow-outer);
   }
   .mcell.today::before{
     content:""; position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
@@ -209,31 +208,86 @@
     top:6px; right:6px; width:24px; height:24px; display:grid; place-items:center; color:var(--icon-active);
   }
 
-  /* Modal base */
+  /* ===== Neumorphic Settings Modal ===== */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
   .modal{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(92vw, 320px); background:#fff; color:#111; border:1px solid var(--border);
-    border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,.28); z-index:11; display:grid; grid-template-rows:auto 1fr auto;
+    width:min(92vw, 360px); background:var(--bg); color:var(--ink);
+    border-radius:12px; box-shadow: var(--neu-shadow-outer); z-index:11;
+    display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
   }
-  .modal .head{ padding:12px 14px; border-bottom:1px solid var(--grid-line); font-weight:800; }
-  .modal .foot{ padding:10px 14px; border-top:1px solid var(--grid-line); display:flex; justify-content:flex-end; gap:10px; }
-  .btn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer; }
-  .btn.ok{ background:#e6e6e6; }
+  .modal .head{
+    padding:12px 14px; font-weight:800;
+    background:var(--bg); box-shadow: var(--neu-shadow-inner);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal .foot{
+    padding:10px 14px; display:flex; justify-content:flex-end; gap:10px;
+    background:var(--bg); box-shadow: var(--neu-shadow-inner);
+  }
+  .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow: var(--neu-shadow-outer); }
+  .btn:active{ transform:scale(.985); }
+  .btn.ok{ background:var(--bg); }
+  .btn.icon{ width:40px; height:40px; display:grid; place-items:center; }
+  .btn.icon svg{
+    width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
 
-  /* Settings content */
-  .settings-wrap{ padding:12px 14px; display:grid; gap:12px; overflow:auto; }
-  .field{ display:grid; gap:6px; }
+  .settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; }
+
+  .neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow: var(--neu-shadow-inner); display:grid; gap:8px; }
   .label{ font-weight:800; font-size:13px; color:#223; }
-  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .select{ width:100%; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-weight:700; }
-  .input{ width:100%; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .chip{ display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:999px; padding:6px 10px; font-weight:800; }
-  .dot{ width:12px; height:12px; border-radius:50%; background:#999; border:1px solid #666; }
-  .icon-btn{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 8px; display:grid; place-items:center; }
-  .row4{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .row4 > .select{ width:100%; }
-  .stat-line{ display:flex; justify-content:space-between; font-weight:800; padding:8px 0; border-bottom:1px solid #eee; }
+
+  .neu-select{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow: var(--neu-shadow-outer); cursor:pointer;
+    user-select:none;
+  }
+  .neu-select .ph{ opacity:.7; }
+  .neu-select svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-menu{ display:none; position:relative; }
+  .neu-menu.open{ display:block; }
+  .menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow: var(--neu-shadow-outer); overflow:hidden; }
+  .menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; }
+  .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
+  .menu-dot{ width:12px; height:12px; border-radius:50%; box-shadow: var(--neu-shadow-inner); }
+
+  .chip{
+    display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px;
+    background:var(--bg); box-shadow: var(--neu-shadow-outer); font-weight:800; width:fit-content;
+  }
+  .dot{ width:12px; height:12px; border-radius:50%; border:1px solid #273b4d; box-shadow: var(--neu-shadow-inner); }
+  .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
+  .chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+
+  .note-field{ display:grid; gap:6px; }
+  .note-input{
+    background:var(--bg); border:none; outline:none; border-radius:12px; padding:10px 12px; font-weight:700;
+    box-shadow: var(--neu-shadow-inner);
+  }
+
+  .row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+  .time-row{ display:grid; gap:8px; }
+  .time-pair{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow: var(--neu-shadow-outer);
+  }
+  .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
+  .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
+
+  .swatch-grid{ display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; }
+  .sw{ width:32px; height:32px; border-radius:10px; box-shadow: var(--neu-shadow-outer); cursor:pointer; border:1px solid rgba(0,0,0,.08); }
+  .sw.sel{ box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--pressed-navy), var(--neu-shadow-outer); }
+
+  /* Stats */
+  .stat-line{ display:flex; justify-content:space-between; font-weight:800; padding:8px 0; border-bottom:1px solid #d8e1ec; }
   .pct{ font-weight:900; }
   .pct.green{ color:#15a05c; }
   .pct.yellow{ color:#b18a00; }
@@ -299,7 +353,7 @@
   </main>
 
 <script>
-console.info('Chrono r69 — mirrored top spacing, Settings modal w/ per-block controls, recurrence, stats, persist blocks');
+console.info('Chrono r70 — neumorphic settings UI, activity ordering, defaults, notes, AM/PM picker, save leaves colored block.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -320,6 +374,15 @@ function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function totalDur(a){ return (a.endMin - a.startMin); }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
 function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
+function HHMM_ampm(min){
+  const m=((Math.round(min)|0)+1440)%1440; let h=Math.floor(m/60), r=m%60;
+  const am = h<12; h = (h%12)||12; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')} ${am?'AM':'PM'}`;
+}
+function ampmToMin(str){
+  const m = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i); if(!m) return null;
+  let h=+m[1], mm=+m[2], ap=m[3].toUpperCase(); if(h<1||h>12||mm%15!==0) return null;
+  if(h===12) h=0; if(ap==='PM') h+=12; return h*60+mm;
+}
 
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
@@ -332,7 +395,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=25;
+const DB_NAME='chronoDB', DB_VERSION=26;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -390,6 +453,53 @@ async function getBlocksAll(){
     req.onsuccess=()=>res(req.result||[]);
     req.onerror=()=>rej(req.error);
   });
+}
+
+/* ===== Activities & Colors ===== */
+
+/* Ordered list per spec */
+const ACTIVITY_LIST = [
+  {key:'work', label:'Work'},
+  {key:'school', label:'School'},
+  {key:'commute', label:'Commute'},
+  {key:'chores', label:'Chores'},
+  {key:'errands', label:'Errands'},
+  {key:'meal', label:'Meal Time'},
+  {key:'hygiene', label:'Hygiene'},
+  {key:'childcare', label:'Child Care'},
+  {key:'selfcare', label:'Self Care'},
+  {key:'exercise', label:'Exercise'},
+  {key:'family', label:'Family Time'},
+  {key:'hobbies', label:'Hobbies'},
+  {key:'projects', label:'Projects'},
+  {key:'rr', label:'R & R'},
+  {key:'free', label:'Free Time'},
+  {key:'sleep', label:'Sleep'}
+];
+
+/* Preassigned default colors (placeholder tones).
+   ⚠️ Replace with your exact 18-swatch shades when you provide the hex values. */
+const COLOR_SWATCHES = [
+  '#E5484D','#3E63DD','#22C55E','#EAB308','#F97316','#0EA5E9',
+  '#8B5CF6','#10B981','#EF4444','#7DD3FC','#94A3B8','#F59E0B',
+  '#14B8A6','#F43F5E','#A3E635','#111827','#6EE7B7','#FCA5A5'
+];
+
+/* Activity → default swatch index (you can remap after providing exact colors) */
+const ACTIVITY_COLOR = {
+  work:0, school:1, commute:3, chores:10, errands:9, meal:4, hygiene:5, childcare:15,
+  selfcare:6, exercise:2, family:16, hobbies:6, projects:12, rr:13, free:14, sleep:1
+};
+
+/* Defaults: Firm for Work, Commute, School, Child Care; Flexible for others */
+function defaultFlexForActivity(key){
+  return (key==='work'||key==='commute'||key==='school'||key==='childcare') ? 'firm' : 'flexible';
+}
+
+function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
+function colorForActivity(k){
+  const idx = ACTIVITY_COLOR[k]; const hex = COLOR_SWATCHES[idx ?? 0];
+  return hex || COLOR_SWATCHES[0];
 }
 
 /* selection (in-progress) */
@@ -661,7 +771,7 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* draw stored blocks (current week + recurrences) */
+/* draw stored blocks (current week + simple recurrences) */
 async function drawBlocks(){
   const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
   host.innerHTML='';
@@ -679,8 +789,7 @@ async function drawBlocks(){
         if(weeksDiff>=0) instances.push({...b, weekSt:wst});
       }
     }else if(b.recurrence==='monthly'){
-      // simple monthly: same weekday/weekSt shifted by whole months is complex; render only when original week matches visible (placeholder)
-      if(b.weekSt===wst) instances.push(b);
+      if(b.weekSt===wst) instances.push(b); // (placeholder monthly)
     }
   }
 
@@ -692,8 +801,16 @@ async function drawBlocks(){
     el.style.top = `${b.topY+2}px`;
     el.style.width = `${b.colWidth-4}px`;
     el.style.height = `${b.height-4}px`;
+    const color = seg.colorHex || colorForActivity(seg.activityKey);
+    el.style.background = hexWithAlpha(color, .22);
+    el.style.borderColor = color;
     host.appendChild(el);
   }
+}
+function hexWithAlpha(hex, a){
+  const h = hex.replace('#',''); const bigint=parseInt(h,16);
+  const r=(bigint>>16)&255, g=(bigint>>8)&255, b=(bigint)&255;
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 /* draw selection + side cluster (that avoids handles) */
@@ -951,7 +1068,7 @@ function modalConfirm(text){
   return new Promise((resolve)=>{
     const veil=document.createElement('div'); veil.className='veil';
     const modal=document.createElement('div'); modal.className='modal';
-    modal.innerHTML=`<div class="head">${text}</div><div></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
     document.body.appendChild(veil); document.body.appendChild(modal);
     const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
     modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return;
@@ -1072,7 +1189,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r69</div>
+        <div class="watermark">Chrono r70</div>
       </div>
     </div>
   `;
@@ -1176,7 +1293,7 @@ function repositionSelButtons(){
   const botMax = Math.max(...inWeek.map(b=>b.botY));
 
   const vpCenter = (window.scrollY + window.innerHeight/2) - weekGeom.rect.top;
-  let anchor=inWeek[0]; let best=Math.abs(((anchor.topY+anchor.botY)/2) - vpCenter);
+  let anchor=inWeek[0]; let best=Math.abs(((anchor.topY+b.anchor?.botY)/2 || 0) - vpCenter);
   for(const b of inWeek){ const mid=(b.topY+b.botY)/2, d=Math.abs(mid - vpCenter); if(d<best){best=d; anchor=b;} }
 
   const margin=8, btnW=44, totalH=(44*2)+8;
@@ -1193,29 +1310,7 @@ function repositionSelButtons(){
   positionSelButtons({left, top});
 }
 
-/* ===== Settings & Stats ===== */
-
-const ACTIVITY_LIST = [
-  // Replace colors with the exact swatch you provided when ready.
-  {key:'work', label:'Work', color:'#e34848'},
-  {key:'sleep', label:'Sleep', color:'#3d7be0'},
-  {key:'exercise', label:'Exercise', color:'#2fbf64'},
-  {key:'commute', label:'Commute', color:'#e3c234'},
-  {key:'family', label:'Family', color:'#e36bd1'},
-  {key:'study', label:'Study', color:'#8b5cf6'},
-  {key:'meal', label:'Meal', color:'#ff8a3d'},
-  {key:'errands', label:'Errands', color:'#7dd3fc'},
-  {key:'cleaning', label:'Cleaning', color:'#94a3b8'},
-  {key:'hobby', label:'Hobby', color:'#22c55e'},
-  {key:'social', label:'Social', color:'#ef4444'},
-  {key:'gaming', label:'Gaming', color:'#0ea5e9'},
-  {key:'meditation', label:'Meditation', color:'#10b981'},
-  {key:'health', label:'Health', color:'#f97316'},
-  {key:'admin', label:'Admin', color:'#64748b'},
-  {key:'other', label:'Other', color:'#111827'}
-];
-
-function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
+/* ===== Settings & Stats (Neumorphic) ===== */
 
 function onGearTap(ev){
   ev.stopPropagation();
@@ -1228,73 +1323,106 @@ function openSettingsModal(){
   const veil = document.createElement('div'); veil.className='veil';
   const modal = document.createElement('div'); modal.className='modal';
 
-  const current = {
-    activityKey: 'work',
-    fromMin: chain.parent?.startMin ?? 480,
-    toMin: chain.parent?.endMin ?? 540,
+  const parent = chain.parent;
+  const startDay = new Date(parent.weekSt + parent.dayIdx*DAY_MS);
+  const startDow = SHORT_DOW[startDay.getDay()];
+
+  const defaults = {
+    activityKey: null, // none selected until user picks (placeholder mode)
+    colorHex: null,
+    note: '',
+    fromMin: parent?.startMin ?? 480,
+    toMin: parent?.endMin ?? 540,
     recurrence: 'reoccurring', // 'reoccurring' | 'week' | 'month'
-    flexibility: 'flexible',   // 'flexible' | 'firm'
+    flexibility: 'flexible',   // default until activity chosen; will update after pick
     notify: 'reoccurring',     // 'reoccurring' | 'week' | 'month' | 'off'
     privacy: 'private'         // 'private' | 'visible'
   };
 
-  const act = getActivityByKey(current.activityKey);
-
   modal.innerHTML = `
     <div class="head">Settings</div>
-    <div class="settings-wrap">
-      <div class="field">
-        <div class="label">Assign Activity</div>
-        <select class="select" id="actSelect">
-          ${ACTIVITY_LIST.map(a=>`<option value="${a.key}" ${a.key===act.key?'selected':''}>${a.label}</option>`).join('')}
-        </select>
-        <div class="row">
-          <span class="chip" id="actChip"><span class="dot" id="actDot" style="background:${act.color}"></span><span id="actName">${act.label}</span></span>
-          <button class="icon-btn" id="renameBtn" title="Rename">
-            ✎
-          </button>
+    <div class="settings-wrap" id="settingsWrap">
+      <!-- Assign Activity -->
+      <div class="neu-field" id="assignField">
+        <div class="neu-select" id="assignSelect" role="button" aria-expanded="false">
+          <span class="ph" id="assignLabel">Assign Activity</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
+        </div>
+        <div class="neu-menu" id="assignMenu">
+          <div class="menu-card" id="assignList"></div>
+        </div>
+        <div class="row" id="selectedChipRow" style="display:none">
+          <span class="chip" id="actChip">
+            <span class="dot" id="actDot"></span>
+            <span id="actName"></span>
+            <button class="edit" id="renameBtn" title="Rename">
+              <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg>
+            </button>
+          </span>
+        </div>
+        <div class="note-field" id="noteRow" style="display:none">
+          <input class="note-input" id="noteInput" maxlength="80" placeholder="Add a note (e.g., Walk the dog, Bank run)" />
         </div>
       </div>
 
-      <div class="field">
-        <div class="label">Time</div>
-        <div class="row">
-          <input class="input" id="fromTime" inputmode="numeric" pattern="^\\d{2}:\\d{2}$" maxlength="5" value="${HHMM(current.fromMin)}" />
-          <span style="font-weight:800">to</span>
-          <input class="input" id="toTime" inputmode="numeric" pattern="^\\d{2}:\\d{2}$" maxlength="5" value="${HHMM(current.toMin)}" />
+      <!-- Time (AM/PM with day initials; picker-only) -->
+      <div class="neu-field">
+        <div class="time-row">
+          <div class="time-pair">
+            <span class="time-day" id="fromDay">${startDow}</span>
+            <button class="time-btn" id="fromBtn" type="button">${HHMM_ampm(defaults.fromMin)}</button>
+          </div>
+          <div class="time-pair">
+            <span class="time-day" id="toDay">${startDow}</span>
+            <button class="time-btn" id="toBtn" type="button">${HHMM_ampm(defaults.toMin)}</button>
+          </div>
         </div>
+        <!-- hidden inputs to trigger native pickers; keyboard input suppressed -->
+        <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
+        <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
       </div>
 
-      <div class="field">
-        <div class="label">Options</div>
+      <!-- Options -->
+      <div class="neu-field">
         <div class="row4">
-          <select class="select" id="recurringSel">
-            <option value="reoccurring" selected>Reoccurring</option>
-            <option value="week">This week</option>
-            <option value="month">This month</option>
-          </select>
+          <div class="neu-select" id="recurringSel"><span>Reoccurring</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="recurringMenu"><div class="menu-card">
+            <div class="menu-item" data-val="reoccurring">Reoccurring</div>
+            <div class="menu-item" data-val="week">This week</div>
+            <div class="menu-item" data-val="month">This month</div>
+          </div></div>
 
-          <select class="select" id="flexSel">
-            <option value="flexible" selected>Flexible</option>
-            <option value="firm">Firm</option>
-          </select>
+          <div class="neu-select" id="flexSel"><span>Flexible</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="flexMenu"><div class="menu-card">
+            <div class="menu-item" data-val="flexible">Flexible</div>
+            <div class="menu-item" data-val="firm">Firm</div>
+          </div></div>
 
-          <select class="select" id="notifSel">
-            <option value="reoccurring" selected>Reoccurring notifications</option>
-            <option value="week">This week</option>
-            <option value="month">This month</option>
-            <option value="off">Off</option>
-          </select>
+          <div class="neu-select" id="notifSel"><span>Notifications</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="notifMenu"><div class="menu-card">
+            <div class="menu-item" data-val="reoccurring">Reoccurring</div>
+            <div class="menu-item" data-val="week">This week</div>
+            <div class="menu-item" data-val="month">This month</div>
+            <div class="menu-item" data-val="off">Off</div>
+          </div></div>
 
-          <select class="select" id="privacySel">
-            <option value="private" selected>Private</option>
-            <option value="visible">Visible to connected accounts</option>
-          </select>
+          <div class="neu-select" id="privacySel"><span>Private</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="privacyMenu"><div class="menu-card">
+            <div class="menu-item" data-val="private">Private</div>
+            <div class="menu-item" data-val="visible">Visible to connected accounts</div>
+          </div></div>
         </div>
       </div>
 
-      <div class="field">
+      <!-- Statistics button -->
+      <div class="row">
         <button class="btn" id="statsBtn">Statistics</button>
+      </div>
+
+      <!-- Color palette editor (opens from chip edit) -->
+      <div class="neu-field" id="colorField" style="display:none">
+        <div class="label">Choose Color</div>
+        <div class="swatch-grid" id="swatchGrid"></div>
       </div>
     </div>
 
@@ -1304,46 +1432,173 @@ function openSettingsModal(){
     </div>
   `;
 
-  const closeAll = ()=>{ veil.remove(); modal.remove(); };
+  document.body.appendChild(veil); document.body.appendChild(modal);
 
+  const closeAll = ()=>{ veil.remove(); modal.remove(); };
   veil.addEventListener('click', ()=>{ confirmExit(closeAll); });
 
-  modal.querySelector('#exitBtn').addEventListener('click', ()=>{ confirmExit(closeAll); });
-  modal.querySelector('#saveBtn').addEventListener('click', async ()=>{
-    const actKey = modal.querySelector('#actSelect').value;
-    const from = parseHHMM(modal.querySelector('#fromTime').value);
-    const to = parseHHMM(modal.querySelector('#toTime').value);
-    if(from==null || to==null || to<=from){ alert('Please enter valid HH:MM times (15-min steps) and ensure End > Start.'); return; }
-    const recurVal = modal.querySelector('#recurringSel').value;
-    const flexVal = modal.querySelector('#flexSel').value;
-    const notifVal = modal.querySelector('#notifSel').value;
-    const privVal = modal.querySelector('#privacySel').value;
-
-    finalizeBlock({actKey, from, to, recurVal, flexVal, notifVal, privVal}).then(()=>{
-      closeAll();
+  // Build activity list menu
+  const listEl = modal.querySelector('#assignList');
+  ACTIVITY_LIST.forEach(a=>{
+    const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
+    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = colorForActivity(a.key);
+    const label = document.createElement('span'); label.textContent = a.label;
+    row.appendChild(dot); row.appendChild(label);
+    row.addEventListener('click', ()=>{
+      defaults.activityKey = a.key;
+      defaults.colorHex = colorForActivity(a.key);
+      defaults.flexibility = defaultFlexForActivity(a.key);
+      modal.querySelector('#assignLabel').textContent = a.label;
+      modal.querySelector('#assignMenu').classList.remove('open');
+      modal.querySelector('#assignSelect').setAttribute('aria-expanded','false');
+      // reveal chip + note
+      modal.querySelector('#selectedChipRow').style.display = '';
+      modal.querySelector('#noteRow').style.display = '';
+      const chipDot = modal.querySelector('#actDot'); chipDot.style.background = defaults.colorHex;
+      modal.querySelector('#actName').textContent = a.label;
+      // reflect default flex in control
+      modal.querySelector('#flexSel span').textContent = (defaults.flexibility==='firm'?'Firm':'Flexible');
     });
+    listEl.appendChild(row);
   });
 
-  modal.querySelector('#statsBtn').addEventListener('click', async ()=>{
-    const actKey = modal.querySelector('#actSelect').value;
-    const act = getActivityByKey(actKey);
-    await openStatsModal(act.label, act.color);
+  modal.querySelector('#assignSelect').addEventListener('click', ()=>{
+    const m = modal.querySelector('#assignMenu');
+    const open = m.classList.toggle('open');
+    modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false');
   });
 
-  modal.querySelector('#actSelect').addEventListener('change', (e)=>{
-    const a = getActivityByKey(e.target.value);
-    modal.querySelector('#actDot').style.background = a.color;
-    modal.querySelector('#actName').textContent = a.label;
-  });
-
+  // Rename & color edit
   modal.querySelector('#renameBtn').addEventListener('click', ()=>{
     const nameEl = modal.querySelector('#actName');
-    const current = nameEl.textContent;
-    const next = prompt('Rename activity (max 14 chars):', current)?.slice(0,14);
+    const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14);
     if(next && next.trim().length){ nameEl.textContent = next.trim(); }
+    // show color palette for this activity
+    buildSwatches();
+    modal.querySelector('#colorField').style.display='';
   });
 
-  document.body.appendChild(veil); document.body.appendChild(modal);
+  function buildSwatches(){
+    const grid = modal.querySelector('#swatchGrid'); grid.innerHTML='';
+    COLOR_SWATCHES.forEach((hex, idx)=>{
+      const sw = document.createElement('div'); sw.className='sw'; sw.style.background=hex;
+      if(hex===defaults.colorHex) sw.classList.add('sel');
+      sw.addEventListener('click', ()=>{
+        defaults.colorHex = hex;
+        grid.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel'));
+        sw.classList.add('sel');
+        modal.querySelector('#actDot').style.background = hex;
+      });
+      grid.appendChild(sw);
+    });
+  }
+
+  // Dropdown helpers
+  hookMenu(modal, '#recurringSel','#recurringMenu', (val,label)=>{ defaults.recurrence=val; modal.querySelector('#recurringSel span').textContent=label; });
+  hookMenu(modal, '#flexSel','#flexMenu', (val,label)=>{ defaults.flexibility=val; modal.querySelector('#flexSel span').textContent=label; });
+  hookMenu(modal, '#notifSel','#notifMenu', (val,label)=>{ defaults.notify=val; modal.querySelector('#notifSel span').textContent=label; });
+  hookMenu(modal, '#privacySel','#privacyMenu', (val,label)=>{ defaults.privacy=val; modal.querySelector('#privacySel span').textContent=label; });
+
+  // Time pickers (AM/PM, 15-min, <=24h consecutive)
+  const fromBtn = modal.querySelector('#fromBtn');
+  const toBtn   = modal.querySelector('#toBtn');
+  const fromPk  = modal.querySelector('#fromPicker');
+  const toPk    = modal.querySelector('#toPicker');
+  // prevent typing
+  fromPk.addEventListener('keydown', e=>e.preventDefault());
+  toPk.addEventListener('keydown', e=>e.preventDefault());
+
+  function setPickerValue(input, minutes){
+    const h = Math.floor(minutes/60), m = minutes%60;
+    input.value = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  setPickerValue(fromPk, defaults.fromMin);
+  setPickerValue(toPk, defaults.toMin);
+
+  fromBtn.addEventListener('click', ()=>{ fromPk.showPicker?.(); });
+  toBtn.addEventListener('click',   ()=>{ toPk.showPicker?.(); });
+
+  fromPk.addEventListener('change', ()=>{
+    const [h,m]=fromPk.value.split(':').map(Number);
+    const mins = h*60+m;
+    defaults.fromMin = snap15(mins);
+    // enforce at least +15 and <=24h
+    if(defaults.toMin <= defaults.fromMin) defaults.toMin = clamp(defaults.fromMin+15, 0, 24*60);
+    fromBtn.textContent = HHMM_ampm(defaults.fromMin);
+    updateTimeDays();
+    setPickerValue(toPk, defaults.toMin);
+  });
+  toPk.addEventListener('change', ()=>{
+    const [h,m]=toPk.value.split(':').map(Number);
+    let mins = h*60+m;
+    mins = snap15(mins);
+    // Block >24h (same-day only unless we have spillover chain)
+    const maxEnd = chain.child ? 1440 : 1440; // still <= 24h window overall
+    if(mins <= defaults.fromMin) mins = clamp(defaults.fromMin+15, 0, maxEnd);
+    defaults.toMin = mins;
+    toBtn.textContent = HHMM_ampm(defaults.toMin);
+    updateTimeDays();
+  });
+
+  function updateTimeDays(){
+    const fromDay = new Date(parent.weekSt + parent.dayIdx*DAY_MS);
+    const toBase = new Date(parent.weekSt + parent.dayIdx*DAY_MS);
+    let toDay = toBase;
+    if(chain.child && defaults.toMin===1440) toDay = addDays(toBase,1);
+    modal.querySelector('#fromDay').textContent = SHORT_DOW[fromDay.getDay()];
+    modal.querySelector('#toDay').textContent   = SHORT_DOW[toDay.getDay()];
+  }
+  updateTimeDays();
+
+  // Stats
+  modal.querySelector('#statsBtn').addEventListener('click', async ()=>{
+    const actLabel = defaults.activityKey ? getActivityByKey(defaults.activityKey).label : '—';
+    await openStatsModal(actLabel, defaults.colorHex || '#999');
+  });
+
+  // Save / Exit
+  modal.querySelector('#exitBtn').addEventListener('click', ()=>{ confirmExit(closeAll); });
+  modal.querySelector('#saveBtn').addEventListener('click', async ()=>{
+    if(!defaults.activityKey){
+      alert('Please assign an activity.');
+      return;
+    }
+    // validate times: consecutive block, <=24h, step 15 ensured by picker
+    if(!(defaults.toMin > defaults.fromMin)){
+      alert('End time must be after start time.');
+      return;
+    }
+    const note = modal.querySelector('#noteInput').value.trim();
+    await finalizeBlock({
+      actKey: defaults.activityKey,
+      actName: modal.querySelector('#actName').textContent,
+      colorHex: defaults.colorHex || colorForActivity(defaults.activityKey),
+      from: defaults.fromMin,
+      to: defaults.toMin,
+      recurVal: defaults.recurrence,
+      flexVal: defaults.flexibility,
+      notifVal: defaults.notify,
+      privVal: defaults.privacy,
+      note
+    });
+    closeAll();
+  });
+}
+
+function hookMenu(root, selSel, menuSel, onPick){
+  const trigger = root.querySelector(selSel);
+  const menu = root.querySelector(menuSel);
+  trigger.addEventListener('click', ()=>{
+    const open = menu.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', open?'true':'false');
+  });
+  menu.querySelectorAll('.menu-item').forEach(mi=>{
+    mi.addEventListener('click', ()=>{
+      onPick(mi.dataset.val, mi.textContent.trim());
+      menu.classList.remove('open');
+      trigger.setAttribute('aria-expanded','false');
+    });
+  });
 }
 
 function confirmExit(done){
@@ -1353,17 +1608,11 @@ function confirmExit(done){
   });
 }
 
-function parseHHMM(s){
-  if(!/^\d{2}:\d{2}$/.test(s)) return null;
-  const [h,m] = s.split(':').map(n=>parseInt(n,10));
-  if(h<0||h>23||m%15!==0||m<0||m>59) return null;
-  return h*60+m;
-}
-
-async function finalizeBlock({actKey, from, to, recurVal, flexVal, notifVal, privVal}){
+/* finalize: save block(s), clear selection, paint colored block(s) */
+async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
   if(!chain || !chain.parent) return;
 
-  // create a single block covering parent + (optional child)
+  // base block for parent segment
   const parent = chain.parent;
   const base = {
     id: 'b'+Date.now(),
@@ -1372,28 +1621,31 @@ async function finalizeBlock({actKey, from, to, recurVal, flexVal, notifVal, pri
     startMin: from,
     endMin: to,
     activityKey: actKey,
-    activityName: getActivityByKey(actKey).label, // renamed label not persisted yet; can extend later
+    activityName: actName,
+    colorHex,
+    note: note || '',
     recurrence: (recurVal==='reoccurring' ? 'weekly' : (recurVal==='week' ? 'none' : 'monthly')),
-    flexibility: flexVal, notifications: notifVal, privacy: privVal
+    flexibility: flexVal,
+    notifications: notifVal,
+    privacy: privVal
   };
   await putBlock(base);
 
-  // if chain has child (spillover), save a second block for that day portion
+  // spillover child handled if present (keeps child minutes as set by selector)
   if(chain.child){
     const child = chain.child;
-    const cfrom = (child.startMin); const cto = (child.endMin);
     const cBlock = {
       ...base,
       id: 'b'+(Date.now()+1),
       weekSt: child.weekSt,
       dayIdx: child.dayIdx,
-      startMin: cfrom,
-      endMin: cto
+      startMin: child.startMin,
+      endMin: child.endMin
     };
     await putBlock(cBlock);
   }
 
-  // clear selection and persist
+  // clear selection → leave colored blocks
   chain = null;
   await saveChain(null);
   repaintWeek(true); drawSelection(); drawBlocks();
@@ -1444,15 +1696,13 @@ async function computeActivityStats(activityName){
     let minutes=0;
     for(const b of blocks){
       if(b.activityName!==activityName) continue;
-      // approximate: generate weekly recurrences into last range for weekly only
-      const baseWeeks = [b];
+      const instances = [];
       if(b.recurrence==='weekly'){
-        // accumulate instances each week back to range
-        for(let t=b.weekSt; t<=msNow; t+=oneWeek){
-          baseWeeks.push({...b, weekSt:t});
-        }
+        for(let t=b.weekSt; t<=msNow; t+=oneWeek){ instances.push({...b, weekSt:t}); }
+      }else{
+        instances.push(b);
       }
-      for(const inst of baseWeeks){
+      for(const inst of instances){
         const weekTime = inst.weekSt + inst.dayIdx*DAY_MS;
         if(weekTime >= from && weekTime <= msNow){
           minutes += (inst.endMin - inst.startMin);
@@ -1466,8 +1716,7 @@ async function computeActivityStats(activityName){
   const monthH = sumHours(oneMonth);
   const yearH = sumHours(oneYear);
 
-  // completion placeholder: assume 100% until completion tracking exists
-  const completionPct = 100;
+  const completionPct = 100; // placeholder until completion tracking exists
 
   return { avgWeek: weekH, avgMonth: monthH, avgYear: yearH, completionPct };
 }
@@ -1483,6 +1732,7 @@ async function onXTap(ev){
   overlayRoot && (overlayRoot.innerHTML='');
 }
 
+/* viewport listeners once */
 let _vpAttached=false;
 function attachViewportRepositioners(){
   if(_vpAttached) return;
