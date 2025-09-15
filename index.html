@@ -23,14 +23,14 @@
     --marquee-border:5px;
     --marquee-shadow:0 0 12px 6px var(--turq-glow);
 
-    /* handles & stamps */
+    /* chevrons */
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px;          /* stamp ↔ handle gap (both ends) */
-    --top-handle-extra:4px;      /* tiny optical lift so top never looks jammed */
-    --handle-height-mult:1.6;
+    --handle-gap:10px;                 /* min clearance between stamp & handle */
+    --handle-height-mult:1.6;          /* handle height vs row height */
 
-    --stamp-gap:6px;             /* selection ↔ stamp gap */
+    /* stamps */
+    --stamp-gap:6px;                   /* selection ↔ stamp gap (top & bottom) */
     --stamp-h:26px;
   }
 
@@ -71,6 +71,7 @@
   .neu-btn svg{
     width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
     fill:none; stroke-linecap:round; stroke-linejoin:round;
+    /* Emboss highlight like chevrons */
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
   .neu-btn.is-pressed{
@@ -81,6 +82,7 @@
        var(--off)         var(--off)         var(--blur) var(--hi),
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
   }
+  /* LED state: remove emboss, add turquoise glow */
   .neu-btn.is-pressed svg{
     stroke:var(--icon-active);
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
@@ -157,12 +159,12 @@
     background:var(--pressed-navy); color:var(--icon-active);
     border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-    pointer-events:none; z-index:5;
+    pointer-events:none; z-index:5;   /* <— stamps always above handles/effects */
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
     height:var(--stamp-h); display:grid; place-items:center;
   }
 
-  /* Chevron handles */
+  /* Chevron handles: column-width, tall, rounded chip */
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
@@ -174,10 +176,11 @@
   }
   .chev path{
     fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    /* Same embossed kiss as icons */
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
-  /* Side buttons (Settings / X) — single cluster per view, outside & centered) */
+  /* Floating buttons */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
   .selBtns > button{ touch-action:manipulation; }
   .selBtnHidden{ display:none !important; }
@@ -204,7 +207,7 @@
     top:6px; right:6px; width:24px; height:24px; display:grid; place-items:center; color:var(--icon-active);
   }
 
-  /* Modal */
+  /* Simple modal reused for spillover confirm */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
   .modal{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -237,7 +240,7 @@
         </svg>
       </button>
 
-      <!-- Week (not active by default) -->
+      <!-- Week -->
       <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
@@ -275,13 +278,13 @@
   </main>
 
 <script>
-console.info('Chrono r68 — top chevron margin, screensaver default, quick-nav flash, cluster avoids handles.');
+console.info('Chrono r69 — top chevron spacing parity, screensaver default, quick-nav flash, cluster avoids handles.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
 let activeView = null; // screensaver by default
-let activeDayISO = toISO(new Date());
+let activeDayISO = toISO(new Date()));
 let visibleWeekFirst = weekStart(new Date());
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -343,7 +346,7 @@ async function storageGet(k){
   });
 }
 
-/* selection */
+/* selection chain */
 const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
@@ -355,6 +358,7 @@ let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
 let dragPixels=0, wasDrag=false;
 let crossedTop=false, crossedBottom=false, lastEdgeCrossed=null;
 
+/* controls */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
@@ -400,7 +404,7 @@ function buildWeekView(){
         <div class="hours" id="weekHours"></div>
       </div>
     </div>
-  `;
+  ";
 
   const prev = document.getElementById('prevWeekBtn');
   const next = document.getElementById('nextWeekBtn');
@@ -575,7 +579,7 @@ async function onWeekGridTap(e){
   }
 }
 
-/* helpers */
+/* helpers for selection */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 function boundsFromSeg(seg){
@@ -588,7 +592,7 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, offsetTop:0, colWidth, topY, botY, height};
 }
 
-/* chevrons (identical, just flipped) */
+/* SVG triple chevrons (up/down) sized to column */
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
   const w = Math.max(24, colW - padX*2);
@@ -597,12 +601,12 @@ function chevronsSVG(dir, colW, rowH){
   const gap = h/6;
   const span = Math.min(w*0.42, h/4);
 
-  const triUp = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
-  const triDn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
 
-  const d1 = (dir==='up'? triUp(gap) : triDn(gap));
-  const d2 = (dir==='up'? triUp(gap*2.2) : triDn(gap*2.2));
-  const d3 = (dir==='up'? triUp(gap*3.4) : triDn(gap*3.4));
+  const d1 = (dir==='up'? up(gap) : dn(gap));
+  const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
+  const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
 
   return `<div class="chev">
     <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
@@ -611,7 +615,7 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* draw selection + side cluster (that avoids handles) */
+/* Draw selection */
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   if(!overlayRoot) ensureOverlay();
@@ -621,7 +625,6 @@ function drawSelection(){
 
   const parentHere = segOnThisWeek(chain.parent);
   const childHere  = segOnThisWeek(chain.child);
-
   if(!parentHere && !childHere){ destroySelButtons(); return; }
 
   const segs=[];
@@ -637,6 +640,7 @@ function drawSelection(){
     const seg=entry.seg, name=entry.name;
     const b=boundsFromSeg(seg);
 
+    /* Selection outline/glow */
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=name;
@@ -646,6 +650,7 @@ function drawSelection(){
     rectEl.style.height = `${b.height}px`;
     host.appendChild(rectEl);
 
+    /* Overlay group */
     const group=document.createElement('div');
     group.className='ov-group';
     group.style.left = (weekGeom.rect.left + b.offsetLeft) + 'px';
@@ -665,26 +670,27 @@ function drawSelection(){
     const rowH = weekGeom.rowH[0] || 48;
     const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
     const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
-    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
     const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
     const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
 
     if(renderTop){
+      /* Time stamp (always above) */
       const topStamp=document.createElement('div'); topStamp.className='stamp';
       topStamp.textContent = HHMM(seg.startMin);
       topStamp.style.left = (b.colWidth/2)+'px';
       topStamp.style.top  = (- (sGap + sH))+'px';
       group.appendChild(topStamp);
 
+      /* Handle chip above the stamp, exact symmetric gap = hGap */
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px';
-      topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
+      topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';   /* ← parity with bottom */
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
       topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
       group.appendChild(topHandle);
 
-      handleCenters.push(weekGeom.rect.top + b.topY - (sGap + sH + hGap + (hH/2) + topExtra));
+      handleCenters.push(weekGeom.rect.top + b.topY - (sGap + sH + hGap + (hH/2)));
     }
 
     if(renderBottom){
@@ -707,12 +713,16 @@ function drawSelection(){
   });
 
   ensureSelButtons();
+  positionClusterWithAvoidance(segs, handleCenters);
+  attachViewportRepositioners();
+}
 
-  // Position cluster using union bounds, then nudge to avoid handle overlap
+function positionClusterWithAvoidance(segs, handleCenters){
+  if(!window.__selBtns) return;
+
   const visibleBounds = segs.map(s=>({name:s.name, b:boundsFromSeg(s.seg)}));
   const topMin = Math.min(...visibleBounds.map(v=>v.b.topY));
   const botMax = Math.max(...visibleBounds.map(v=>v.b.botY));
-  const heightUnion = botMax - topMin;
 
   const vpCenter = (window.scrollY + window.innerHeight/2) - weekGeom.rect.top;
   let anchor = visibleBounds[0];
@@ -727,45 +737,34 @@ function drawSelection(){
     left: weekGeom.rect.left + anchor.b.offsetLeft,
     right: weekGeom.rect.left + anchor.b.offsetLeft + anchor.b.colWidth,
     top: weekGeom.rect.top + topMin,
-    height: heightUnion
+    height: botMax - topMin
   };
 
-  // Avoid handles: if cluster vertical span overlaps a handle center ±30px, nudge above/below
-  function positionWithAvoidance(r){
-    const margin=8, btnW=44, totalH=(44*2)+8;
-    let left = r.right + margin;
-    let top  = r.top + (r.height/2) - (totalH/2);
+  const margin=8, btnW=44, totalH=(44*2)+8;
+  let left = rect.right + margin;
+  let top  = rect.top + (rect.height/2) - (totalH/2);
 
-    // side swap if off-screen
-    if(left + btnW > window.innerWidth - margin){
-      left = Math.max(margin, r.left - margin - btnW);
-    }
-
-    // vertical avoidance
-    const clearance = 30;
-    const spanTop = top, spanBot = top + totalH;
-    for(const hc of handleCenters){
-      if(spanTop - clearance < hc && hc < spanBot + clearance){
-        // If handle is below center, move up; else move down
-        if(hc >= (spanTop+spanBot)/2) top = Math.max(margin, hc - clearance - totalH);
-        else top = Math.min(window.innerHeight - margin - totalH, hc + clearance);
-      }
-    }
-
-    // clamp into viewport
-    if(top + totalH > window.innerHeight - margin){
-      top = Math.max(margin, window.innerHeight - margin - totalH);
-    }
-    if(top < margin) top = margin;
-
-    positionSelButtons({left, top});
+  if(left + btnW > window.innerWidth - margin){
+    left = Math.max(margin, rect.left - margin - btnW);
   }
 
-  positionWithAvoidance(rect);
-  attachViewportRepositioners();
+  // Avoid handle overlap
+  const clearance = 30;
+  const spanTop = top, spanBot = top + totalH;
+  for(const hc of handleCenters){
+    if(spanTop - clearance < hc && hc < spanBot + clearance){
+      if(hc >= (spanTop+spanBot)/2) top = Math.max(margin, hc - clearance - totalH);
+      else top = Math.min(window.innerHeight - margin - totalH, hc + clearance);
+    }
+  }
+
+  if(top + totalH > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - margin - totalH);
+  if(top < margin) top = margin;
+
+  positionSelButtons({left, top});
 }
 
-/* Drag & spillover */
+/* Drag logic + spillover */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -911,7 +910,7 @@ async function confirmSpill(direction){
   repaintWeek(true); drawSelection();
 }
 
-/* anchors to day edges */
+/* Keep parent/child anchored to day edges properly */
 function sanitizeChain(){
   if(!chain || !chain.child) return;
   const p=chain.parent, c=chain.child;
@@ -919,7 +918,7 @@ function sanitizeChain(){
   if(chain.dir==='prev'){ p.startMin=0; c.endMin=1440; }
 }
 
-/* month & day views (unchanged) */
+/* month view */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -987,12 +986,13 @@ function renderMonth(base, delta){
   }
 }
 
+/* day view */
 function buildDayView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r68</div>
+        <div class="watermark">Chrono r69</div>
       </div>
     </div>
   `;
@@ -1041,7 +1041,7 @@ function render(){
 }
 init();
 
-/* utils */
+/* utilities */
 function throttle(fn, ms){
   let t=0, lastArgs=null;
   return function(...args){
@@ -1050,10 +1050,10 @@ function throttle(fn, ms){
   }
 }
 
-/* Side cluster plumbing */
+/* floating controls */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
-  if(window.__selBtns && document.body.contains(window.__selBtns)) return;
+  if(window.__selBtns && document.body.contains(window.__selBtns)){ return; }
 
   const wrap = document.createElement('div');
   wrap.className='selBtns'; wrap.id='selBtns';
