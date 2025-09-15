@@ -29,8 +29,8 @@
     --handle-gap:10px;                 /* min clearance between stamp & handle */
     --handle-height-mult:1.6;          /* handle height vs row height */
 
-    /* stamps */
-    --stamp-gap:6px;                   /* selection ↔ stamp gap (top & bottom) */
+    /* stamps (uniform spacing top/bottom) */
+    --stamp-gap:8px;                   /* selection ↔ stamp gap (top & bottom) */
     --stamp-h:26px;
   }
 
@@ -82,7 +82,6 @@
        var(--off)         var(--off)         var(--blur) var(--hi),
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
   }
-  /* LED state: remove emboss, add turquoise glow */
   .neu-btn.is-pressed svg{
     stroke:var(--icon-active);
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
@@ -131,7 +130,7 @@
   }
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Present lens — full hour block (compensates for border thickness) */
+  /* Present lens — full hour block (uses same outline/glow as marquee) */
   .now{
     position:absolute;
     border:var(--marquee-border) solid #fff;
@@ -157,9 +156,9 @@
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
-    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    border:1px solid #273b4d; border-radius:10px; padding:0 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-    pointer-events:none; z-index:5;   /* <— stamps always above handles/effects */
+    pointer-events:none; z-index:5;
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
     height:var(--stamp-h); display:grid; place-items:center;
   }
@@ -278,13 +277,13 @@
   </main>
 
 <script>
-console.info('Chrono r69 — top chevron spacing parity, screensaver default, quick-nav flash, cluster avoids handles.');
+console.info('Chrono r70 — spacing parity + modal guard + screensaver default + hour-block lens');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = null; // screensaver by default
-let activeDayISO = toISO(new Date()));
+let activeView = null; // screensaver default
+let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -305,6 +304,7 @@ function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
+/* layout */
 new ResizeObserver(()=> {
   const w = screenEl.getBoundingClientRect().width;
   document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
@@ -352,6 +352,7 @@ async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 
 let chain = null;
+let edgeOpen=false;
 let dragKind=null, dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
 let baseOtherStart=0, baseOtherEnd=0, otherDurAtStart=0;
@@ -404,7 +405,7 @@ function buildWeekView(){
         <div class="hours" id="weekHours"></div>
       </div>
     </div>
-  ";
+  `;
 
   const prev = document.getElementById('prevWeekBtn');
   const next = document.getElementById('nextWeekBtn');
@@ -433,12 +434,12 @@ function buildWeekView(){
   loadAndDraw().catch(()=>{});
 }
 
-/* quick flash */
+/* quick flash for header arrows */
 function pressFlash(btn){
   btn.classList.add('is-pressed');
   btn.querySelector('svg').style.filter = 'drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow))';
 }
-function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter='drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo))'; }, 160); }
+function unpressFlash(btn){ setTimeout(()=>{ btn.classList.remove('is-pressed'); btn.querySelector('svg').style.filter='drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo))'; }, 140); }
 
 function ensureOverlay(){
   if(overlayRoot && document.body.contains(overlayRoot)) return;
@@ -451,14 +452,19 @@ async function loadAndDraw(){ chain = await loadChain(); sanitizeChain(); drawSe
 
 function repaintWeek(skipSel=false){
   const first=visibleWeekFirst, last=addDays(first,6);
-  document.getElementById('weekTitle').textContent =
-    `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
+  const headTitle=document.getElementById('weekTitle');
+  if(headTitle){
+    headTitle.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
+  }
 
-  const pills=document.getElementById('dowPills'); pills.innerHTML='';
-  for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
+  const pills=document.getElementById('dowPills'); if(pills){ pills.innerHTML='';
+    for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
+  }
 
-  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  const gh=document.getElementById('weekHours');
   const gridEl=document.getElementById('weekGrid');
+  if(!gridEl || !gh) return;
+  gh.innerHTML='';
   weekGeom=computeGeometry(gridEl,7);
   for(let i=0;i<24;i++){
     const s=document.createElement('div'); s.className='hour-stamp';
@@ -494,7 +500,7 @@ function computeGeometry(gridEl, cols){
 }
 
 function buildMask(geom, cols){
-  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
+  const svg=document.getElementById('maskSVG'); if(!svg) return; svg.innerHTML='';
   const { totalW, totalH, colX, rowY } = geom;
   if(totalW<=0 || totalH<=0) return;
   svg.setAttribute('width', totalW);
@@ -532,10 +538,11 @@ function buildMask(geom, cols){
   }
 }
 
-/* Present lens (full hour block, border compensated) */
+/* Present lens: full hour block with same outline/glow as marquee */
 function paintNowMagnifier(geom){
   const nowEl=document.getElementById('nowMagnify');
   const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
+  if(!nowEl) return;
   if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){ nowEl.style.display='none'; return; }
   const {colX,rowY} = geom;
   const dow=today.getDay();
@@ -555,7 +562,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* create on tap — prompt if new selection touches edges */
+/* create on tap — prompt if new selection touches top/bottom edges */
 async function onWeekGridTap(e){
   if(!weekGeom) return;
   destroySelButtons();
@@ -573,6 +580,7 @@ async function onWeekGridTap(e){
   chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin, endMin }, child: null, dir: null };
   await saveChain(chain); drawSelection();
 
+  // Show spill prompt if created selection touches edges
   if(!_modalOpen){
     if(chain.parent.startMin===0){ await spilloverConfirm('prev'); }
     else if(chain.parent.endMin===1440){ await spilloverConfirm('next'); }
@@ -592,7 +600,7 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, offsetTop:0, colWidth, topY, botY, height};
 }
 
-/* SVG triple chevrons (up/down) sized to column */
+/* SVG triple chevrons (up/down) sized to column; identical geometry, just flipped */
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
   const w = Math.max(24, colW - padX*2);
@@ -634,7 +642,7 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
-  const handleCenters=[]; // for avoidance
+  const handleCenters=[]; // for cluster avoidance
 
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
@@ -650,7 +658,7 @@ function drawSelection(){
     rectEl.style.height = `${b.height}px`;
     host.appendChild(rectEl);
 
-    /* Overlay group */
+    /* Overlay group for stamps/handles */
     const group=document.createElement('div');
     group.className='ov-group';
     group.style.left = (weekGeom.rect.left + b.offsetLeft) + 'px';
@@ -670,21 +678,21 @@ function drawSelection(){
     const rowH = weekGeom.rowH[0] || 48;
     const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
     const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
-    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
+    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||8;
     const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
 
     if(renderTop){
-      /* Time stamp (always above) */
+      /* Time stamp above selection */
       const topStamp=document.createElement('div'); topStamp.className='stamp';
       topStamp.textContent = HHMM(seg.startMin);
       topStamp.style.left = (b.colWidth/2)+'px';
       topStamp.style.top  = (- (sGap + sH))+'px';
       group.appendChild(topStamp);
 
-      /* Handle chip above the stamp, exact symmetric gap = hGap */
+      /* Top handle above stamp with equalized spacing: selection ↔ sGap ↔ stamp (sH) ↔ hGap ↔ handle (hH) */
       const topHandle=document.createElement('div'); topHandle.className='handle top';
       topHandle.style.left='0px';
-      topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';   /* ← parity with bottom */
+      topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';
       topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
       topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
       topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
@@ -724,6 +732,7 @@ function positionClusterWithAvoidance(segs, handleCenters){
   const topMin = Math.min(...visibleBounds.map(v=>v.b.topY));
   const botMax = Math.max(...visibleBounds.map(v=>v.b.botY));
 
+  // choose the column whose midpoint is nearest viewport center
   const vpCenter = (window.scrollY + window.innerHeight/2) - weekGeom.rect.top;
   let anchor = visibleBounds[0];
   let best = Math.abs(((anchor.b.topY+anchor.b.botY)/2) - vpCenter);
@@ -748,7 +757,7 @@ function positionClusterWithAvoidance(segs, handleCenters){
     left = Math.max(margin, rect.left - margin - btnW);
   }
 
-  // Avoid handle overlap
+  // avoid chevron handle overlap
   const clearance = 30;
   const spanTop = top, spanBot = top + totalH;
   for(const hc of handleCenters){
@@ -992,7 +1001,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r69</div>
+        <div class="watermark">Chrono r70</div>
       </div>
     </div>
   `;
@@ -1012,7 +1021,6 @@ async function init(){
       if('activeView' in snap) activeView = snap.activeView ?? null;
       if('activeDayISO' in snap) activeDayISO = snap.activeDayISO;
       if('visibleWeekFirst' in snap && typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
-      // reflect restored button state
       if(activeView){
         const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`);
         btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true');
