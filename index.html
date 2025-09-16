@@ -26,7 +26,7 @@
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
     --handle-gap:10px;
-    --top-handle-extra:10px; /* optical lift + margin fix for top chevrons */
+    --top-handle-extra:10px;
     --handle-height-mult:1.6;
 
     --stamp-gap:6px; --stamp-h:26px;
@@ -88,12 +88,12 @@
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
   }
   .neu-btn:active{ transform:scale(.985); }
-
   .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; }
   .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
   .neu-btn--sm.drag-on{ background:var(--pressed-navy); }
   .neu-btn--sm.drag-on svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
 
+  /* Layout inside week screen */
   .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
@@ -128,7 +128,7 @@
   /* Existing block focus (no glow) */
   .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
 
-  /* Time stamps */
+  /* Time stamps (24h) */
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
@@ -157,17 +157,6 @@
 
   /* Side buttons */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
-  .selBtnHidden{ display:none !important; }
-
-  /* Month minimal */
-  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr; }
-  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:var(--ink) }
-  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:8px; padding:10px; }
-  .mcell{ position:relative; background:var(--bg); color:var(--ink); border-radius:8px; box-shadow:-1px -1px 0 0 var(--hi), 1px 1px 0 0 var(--lo); }
-  .mcell.muted{ color:#8da0b3 }
-  .mcell.today{ box-shadow:var(--neu-shadow-outer); }
-  .mcell.today::before{ content:""; position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%; background:var(--pressed-navy); box-shadow:0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35); }
-  .mcell.today .date{ position:absolute; top:6px; right:6px; width:24px; height:24px; display:grid; place-items:center; color:var(--icon-active); }
 
   /* Modal (neumorphic with offset shadow) */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
@@ -178,7 +167,7 @@
     display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
   }
   .modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; }
-  .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow: var(--neu-shadow-inner); }
+  .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow:var(--neu-shadow-inner); }
   .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); }
   .btn.icon{ width:44px; height:44px; display:grid; place-items:center; }
   .btn.icon svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
@@ -193,11 +182,11 @@
   .menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow:var(--neu-shadow-outer); overflow:hidden; }
   .menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; }
   .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
-  .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; border:none; } /* true color */
+  .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; border:none; }
 
   .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; }
-  .dot{ width:12px; height:12px; border-radius:50%; border:none; box-shadow:none; } /* true color */
+  .dot{ width:12px; height:12px; border-radius:50%; border:none; box-shadow:none; }
   .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
   .chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
 
@@ -209,9 +198,9 @@
   .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
   .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
 
-  .stat-line{ display:flex; justify-content:space-between; font-weight:800; padding:8px 0; border-bottom:1px solid #d8e1ec; }
-  .pct{ font-weight:900; }
-  .pct.green{ color:#15a05c; } .pct.yellow{ color:#b18a00; } .pct.orange{ color:#c85b00; } .pct.red{ color:#bf1b1b; }
+  /* Screensaver watermark */
+  .screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 }
+  .screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; }
 </style>
 </head>
 <body>
@@ -245,7 +234,7 @@
         </svg>
       </button>
 
-      <button class="neu-btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
+      <button class="neu-btn" aria-label="Month view (disabled)" aria-pressed="false" data-view="month" title="Month (disabled)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
@@ -257,7 +246,7 @@
         </svg>
       </button>
 
-      <button class="neu-btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
+      <button class="neu-btn" aria-label="To-Do (disabled)" aria-pressed="false" data-view="todo" title="To-Do (disabled)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="3"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -268,13 +257,17 @@
   </main>
 
 <script>
-console.info('Chrono r77 — Fix: chevrons drag again; settings/buttons unfrozen; veil-only shielding; all prior fixes intact.');
+/* Chrono r80 — Week-only build.
+   - Fix: spillover prompts only when user drags past day edge (ignores overlap clamping).
+   - Fix: selector cannot overlap existing blocks (hard walls).
+   - Fix: spillover selection behaves as ONE entity; stamps/handles only at global start/end.
+   - UI: 24h selector stamps.
+   - Nuke month/todo/day content; blank screens. Watermark on screensaver (no active view). */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
 let activeView = null;
-let activeDayISO = toISO(new Date());
 let visibleWeekFirst = weekStart(new Date());
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -286,7 +279,6 @@ function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
-function HHMM_ampm(min){ const m=((Math.round(min)|0)+1440)%1440; let h=Math.floor(m/60), r=m%60; const am=h<12; h=(h%12)||12; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')} ${am?'AM':'PM'}`; }
 function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 
 const DAY_MS = 86400000;
@@ -300,7 +292,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=31;
+const DB_NAME='chronoDB', DB_VERSION=32;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -390,7 +382,7 @@ function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVIT
 function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
 
 /* selection chain (for new selections) */
-const CHAIN_KEY='selChain_v13';
+const CHAIN_KEY='selChain_v14';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 let chain = null;
@@ -399,9 +391,8 @@ let chain = null;
 let dragKind=null, dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
 let dragPixels=0, wasDrag=false;
-let crossedTop=false, crossedBottom=false, lastEdgeCrossed=null;
-
-let weekGeom=null, overlayRoot=null;
+let desiredEdgeIntent=null; // 'prev' | 'next' | null (computed from raw delta, not clamped)
+let weekGeom=null;
 let selectedBlock=null;
 let selectedGroup=null;
 let dragBlockMode=false;
@@ -416,7 +407,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
   const wasPressed = b.classList.contains('is-pressed');
   buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
   if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
-  if(activeView===v){ activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML=''; destroyOverlay(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); }
+  if(activeView===v){ activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); showScreensaver(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); }
   else{ activeView=v; render(); }
   saveSoon(200);
 });
@@ -450,7 +441,6 @@ function buildWeekView(){
   document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearSelector(); };
   document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); };
 
-  ensureOverlay();
   repaintWeek();
 
   const grid = document.getElementById('weekGrid');
@@ -476,7 +466,7 @@ function computeGeometry(gridEl, cols){
     const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
     for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
   }
-  return {totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
+  weekGeom={totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
 }
 function buildMask(geom, cols){
   const svg=document.getElementById('maskSVG'); svg.innerHTML='';
@@ -510,7 +500,7 @@ function repaintWeek(){
   for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const gridEl=document.getElementById('weekGrid');
-  weekGeom=computeGeometry(gridEl,7);
+  computeGeometry(gridEl,7);
   for(let i=0;i<24;i++){
     const s=document.createElement('div'); s.className='hour-stamp';
     s.textContent = hourToAMPM(i);
@@ -521,15 +511,14 @@ function repaintWeek(){
 }
 
 /* ---------- Interval helpers for no-overlap rules ---------- */
-
 function sortByStart(a,b){ return a.startMin - b.startMin; }
 function sameWeekDay(seg, weekSt, dayIdx){ return seg.weekSt===weekSt && seg.dayIdx===dayIdx; }
 
-async function dayBusyIntervals(weekSt, dayIdx, excludeGroupId=null){
+async function dayBusyIntervals(weekSt, dayIdx, excludeGroupIdOrId=null){
   const all = await getBlocksAll();
   const instances = await getInstancesForWeek(all);
   const list = instances
-    .filter(b => sameWeekDay(b, weekSt, dayIdx) && (!excludeGroupId || (b.groupId||b.id)!==excludeGroupId))
+    .filter(b => sameWeekDay(b, weekSt, dayIdx) && (!excludeGroupIdOrId || (b.groupId||b.id)!==excludeGroupIdOrId))
     .map(b => ({startMin:b.startMin, endMin:b.endMin}));
   list.sort(sortByStart);
   const merged=[];
@@ -540,18 +529,22 @@ async function dayBusyIntervals(weekSt, dayIdx, excludeGroupId=null){
   return merged;
 }
 function clampToFreeWindow(start, end, busy){
+  // Do NOT "invent" time by stretching to 0 or 1440; keep within nearest free window.
   let s = clamp(start, 0, 1440-15);
   let e = clamp(end, s+15, 1440);
+
   for(const b of busy){
-    if(e> b.startMin && s < b.startMin && e <= b.endMin){ e = b.startMin; }
+    // if overlaps completely inside busy, snap right after busy
     if(s>=b.startMin && e<=b.endMin){ s = b.endMin; e = Math.max(s+15, e); }
-    if(s < b.endMin && e > b.endMin && s >= b.startMin){ s = b.endMin; }
+    // if left part collides
+    if(s < b.endMin && s >= b.startMin && e > b.endMin){ s = b.endMin; }
+    // if right part collides
+    if(e > b.startMin && e <= b.endMin && s < b.startMin){ e = b.startMin; }
+    // if busy in the middle
     if(s < b.startMin && e > b.endMin){
-      const leftSpan  = b.startMin - s;
-      const rightSpan = e - b.endMin;
-      if(rightSpan>=15){ s = b.endMin; }
-      else if(leftSpan>=15){ e = b.startMin; }
-      else { e = Math.max(s+15, b.startMin); }
+      // choose the side that keeps at least 15min, prefer left trim
+      if(b.startMin - s >= 15){ e = b.startMin; }
+      else { s = b.endMin; }
     }
     s = clamp(s, 0, 1440-15);
     e = clamp(e, s+15, 1440);
@@ -559,13 +552,11 @@ function clampToFreeWindow(start, end, busy){
   return {start:s, end:e};
 }
 function largestFreeStartingAt(atMin, busy, minLen=15){
-  let cursor = clamp(atMin,0,1440);
-  const free=[];
-  let prev=0;
+  const free=[]; let prev=0;
   for(const b of busy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
   if(prev<1440) free.push({s:prev, e:1440});
   for(const f of free){
-    const s = Math.max(cursor, f.s);
+    const s = Math.max(atMin, f.s);
     const len = f.e - s;
     if(len>=minLen) return {start:s, end:s+len};
   }
@@ -617,12 +608,10 @@ async function drawBlocks(){
   document.getElementById('weekGrid').onclick = onWeekGridTap;
 }
 
-/* overlays */
-function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot)) return; overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot'; document.body.appendChild(overlayRoot); }
-function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
+/* overlays util */
 function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
 
-/* ---------- SELECTOR TOOL (24h stamps + hard walls) ---------- */
+/* ---------- SELECTOR TOOL (24h stamps + hard walls + correct spill logic) ---------- */
 async function onWeekGridTap(e){
   if(_modalOpen) return;
   const blockEl = e.target.closest('.blockRect');
@@ -677,17 +666,15 @@ function drawSelector(){
   const childHere  = segOnThisWeek(chain.child);
   if(!parentHere && !childHere) return;
 
-  const segs=[];
-  if(parentHere) segs.push({seg:chain.parent, name:'parent'});
-  if(childHere)  segs.push({seg:chain.child,  name:'child'});
-
-  segs.forEach((entry)=>{
-    const seg=entry.seg, name=entry.name;
+  // We render as ONE entity:
+  // - If only parent: both stamps + both handles.
+  // - If parent + child: top stamp/handle on parent; bottom stamp/handle on child. No extra stamps.
+  const renderEntry = (seg, which, showTop, showBottom)=>{
     const b=boundsFromSeg(seg);
 
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
-    rectEl.dataset.name=name;
+    rectEl.dataset.name=which;
     rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
     rectEl.style.top    = `${b.topY}px`;
     rectEl.style.width  = `${b.colWidth}px`;
@@ -703,35 +690,45 @@ function drawSelector(){
 
     const group=document.createElement('div'); group.style.position='absolute'; group.style.left = `${weekGeom.colX[seg.dayIdx]}px`; group.style.top = `${b.topY}px`; group.style.width=`${b.colWidth}px`; group.style.height=`${b.height}px`; host.appendChild(group);
 
-    // 24h stamps
-    const topStamp=document.createElement('div'); topStamp.className='stamp';
-    topStamp.textContent = HHMM_24(seg.startMin);
-    topStamp.style.left = (b.colWidth/2)+'px';
-    topStamp.style.top  = (- (sGap + sH))+'px';
-    group.appendChild(topStamp);
+    if(showTop){
+      const topStamp=document.createElement('div'); topStamp.className='stamp';
+      topStamp.textContent = HHMM_24(seg.startMin);
+      topStamp.style.left = (b.colWidth/2)+'px';
+      topStamp.style.top  = (- (sGap + sH))+'px';
+      group.appendChild(topStamp);
 
-    const topHandle=document.createElement('div'); topHandle.className='handle top';
-    topHandle.style.left='0px';
-    topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
-    topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
-    topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
-    topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
-    group.appendChild(topHandle);
+      const topHandle=document.createElement('div'); topHandle.className='handle top';
+      topHandle.style.left='0px';
+      topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
+      topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
+      topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
+      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', which), {passive:false});
+      group.appendChild(topHandle);
+    }
 
-    const botStamp=document.createElement('div'); botStamp.className='stamp';
-    botStamp.textContent = HHMM_24(seg.endMin);
-    botStamp.style.left = (b.colWidth/2)+'px';
-    botStamp.style.top  = (b.height + sGap)+'px';
-    group.appendChild(botStamp);
+    if(showBottom){
+      const botStamp=document.createElement('div'); botStamp.className='stamp';
+      botStamp.textContent = HHMM_24(seg.endMin);
+      botStamp.style.left = (b.colWidth/2)+'px';
+      botStamp.style.top  = (b.height + sGap)+'px';
+      group.appendChild(botStamp);
 
-    const botHandle=document.createElement('div'); botHandle.className='handle bottom';
-    botHandle.style.left='0px';
-    botHandle.style.top = (b.height + sGap + sH + hGap)+'px';
-    botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
-    botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
-    botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
-    group.appendChild(botHandle);
-  });
+      const botHandle=document.createElement('div'); botHandle.className='handle bottom';
+      botHandle.style.left='0px';
+      botHandle.style.top = (b.height + sGap + sH + hGap)+'px';
+      botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
+      botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
+      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', which), {passive:false});
+      group.appendChild(botHandle);
+    }
+  };
+
+  if(parentHere && !childHere){ renderEntry(chain.parent,'parent',true,true); }
+  else if(!parentHere && childHere){ renderEntry(chain.child,'child',true,true); }
+  else {
+    renderEntry(chain.parent,'parent',true,false);
+    renderEntry(chain.child,'child',false,true);
+  }
 
   positionSelectorButtons();
 }
@@ -777,20 +774,6 @@ function clearSelector(){
 }
 
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
-function clampToBudget(seg, which){
-  const minGap=15;
-  const hasChild = !!chain.child && !!chain.dir;
-
-  if(!hasChild){
-    seg.startMin = clamp(seg.startMin, 0, 1440-minGap);
-    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
-    return;
-  }
-
-  const p=chain.parent, c=chain.child;
-  if(chain.dir==='next'){ p.endMin=1440; c.startMin=0; }
-  if(chain.dir==='prev'){ p.startMin=0;  c.endMin=1440; }
-}
 
 async function clampSelectorAgainstBlocks(seg){
   const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
@@ -808,8 +791,7 @@ function startDrag(ev, kind, which){
 
   dragKind = kind; dragTarget = which;
   dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
-  crossedTop=crossedBottom=false; lastEdgeCrossed=null;
-  wasDrag=false; dragPixels=0;
+  dragPixels=0; wasDrag=false; desiredEdgeIntent=null;
 
   const move=async (e)=>{
     if(_modalOpen) return;
@@ -818,17 +800,19 @@ function startDrag(ev, kind, which){
     const movedMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
     const snappedDelta = snap15(movedMin);
 
+    // Compute desired un-clamped edge to decide spill INTENT
+    let desiredStart = baseStart, desiredEnd = baseEnd;
+    if(dragKind==='top'){ desiredStart = baseStart + snappedDelta; }
+    else { desiredEnd = baseEnd + snappedDelta; }
+
+    desiredEdgeIntent = null;
+    if(dragKind==='top' && desiredStart < 0) desiredEdgeIntent='prev';
+    if(dragKind==='bottom' && desiredEnd > 1440) desiredEdgeIntent='next';
+
+    // Apply constrained movement with hard walls (no overlap)
     if(dragKind==='top'){ seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15); }
     else { seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440); }
-
-    clampToBudget(seg, which);
     await clampSelectorAgainstBlocks(seg);
-
-    if(!chain.child){
-      crossedTop    = crossedTop    || (seg.startMin===0);
-      crossedBottom = crossedBottom || (seg.endMin===1440);
-      lastEdgeCrossed = (seg.startMin===0)? 'prev' : (seg.endMin===1440 ? 'next' : lastEdgeCrossed);
-    }
 
     wasDrag = wasDrag || Math.abs(snappedDelta) >= 15;
     drawSelector();
@@ -841,18 +825,16 @@ function startDrag(ev, kind, which){
       else { seg.endMin = seg.startMin + 15; }
     }
 
-    if(!_modalOpen && !chain.child && wasDrag){
-      const hitPrev = seg.startMin===0;
-      const hitNext = seg.endMin===1440;
-      const want = hitPrev ? 'prev' : (hitNext ? 'next' : null);
-      if(want) await spilloverConfirm(want);
+    // Spill prompt ONLY if the user's intended move crossed an actual day edge (ignores overlap clamps)
+    if(!_modalOpen && wasDrag && !chain.child && desiredEdgeIntent){
+      await spilloverConfirm(desiredEdgeIntent);
     }
 
     await saveChain(chain).catch(()=>{});
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
-    dragKind=null;
+    dragKind=null; desiredEdgeIntent=null;
   };
 
   window.addEventListener('pointermove', move, {passive:false});
@@ -872,7 +854,7 @@ function modalConfirm(text){
     const veil=document.createElement('div'); veil.className='veil';
     const modal=document.createElement('div'); modal.className='modal';
 
-    // Shield ONLY on veil (prevents tap-through, keeps modal interactive)
+    // Shield ONLY on veil
     const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
     ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
       .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
@@ -896,26 +878,30 @@ async function confirmSpill(direction){
   chain.dir = direction;
 
   if(direction==='next'){
-    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
-    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
+    // Parent ends at 1440 (clamped against busy)
     const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
     const parentClamp = clampToFreeWindow(p.startMin, 1440, parentBusy);
     p.endMin = parentClamp.end;
 
+    // Child starts next day at first free window
+    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
+    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
+
     const childBusy = await dayBusyIntervals(childWeek, childDay, null);
     const freeStart = largestFreeStartingAt(0, childBusy, 15);
     if(!freeStart){ chain.child=null; await saveChain(chain); repaintWeek(true); drawSelector(); return; }
-    const childSpanEnd = freeStart.end;
-    const remainingNeeded = Math.max(15, 1440 - p.endMin);
-    const childEnd = Math.min(childSpanEnd, freeStart.start + remainingNeeded);
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: freeStart.start, endMin: childEnd };
+    // Single selection continues into child
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: freeStart.start, endMin: Math.max(freeStart.start+15, freeStart.start + (60 - (p.endMin - p.startMin))) };
     if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
   }else{
-    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
-    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
+    // Parent starts at 0 (clamped)
     const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
     const parentClamp = clampToFreeWindow(0, p.endMin, parentBusy);
     p.startMin = parentClamp.start;
+
+    // Child goes to previous day at last free slot
+    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
+    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
 
     const childBusy = await dayBusyIntervals(childWeek, childDay, null);
     const free=[]; let prev=0;
@@ -1100,20 +1086,17 @@ async function copyBlockUnified(){
   await drawBlocks();
 }
 
-/* settings */
+/* settings modal (veil-only shielding; true colors; unified spillover) */
 function openSettingsForSelection(){
   if(selectedGroup && selectedGroup.length){ openSettingsModal(selectedGroup[0]); }
   else if(selectedBlock){ openSettingsModal(selectedBlock); }
 }
-
-/* ===== Settings modal (veil-only shielding; true colors; unified spillover) ===== */
 function openSettingsModal(existingSeg){
   _modalOpen=true;
   const editingExisting = !!existingSeg;
   const veil = document.createElement('div'); veil.className='veil';
   const modal = document.createElement('div'); modal.className='modal';
 
-  // Shield ONLY on veil (prevents tap-through; keeps modal interactive)
   const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
   ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
     .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
@@ -1172,8 +1155,8 @@ function openSettingsModal(existingSeg){
 
       <div class="neu-field">
         <div class="time-row">
-          <div class="time-pair"><span class="time-day" id="fromDay">${defaults.fromDow}</span><button class="time-btn" id="fromBtn" type="button">${HHMM_ampm(defaults.fromMin)}</button></div>
-          <div class="time-pair"><span class="time-day" id="toDay">${defaults.toDow}</span><button class="time-btn" id="toBtn"   type="button">${HHMM_ampm(defaults.toMin)}</button></div>
+          <div class="time-pair"><span class="time-day" id="fromDay">${defaults.fromDow}</span><button class="time-btn" id="fromBtn" type="button">${HHMM_24(defaults.fromMin)}</button></div>
+          <div class="time-pair"><span class="time-day" id="toDay">${defaults.toDow}</span><button class="time-btn" id="toBtn"   type="button">${HHMM_24(defaults.toMin)}</button></div>
         </div>
         <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
         <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
@@ -1267,8 +1250,8 @@ function openSettingsModal(existingSeg){
   function setPickerValue(input, minutes){ const h=Math.floor(minutes/60), m=minutes%60; input.value=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
   setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin);
   fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.();
-  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,1440); fromBtn.textContent=HHMM_ampm(defaults.fromMin); setPickerValue(toPk, defaults.toMin); };
-  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin) mins=clamp(defaults.fromMin+15,0,1440); defaults.toMin=mins; toBtn.textContent=HHMM_ampm(defaults.toMin); };
+  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,2880); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440); };
+  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin && defaults.toDow===defaults.fromDow) mins=clamp(defaults.fromMin+15,0,1440); defaults.toMin=(defaults.toDow===defaults.fromDow? mins : 1440+mins); toBtn.textContent=HHMM_24(defaults.toMin%1440); };
 
   modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); };
 
@@ -1285,16 +1268,19 @@ function openSettingsModal(existingSeg){
         const group = all.filter(b=> b.groupId===existingSeg.groupId);
         const first = group.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt))[0];
 
-        // Clamp each day against others (exclude own groupId)
+        const spanLen = defaults.toMin - defaults.fromMin;
+        const firstEnd   = Math.min(1440, defaults.fromMin + Math.min(spanLen, 1440-defaults.fromMin));
+        const needsSecond= defaults.toMin>1440;
+
         const busyFirst  = await dayBusyIntervals(first.weekSt, first.dayIdx, existingSeg.groupId);
-        const clamped1   = clampToFreeWindow(defaults.fromMin, Math.min(1440,defaults.toMin), busyFirst);
+        const clamp1   = clampToFreeWindow(defaults.fromMin, firstEnd, busyFirst);
         const updated1 = {
           ...first,
           activityKey: defaults.activityKey,
           activityName: actName,
           colorHex: defaults.colorHex,
-          startMin: clamped1.start,
-          endMin: Math.max(clamped1.start+15, clamped1.end),
+          startMin: clamp1.start,
+          endMin: Math.max(clamp1.start+15, clamp1.end),
           note,
           recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'),
           flexibility: defaults.flexibility,
@@ -1304,19 +1290,18 @@ function openSettingsModal(existingSeg){
         };
         await putBlock(updated1);
 
-        // Second segment (next day) if needed
-        const needsSecond = defaults.toMin>1440;
         const other = group.find(g=> !(g.weekSt===first.weekSt && g.dayIdx===first.dayIdx));
         if(needsSecond){
           const secondDayIdx = (first.dayIdx===6)? 0 : first.dayIdx+1;
           const secondWeekSt = (first.dayIdx===6)? first.weekSt + 7*DAY_MS : first.weekSt;
+          const leftover = defaults.toMin - 1440;
           const busySecond = await dayBusyIntervals(secondWeekSt, secondDayIdx, existingSeg.groupId);
-          const clamped2 = clampToFreeWindow(0, defaults.toMin-1440, busySecond);
+          const clamp2 = clampToFreeWindow(0, leftover, busySecond);
           const seg2 = other || { id:'b'+(Date.now()+2) };
           const updated2 = {
             ...seg2,
             weekSt: secondWeekSt, dayIdx: secondDayIdx,
-            startMin: clamped2.start, endMin: Math.max(clamped2.start+15, clamped2.end),
+            startMin: clamp2.start, endMin: Math.max(clamp2.start+15, clamp2.end),
             activityKey: defaults.activityKey,
             activityName: actName,
             colorHex: defaults.colorHex,
@@ -1339,8 +1324,8 @@ function openSettingsModal(existingSeg){
           activityKey: defaults.activityKey,
           activityName: actName,
           colorHex: defaults.colorHex,
-          startMin: defaults.fromMin,
-          endMin: defaults.toMin,
+          startMin: defaults.fromMin%1440,
+          endMin: Math.min(1440, defaults.toMin),
           note,
           recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'),
           flexibility: defaults.flexibility,
@@ -1377,9 +1362,8 @@ function openSettingsModal(existingSeg){
       await drawBlocks(); clearBlockFocus(); closeModal();
     }
   };
-
-  document.body.appendChild(modal);
 }
+
 function hookMenu(root, selSel, menuSel, onPick){
   const trigger = root.querySelector(selSel);
   const menu = root.querySelector(menuSel);
@@ -1396,13 +1380,13 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
   const parent = chain.parent;
 
   const busyP = await dayBusyIntervals(parent.weekSt, parent.dayIdx, null);
-  const clampedP = clampToFreeWindow(from, to, busyP);
+  const clampedP = clampToFreeWindow(from%1440, Math.min(1440,to), busyP);
   let pStart = clampedP.start, pEnd = clampedP.end;
 
   if(chain.child){
     const child = chain.child;
     const busyC = await dayBusyIntervals(child.weekSt, child.dayIdx, null);
-    const clampedC = clampToFreeWindow(child.startMin, child.endMin, busyC);
+    const clampedC = clampToFreeWindow(child.startMin, Math.min(1440, child.endMin), busyC);
     if(clampedC.end - clampedC.start >= 15){
       const groupId = 'g'+Date.now();
       const base = {
@@ -1464,7 +1448,7 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
   chain = null; await saveChain(null); await drawBlocks(); clearBlockFocus(); clearSelector();
 }
 
-/* Stats (veil-only shielding) */
+/* Stats (minimal) */
 async function openStatsModal(activityName){
   const veil=document.createElement('div'); veil.className='veil';
   const modal=document.createElement('div'); modal.className='modal';
@@ -1475,10 +1459,7 @@ async function openStatsModal(activityName){
   modal.innerHTML = `
     <div class="head">Statistics — ${activityName}</div>
     <div class="settings-wrap" id="statsWrap">
-      <div class="stat-line"><span>Average hours / week</span><span id="avgW">0.00</span></div>
-      <div class="stat-line"><span>Average hours / month</span><span id="avgM">0.00</span></div>
-      <div class="stat-line"><span>Average hours / year</span><span id="avgY">0.00</span></div>
-      <div class="stat-line"><span>Completion</span><span id="pct" class="pct green">100%</span></div>
+      <div class="row">Coming soon</div>
     </div>
     <div class="foot"><button class="btn ok" id="closeStats">Close</button></div>
   `;
@@ -1487,11 +1468,20 @@ async function openStatsModal(activityName){
   veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); _modalOpen=false; });
 }
 
+/* Screensaver (no active view) */
+function showScreensaver(){
+  screenEl.innerHTML = `
+    <div class="screensaver">
+      <div class="wm">Chrono r80 — Week-only build</div>
+    </div>
+  `;
+}
+
 /* init */
 async function init(){
   try{
     const snap = await storageGet('state');
-    if(snap){ activeView = snap.activeView ?? null; activeDayISO = snap.activeDayISO || activeDayISO; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); if(activeView){ const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }
+    if(snap){ activeView = snap.activeView ?? null; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); if(activeView){ const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }
   }catch{}
   render();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); } });
@@ -1499,51 +1489,17 @@ async function init(){
 }
 function render(){
   if(activeView==='week'){ buildWeekView(); }
-  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r77</div></div></div>`; destroyOverlay(); }
-  else if(activeView==='month'){ buildMonthView(); }
-  else { screenEl.innerHTML=''; destroyOverlay(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); }
+  else if(activeView==='day' || activeView==='month' || activeView==='todo'){
+    // Intentionally blank pages for this pass
+    screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">${activeView[0].toUpperCase()+activeView.slice(1)} (disabled)</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#667a90"><div>Not available in this build</div></div></div>`;
+  }else{
+    showScreensaver();
+  }
 }
-async function saveAll(){ await storageSet('state', { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }); await saveChain(chain); }
+async function saveAll(){ await storageSet('state', { activeView, visibleWeekFirst:+visibleWeekFirst }); }
 
 let _saveT=null;
 function saveSoon(ms=200){ clearTimeout(_saveT); _saveT=setTimeout(()=>saveAll().catch(()=>{}), ms); }
-
-/* Month view (minimal) */
-function buildMonthView(){
-  const base = new Date(); activeDayISO = toISO(base);
-  const first = new Date(base.getFullYear(), base.getMonth(), 1);
-  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-  screenEl.innerHTML = `
-    <div class="month-wrap">
-      <div class="head">
-        <button id="prevMon" class="neu-btn--sm" aria-label="Prev month" title="Prev">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg>
-        </button>
-        <div class="title">${label}</div>
-        <button id="nextMon" class="neu-btn--sm" aria-label="Next month" title="Next">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg>
-        </button>
-      </div>
-      <div class="month-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
-      <div class="month-grid" id="monthGrid"></div>
-    </div>`;
-  const prev=document.getElementById('prevMon'), next=document.getElementById('nextMon');
-  prev.onclick=()=>renderMonth(base, -1); next.onclick=()=>renderMonth(base, +1);
-  renderMonth(base, 0); destroyOverlay(); removeBlockButtons(); removeSelectorButtons(); clearSelHost();
-}
-function renderMonth(base, delta){
-  const d = new Date(base.getFullYear(), base.getMonth()+delta, 1);
-  const first = new Date(d.getFullYear(), d.getMonth(), 1);
-  const last  = new Date(d.getFullYear(), d.getMonth()+1, 0);
-  document.querySelector('.head .title').textContent = first.toLocaleDateString(undefined,{month:'long',year:'numeric'});
-  const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay(); const prevLast = new Date(d.getFullYear(), d.getMonth(), 0).getDate();
-  for(let i=firstWeekday-1;i>=0;i--){ g.insertAdjacentHTML('beforeend', `<div class="mcell muted"><span class="date">${prevLast - i}</span></div>`); }
-  const todayISO = toISO(new Date());
-  for(let day=1; day<=last.getDate(); day++){ const iso = toISO(new Date(d.getFullYear(), d.getMonth(), day)); g.insertAdjacentHTML('beforeend', `<div class="mcell ${iso===todayISO?'today':''}"><span class="date">${day}</span></div>`); }
-  const used = firstWeekday + last.getDate(); const rem = (Math.ceil(used/7)*7) - used;
-  for(let i=1;i<=rem;i++){ g.insertAdjacentHTML('beforeend', `<div class="mcell muted"><span class="date">${i}</span></div>`); }
-}
 
 init();
 </script>
