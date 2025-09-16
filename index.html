@@ -29,7 +29,7 @@
     --top-handle-extra:10px;
     --handle-height-mult:1.6;
 
-    --stamp-gap:6px; --stamp-h:26px;
+    --stamp-gap:6px; --stamp-h:22px;
 
     --neu-shadow-outer:
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
@@ -119,7 +119,7 @@
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Selection marquee & handles */
+  /* Selection marquee & handles (above grid & mask) */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; background:transparent;
@@ -127,14 +127,16 @@
     pointer-events:none; box-shadow: var(--marquee-shadow);
   }
 
-  /* NEW: chevron handles rendered ABOVE grid & mask */
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:5; touch-action:none; display:grid; place-items:center; }
   .chev-chip{ width:100%; height:100%; border-radius:14px; background:var(--bg); box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; }
   .chev path{ fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
 
-  /* NEW: selector time stamps (24h only, narrower) */
-  .stamp{ position:absolute; left:50%; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active);
-    border:1px solid #273b4d; border-radius:8px; padding:2px 6px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap; pointer-events:none; z-index:6; height:22px; display:grid; place-items:center; min-width:56px }
+  /* Selector time stamps (24h only, narrower) */
+  .stamp{
+    position:absolute; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:8px; padding:2px 6px; font-size:12px; font-variant-numeric:tabular-nums;
+    font-weight:900; letter-spacing:.02em; white-space:nowrap; pointer-events:none; z-index:6; height:var(--stamp-h); display:grid; place-items:center; min-width:56px
+  }
 
   .overlayRoot{ position:fixed; inset:0; z-index:7; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
@@ -185,11 +187,6 @@
   .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; } /* exact color, no overlay */
 
   .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; }
-  .dot{ width:12px; height:12px; border-radius:50%; border:1px solid #273b4d; box-shadow:var(--neu-shadow-inner); }
-  .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
-  .chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-
   .note-input{ background:var(--bg); border:none; outline:none; border-radius:12px; padding:10px 12px; font-weight:700; box-shadow:var(--neu-shadow-inner); }
 
   .row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -257,7 +254,7 @@
   </main>
 
 <script>
-console.info('Chrono r73 — 24h selector stamps; tap-through fix; handles above grid; hard-wall collisions; drag/copy ghost + Place; assignment header + weekly total; exact hex; stale-label fix.');
+console.info('Chrono r76 — restores tap-to-create on week; 24h selector stamps; tap-through guard; handles above grid; hard-wall collisions; drag/copy ghost + Place; assignment header + weekly total; exact hex; stale-label fix.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -277,7 +274,6 @@ const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','N
 function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
-function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; } // 24h
@@ -286,7 +282,6 @@ function HHMM_ampm(min){ const m=((Math.round(min)|0)+1440)%1440; let h=Math.flo
 
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
-function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
 new ResizeObserver(()=> {
@@ -295,7 +290,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=29;
+const DB_NAME='chronoDB', DB_VERSION=30;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -353,7 +348,7 @@ async function getBlocksAll(){
   });
 }
 
-/* exact palette (row-major from swatch) */
+/* exact palette */
 const COLORS = [
   '#F7D6D0', '#D6EEF5', '#BFD9CF', '#F7E08C',
   '#E77D7A', '#4EA1D6', '#4FA684', '#E5B21A',
@@ -385,7 +380,6 @@ const ACT_STORE_KEY='activities_v1';
 async function loadActivities(){
   const saved = await storageGet(ACT_STORE_KEY);
   if(saved && Array.isArray(saved)){
-    // merge by key to preserve colors
     ACTIVITY_LIST = ACTIVITY_LIST.map(a=> {
       const m = saved.find(s=>s.key===a.key);
       return m ? {...a, label:m.label} : a;
@@ -397,15 +391,10 @@ async function saveActivities(){ await storageSet(ACT_STORE_KEY, ACTIVITY_LIST.m
 function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
 function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
 
-/* selection chain (placeholder, preserved) */
-const CHAIN_KEY='selChain_v12';
-async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
-async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
-
-let chain = null;
 let weekGeom=null, overlayRoot=null;
-let selectedBlock=null;     // currently focused existing block
+let selectedBlock=null;
 
+/* UI wire-up */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
@@ -461,6 +450,39 @@ function buildWeekView(){
 
   new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedBlock) focusBlock(selectedBlock); }).observe(document.getElementById('weekGrid'));
   window.addEventListener('scroll', ()=>{ if(activeView==='week' && selectedBlock) positionBlockButtons(selectedBlock); }, {passive:true});
+
+  // TAP-TO-CREATE on empty grid (guard against tap-through when modal open)
+  const grid = document.getElementById('weekGrid');
+  grid.addEventListener('click', async (e)=>{
+    if(modalOpen || mode!=='none') return; // tap-through guard + no create while dragging/copying
+    const rect = grid.getBoundingClientRect();
+    const x = clamp(e.clientX - rect.left, 0, rect.width-1);
+    const y = clamp(e.clientY - rect.top, 0, rect.height-1);
+    // find dayIdx by column
+    let dayIdx=0; for(let i=0;i<7;i++){ const left=weekGeom.colX[i], right=weekGeom.colX[i+1]; if(x>=left && x<right){ dayIdx=i; break; } }
+    const startMin = snap15((y/weekGeom.totalH)*1440);
+    let seg = {
+      id:'b'+Date.now(),
+      weekSt:getVisibleWeekStamp(),
+      dayIdx,
+      startMin,
+      endMin:clamp(startMin+60,0,1440), // default 1h
+      activityKey:'work',
+      activityName:getActivityByKey('work').label,
+      colorHex:getActivityByKey('work').color,
+      recurrence:'weekly',
+      flexibility: defaultFlexForActivity('work'),
+      notifications:'reoccurring',
+      privacy:'private',
+      note:''
+    };
+    // hard-wall create: nudge to nearest free gap of same duration on this day
+    const placed = await snapToNearestGap(seg);
+    if(!placed){ alert('No free 1-hour gap on this day.'); return; }
+    seg = placed;
+    drawFocusMarquee(seg);
+    openCreateModal(seg); // open creation modal directly
+  });
 
   drawBlocks();
 }
@@ -519,7 +541,7 @@ function buildMask(geom, cols){
     }
   }
 }
-function repaintWeek(skipSel=false){
+function repaintWeek(){
   const first=visibleWeekFirst, last=addDays(first,6);
   document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
 
@@ -531,7 +553,7 @@ function repaintWeek(skipSel=false){
   weekGeom=computeGeometry(gridEl,7);
   for(let i=0;i<24;i++){
     const s=document.createElement('div'); s.className='hour-stamp';
-    s.textContent = hourToAMPM(i); // leave grid stamps as am/pm
+    s.textContent = hourToAMPM(i); // grid stamps stay am/pm
     s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
     gh.appendChild(s);
   }
@@ -585,9 +607,6 @@ async function drawBlocks(){
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); selectExistingBlock(seg); });
     host.appendChild(el);
   }
-
-  // clicking empty grid clears selection (but NOT when a modal is open)
-  document.getElementById('weekGrid').onclick = ()=>{ if(modalOpen) return; clearBlockFocus(); };
 }
 
 /* ---- Existing block selection UI ---- */
@@ -597,6 +616,7 @@ function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); 
 
 function drawFocusMarquee(seg){
   clearSelHost();
+  clearFocusStampsAndHandles();
   const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
   const b=boundsFromSeg(seg);
   const rectEl=document.createElement('div');
@@ -607,23 +627,39 @@ function drawFocusMarquee(seg){
   rectEl.style.height = `${b.height}px`;
   host.appendChild(rectEl);
 
-  // 24h selector stamps (top/bottom)
+  // 24h selector stamps (top/bottom) — rendered in overlay so never clipped
   const topStamp=document.createElement('div'); topStamp.className='stamp';
   const botStamp=document.createElement('div'); botStamp.className='stamp';
   topStamp.textContent = HHMM_24(seg.startMin);
   botStamp.textContent = HHMM_24(seg.endMin);
-  topStamp.style.top = (b.topY - 26)+'px';
-  botStamp.style.top = (b.botY + 4)+'px';
-  topStamp.style.left = botStamp.style.left = (weekGeom.colX[seg.dayIdx]+(b.colWidth/2))+'px';
-  // stamps must be above everything; attach to overlay
+  const cx = weekGeom.rect.left + weekGeom.colX[seg.dayIdx] + (b.colWidth/2);
+  topStamp.style.left = cx+'px'; botStamp.style.left = cx+'px';
+  topStamp.style.top = (weekGeom.rect.top + b.topY - 28)+'px';
+  botStamp.style.top = (weekGeom.rect.top + b.botY + 6)+'px';
+
   const og = document.getElementById('overlayRoot') || (ensureOverlay(), document.getElementById('overlayRoot'));
   og.appendChild(topStamp); og.appendChild(botStamp);
 
-  // keep references to clear later
-  drawFocusMarquee._stamps && drawFocusMarquee._stamps.forEach(n=>n.remove());
-  drawFocusMarquee._stamps = [topStamp, botStamp];
+  // Chevron handles ABOVE grid (visual only; constrained body remains inside grid)
+  const handleH = Math.max(24, Math.floor((b.height)*0.12));
+  const topHandle = buildHandle(cx - (b.colWidth/2), weekGeom.rect.top + b.topY - handleH - 6, b.colWidth, handleH, true);
+  const botHandle = buildHandle(cx - (b.colWidth/2), weekGeom.rect.top + b.botY + 6,        b.colWidth, handleH, false);
+  og.appendChild(topHandle); og.appendChild(botHandle);
+
+  drawFocusMarquee._elems && drawFocusMarquee._elems.forEach(n=>n.remove());
+  drawFocusMarquee._elems = [topStamp, botStamp, topHandle, botHandle];
 }
-function clearFocusStamps(){ if(drawFocusMarquee._stamps){ drawFocusMarquee._stamps.forEach(n=>n.remove()); drawFocusMarquee._stamps=null; } }
+function buildHandle(x,y,w,h,isTop){
+  const wrap=document.createElement('div'); wrap.className='handle';
+  Object.assign(wrap.style,{left:x+'px', top:y+'px', width:w+'px', height:h+'px', position:'fixed'});
+  const chip=document.createElement('div'); chip.className='chev-chip';
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.classList.add('chev'); svg.style.width='22px'; svg.style.height='22px';
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path'); path.setAttribute('d', isTop ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6');
+  svg.appendChild(path); chip.appendChild(svg); wrap.appendChild(chip);
+  // no resize behavior in this build; purely visual to satisfy always-visible requirement
+  return wrap;
+}
+function clearFocusStampsAndHandles(){ if(drawFocusMarquee._elems){ drawFocusMarquee._elems.forEach(n=>n.remove()); drawFocusMarquee._elems=null; } }
 
 function selectExistingBlock(seg){
   selectedBlock = {...seg}; // copy for editing/dragging
@@ -631,7 +667,7 @@ function selectExistingBlock(seg){
   showBlockButtons(seg);
 }
 function clearBlockFocus(){
-  selectedBlock=null; destroySelButtons(); clearSelHost(); clearFocusStamps(); teardownGhost(); mode='none';
+  selectedBlock=null; destroySelButtons(); clearSelHost(); clearFocusStampsAndHandles(); teardownGhost(); mode='none';
 }
 
 /* ---- Block buttons (drag/copy/settings/close) ---- */
@@ -643,13 +679,9 @@ function buttonEl(iconPath, label){
 function showBlockButtons(seg){
   destroySelButtons();
   const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns';
-  // drag (four arrows)
   const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move");
-  // copy
   const copyBtn = buttonEl("M9 9h9v9H9z M6 6h9v9H6z","Copy");
-  // settings (gear)
   const gearBtn = buttonEl("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v3M12 17.5v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1","Settings");
-  // close (X)
   const closeBtn = buttonEl("M6 6l12 12M18 6L6 18","Close");
 
   wrap.appendChild(dragBtn); wrap.appendChild(copyBtn); wrap.appendChild(gearBtn); wrap.appendChild(closeBtn);
@@ -657,7 +689,7 @@ function showBlockButtons(seg){
 
   dragBtn.onclick = (e)=>{ e.stopPropagation(); toggleDrag(seg, dragBtn); };
   copyBtn.onclick = (e)=>{ e.stopPropagation(); toggleCopy(seg, copyBtn); };
-  gearBtn.onclick = (e)=>{ e.stopPropagation(); openSettingsForBlock(seg, /*reopenGuard*/false); };
+  gearBtn.onclick = (e)=>{ e.stopPropagation(); openSettingsForBlock(seg); };
   closeBtn.onclick = (e)=>{ e.stopPropagation(); clearBlockFocus(); };
 
   positionBlockButtons(seg);
@@ -687,9 +719,32 @@ async function isPlacementValid(seg, ignoreId){
     if(other.id===ignoreId) continue;
     if(segmentsOverlap(seg, other)) return false;
   }
-  // within bounds
   if(seg.startMin<0 || seg.endMin>1440 || seg.startMin>=seg.endMin) return false;
   return true;
+}
+async function snapToNearestGap(seg){
+  const dur = seg.endMin - seg.startMin;
+  const blocks = await getBlocksAll();
+  const inst = (await getInstancesForWeek(blocks)).filter(b=>b.dayIdx===seg.dayIdx).sort((a,b)=>a.startMin-b.startMin);
+  // Build list of free gaps for the day
+  const gaps=[];
+  let cursor=0;
+  for(const b of inst){
+    if(b.startMin>cursor) gaps.push({start:cursor,end:b.startMin});
+    cursor=Math.max(cursor,b.endMin);
+  }
+  if(cursor<1440) gaps.push({start:cursor,end:1440});
+  // find gap with start closest to seg.startMin that fits dur
+  let best=null, bestDist=1e9;
+  for(const g of gaps){
+    for(let s=g.start; s+dur<=g.end; s+=15){
+      const dist=Math.abs(s - seg.startMin);
+      if(dist<bestDist){ bestDist=dist; best={...seg,startMin:s,endMin:s+dur}; }
+      if(bestDist===0) break;
+    }
+    if(bestDist===0) break;
+  }
+  return best;
 }
 
 /* ---- Ghost + Place mechanics ---- */
@@ -716,11 +771,8 @@ function teardownGhost(){ ghostEl?.remove(); ghostEl=null; placeBtn?.style.setPr
 function toggleDrag(seg, btn){
   if(mode==='drag'){ mode='none'; btn.classList.remove('is-pressed'); teardownGhost(); return; }
   mode='drag'; btn.classList.add('is-pressed');
-  // ensure copy not active
-  const copyBtn=document.querySelector('#blockBtns button:nth-child(2)');
-  copyBtn?.classList.remove('is-pressed');
+  const copyBtn=document.querySelector('#blockBtns button:nth-child(2)'); copyBtn?.classList.remove('is-pressed');
 
-  // build ghost
   const g=createGhost();
   const onMove=async (e)=>{
     if(mode!=='drag' || !weekGeom) return;
@@ -741,18 +793,14 @@ function toggleDrag(seg, btn){
     if(ok){ pb.style.display='block'; positionPlaceButton({...b, dayIdx}); pb.onclick=async(ev)=>{ ev.stopPropagation(); if(mode!=='drag') return; await putBlock(temp); await drawBlocks(); selectExistingBlock(temp); mode='none'; teardownGhost(); btn.classList.remove('is-pressed'); }; }
     else { pb.style.display='none'; }
   };
-  const onUp=()=>{ if(mode==='drag'){ /* stay active until Place or toggle off */ } };
   window.addEventListener('pointermove', onMove, {passive:true});
-  window.addEventListener('pointerup', onUp, {passive:true});
 }
 
 /* ---- Copy existing block (toggle) ---- */
 function toggleCopy(seg, btn){
   if(mode==='copy'){ mode='none'; btn.classList.remove('is-pressed'); teardownGhost(); return; }
   mode='copy'; btn.classList.add('is-pressed');
-  // ensure drag not active
-  const dragBtn=document.querySelector('#blockBtns button:nth-child(1)');
-  dragBtn?.classList.remove('is-pressed');
+  const dragBtn=document.querySelector('#blockBtns button:nth-child(1)'); dragBtn?.classList.remove('is-pressed');
 
   const g=createGhost();
   const onMove=async (e)=>{
@@ -763,7 +811,7 @@ function toggleCopy(seg, btn){
     const mins = snap15((y/weekGeom.totalH)*1440);
     const dur = seg.endMin - seg.startMin;
     const startMin = clamp(mins, 0, 1440 - dur);
-    const temp={...seg, id:'b'+(Date.now()), dayIdx, startMin, endMin:startMin+dur}; // clone candidate
+    const temp={...seg, id:'b'+(Date.now()), dayIdx, startMin, endMin:startMin+dur}; // clone
     const b=boundsFromSeg(temp);
     Object.assign(g.style, {left:(weekGeom.rect.left+b.offsetLeft)+'px', top:(weekGeom.rect.top+b.topY)+'px', width:b.colWidth+'px', height:b.height+'px'});
 
@@ -774,37 +822,38 @@ function toggleCopy(seg, btn){
     if(ok){ pb.style.display='block'; positionPlaceButton({...b, dayIdx}); pb.onclick=async(ev)=>{ ev.stopPropagation(); if(mode!=='copy') return; await putBlock(temp); await drawBlocks(); selectExistingBlock(temp); mode='none'; teardownGhost(); btn.classList.remove('is-pressed'); }; }
     else { pb.style.display='none'; }
   };
-  const onUp=()=>{ if(mode==='copy'){ /* remain until Place or toggle off */ } };
   window.addEventListener('pointermove', onMove, {passive:true});
-  window.addEventListener('pointerup', onUp, {passive:true});
 }
 
-/* ---- Open settings for existing block ---- */
-function openSettingsForBlock(seg, reopenGuard){
+/* ---- Settings (existing block) ---- */
+function openSettingsForBlock(seg){
+  openSettingsModal(seg, /*isNew*/false);
+}
+
+/* ---- Create modal (new block) ---- */
+function openCreateModal(seg){
+  openSettingsModal(seg, /*isNew*/true);
+}
+
+/* Shared Settings modal with header redesign */
+function openSettingsModal(seg, isNew){
   modalOpen = true;
 
   const veil = document.createElement('div'); veil.className='veil';
   const modal = document.createElement('div'); modal.className='modal';
 
-  const baseSeg = seg;
-
-  const startDay = new Date(baseSeg.weekSt + baseSeg.dayIdx*DAY_MS);
+  const startDay = new Date(seg.weekSt + seg.dayIdx*DAY_MS);
   const startDow = SHORT_DOW[startDay.getDay()];
 
-  // compute weekly total for activity (current visible week)
+  // weekly total for activity (current visible week)
   const act = getActivityByKey(seg.activityKey);
   let weeklyTotalText = '—';
-  computeWeeklyTotalMinutes(seg.activityKey).then(min=>{
-    weeklyTotalText = fmtHM(min);
-    const wtEl = modal.querySelector?.('#weeklyTotal');
-    if(wtEl) wtEl.textContent = weeklyTotalText;
-  });
 
   modal.innerHTML = `
     <div class="head">Settings</div>
     <div class="settings-wrap" id="settingsWrap">
       <div class="neu-field" id="assignField">
-        <!-- NEW header row (dot + name on left, weekly total + pencil on right). Taps: header opens menu; pencil = rename -->
+        <!-- Header: dot + name (left), weekly total + pencil (right) -->
         <div class="row" id="assignHeader" style="justify-content:space-between; align-items:center;">
           <div class="row" id="assignHeaderLeft" style="gap:10px; align-items:center; cursor:pointer;">
             <span class="menu-dot" id="assignDot" style="background:${seg.colorHex || act.color};"></span>
@@ -877,6 +926,12 @@ function openSettingsForBlock(seg, reopenGuard){
   `;
   document.body.appendChild(veil); document.body.appendChild(modal);
 
+  // compute weekly total
+  computeWeeklyTotalMinutes(seg.activityKey).then(min=>{
+    weeklyTotalText = fmtHM(min);
+    modal.querySelector('#weeklyTotal').textContent = weeklyTotalText;
+  });
+
   // Close guards
   const closeModal = ()=>{ modalOpen=false; veil.remove(); modal.remove(); };
   veil.addEventListener('click', (e)=>{ e.stopPropagation(); confirmExit(closeModal); });
@@ -885,7 +940,7 @@ function openSettingsForBlock(seg, reopenGuard){
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
-    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color; // exact
+    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color;
     const label = document.createElement('span'); label.textContent = a.label;
     row.appendChild(dot); row.appendChild(label);
     row.addEventListener('click', async ()=>{
@@ -895,16 +950,20 @@ function openSettingsForBlock(seg, reopenGuard){
       modal.querySelector('#assignDot').style.background = a.color;
       modal.querySelector('#assignName').textContent = a.label;
       modal.querySelector('#assignMenu').classList.remove('open');
-      await computeWeeklyTotalMinutes(a.key).then(min=> modal.querySelector('#weeklyTotal').textContent = fmtHM(min));
+      const min = await computeWeeklyTotalMinutes(a.key);
+      modal.querySelector('#weeklyTotal').textContent = fmtHM(min);
+      await saveActivities(); // in case labels changed elsewhere
     });
     listEl.appendChild(row);
   });
 
   // Header interactions
-  modal.querySelector('#assignHeaderLeft').addEventListener('click', ()=>{
+  modal.querySelector('#assignHeaderLeft').addEventListener('click', (ev)=>{
+    ev.stopPropagation();
     modal.querySelector('#assignMenu').classList.toggle('open');
   });
-  modal.querySelector('#pencilBtn').addEventListener('click', async ()=>{
+  modal.querySelector('#pencilBtn').addEventListener('click', async (ev)=>{
+    ev.stopPropagation();
     const cur = modal.querySelector('#assignName').textContent;
     const next = prompt('Rename activity (max 14 chars):', cur)?.slice(0,14);
     if(next && next.trim()){
@@ -913,7 +972,7 @@ function openSettingsForBlock(seg, reopenGuard){
       if(idx>=0){ ACTIVITY_LIST[idx] = {...ACTIVITY_LIST[idx], label: next.trim()}; await saveActivities(); }
       seg.activityName = next.trim();
       modal.querySelector('#assignName').textContent = next.trim();
-      await drawBlocks(); // labels not drawn on blocks, but keep consistent
+      await drawBlocks();
     }
   });
 
@@ -923,7 +982,7 @@ function openSettingsForBlock(seg, reopenGuard){
   hookMenu(modal, '#notifSel','#notifMenu', (v,l)=>{ seg.notifications=v; modal.querySelector('#notifSel span').textContent=l; });
   hookMenu(modal, '#privacySel','#privacyMenu', (v,l)=>{ seg.privacy=v; modal.querySelector('#privacySel span').textContent=l; });
 
-  // time pickers (keep AM/PM labels in buttons; pickers 24h input step=900)
+  // time pickers (UI shows am/pm in buttons; pickers use 24h input step=900)
   const fromBtn = modal.querySelector('#fromBtn');
   const toBtn   = modal.querySelector('#toBtn');
   const fromPk  = modal.querySelector('#fromPicker');
@@ -936,20 +995,22 @@ function openSettingsForBlock(seg, reopenGuard){
   toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=seg.startMin) mins=clamp(seg.startMin+15,0,1440); seg.endMin=mins; toBtn.textContent=HHMM_ampm(seg.endMin); drawFocusMarquee(seg); };
 
   // stats
-  modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(seg.activityName || getActivityByKey(seg.activityKey).label); };
+  modal.querySelector('#statsBtn').onclick=async(e)=>{ e.stopPropagation(); await openStatsModal(seg.activityName || getActivityByKey(seg.activityKey).label); };
 
   // exit/save
   modal.querySelector('#exitBtn').onclick=(e)=>{ e.stopPropagation(); confirmExit(closeModal); };
   modal.querySelector('#saveBtn').onclick=async(e)=>{
     e.stopPropagation();
-    if(!(seg.endMin>seg.startMin)){ alert('End time must be after start time.'); return; }
+    // enforce hard walls
+    if(!(await isPlacementValid(seg, isNew? null : seg.id))){
+      alert('This time overlaps another block. Choose a free slot.'); return;
+    }
     seg.note = modal.querySelector('#noteInput').value.trim();
-
     await putBlock(seg);
     await drawBlocks();
-    // Reopen Settings immediately with UPDATED labels (fix stale label bug)
+    // Reopen Settings to fix stale label after edit of existing; for new we just close.
     closeModal();
-    setTimeout(()=> openSettingsForBlock(seg, /*reopenGuard*/true), 0);
+    if(!isNew){ setTimeout(()=> openSettingsForBlock(seg), 0); }
   };
 }
 
@@ -961,7 +1022,7 @@ function hookMenu(root, selSel, menuSel, onPick){
 }
 
 function confirmExit(done){
-  modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); });
+  modalConfirm('Exit without saving?').then(ok=>{ if(ok) done(); });
 }
 function modalConfirm(text){
   return new Promise((resolve)=>{
@@ -1028,13 +1089,13 @@ async function init(){
 }
 function render(){
   if(activeView==='week'){ buildWeekView(); }
-  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r73</div></div></div>`; destroyOverlay(); }
+  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r76</div></div></div>`; destroyOverlay(); }
   else if(activeView==='month'){ buildMonthView(); }
   else { screenEl.innerHTML=''; destroyOverlay(); }
 }
 
 function saveSoon(ms=300){ clearTimeout(saveSoon._t); saveSoon._t=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
-async function saveAll(){ await storageSet('state', { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }); await saveChain(chain); }
+async function saveAll(){ await storageSet('state', { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }); }
 
 /* Month view (minimal for completeness) */
 function buildMonthView(){
@@ -1089,3 +1150,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
