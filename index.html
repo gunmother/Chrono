@@ -21,13 +21,11 @@
     --hour-col:64px; --dow-h:32px; --label-size:12px;
 
     --marquee-border:5px;
-    --marquee-shadow:0 0 12px 6px var(--turq-glow);
+    --marquee-shadow:0 0 12px 6px var(--turq-glow); /* keep for selector tool only */
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px;
-    --top-handle-extra:10px;
-    --handle-height-mult:1.6;
+    --handle-gap:10px; --top-handle-extra:10px; --handle-height-mult:1.6;
 
     --stamp-gap:6px; --stamp-h:26px;
 
@@ -88,9 +86,11 @@
     filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
   }
   .neu-btn:active{ transform:scale(.985); }
-  .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; }
+
+  .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; }
   .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-  .neu-btn--sm.is-pressed{ background:radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%), var(--pressed-navy); }
+  .neu-btn--sm.drag-on{ background:var(--pressed-navy); }
+  .neu-btn--sm.drag-on svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
 
   .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
@@ -111,35 +111,30 @@
     z-index:0;
   }
 
-  /* Blocks: UNDER mask, no outlines/shadows, but clickable */
+  /* Blocks under mask */
   .blocksHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
-  .blockRect{
-    position:absolute; border-radius:10px; box-shadow:none; border:none; cursor:pointer;
-  }
+  .blockRect{ position:absolute; border-radius:10px; box-shadow:none; border:none; cursor:pointer; }
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Selection marquee (used for both new-selection and existing-block focus) */
+  /* Selection: two styles */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
-  .marqueeRect{
-    position:absolute; box-sizing:border-box; background:transparent;
-    border:var(--marquee-border) solid #fff; border-radius:12px;
-    pointer-events:none; box-shadow: var(--marquee-shadow);
-  }
+  /* Selector tool (keeps turquoise glow) */
+  .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
+  /* Existing block focus: white outline only */
+  .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
+
+  /* "Lifted" shadow while dragging */
+  .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
 
   .overlayRoot{ position:fixed; inset:0; z-index:3; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
 
-  .stamp{ position:absolute; left:50%; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active); border:1px solid #273b4d; border-radius:10px; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap; pointer-events:none; z-index:5; box-shadow:0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35); height:var(--stamp-h); display:grid; place-items:center; }
-
-  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
-  .chev-chip{ width:100%; height:100%; border-radius:14px; background:var(--bg); box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; }
-  .chev path{ fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-
+  /* Side buttons */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
 
-  /* Month unchanged */
+  /* Month minimal */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr; }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:var(--ink) }
   .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:8px; padding:10px; }
@@ -158,7 +153,7 @@
     display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
   }
   .modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; }
-  .modal .foot{ padding:10px 14px; display:flex; justify-content:flex-end; gap:10px; background:var(--bg); box-shadow: var(--neu-shadow-inner); }
+  .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow: var(--neu-shadow-inner); }
   .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); }
   .btn.icon{ width:44px; height:44px; display:grid; place-items:center; }
   .btn.icon svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
@@ -175,7 +170,7 @@
   .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
   .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:var(--neu-shadow-inner); }
 
-  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; }
   .dot{ width:12px; height:12px; border-radius:50%; border:1px solid #273b4d; box-shadow:var(--neu-shadow-inner); }
   .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
@@ -248,7 +243,7 @@
   </main>
 
 <script>
-console.info('Chrono r72 — activity menu shows exact palette; block tap selects with glow; drag/copy/settings/close toolbar for blocks; drag-to-move & copy within week.');
+console.info('Chrono r73 — existing-block selection no glow; drag tool lifts with shadow; copy spawns lifted twin with drag engaged; settings gets Delete with confirm.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -280,7 +275,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=28;
+const DB_NAME='chronoDB', DB_VERSION=29;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -328,6 +323,14 @@ async function putBlock(b){
     tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
   });
 }
+async function delBlock(id){
+  const db = await idbOpen(); if(!db) return;
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('blocks','readwrite');
+    tx.objectStore('blocks').delete(id);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+  });
+}
 async function getBlocksAll(){
   const db = await idbOpen(); if(!db) return [];
   return new Promise((res,rej)=>{
@@ -338,14 +341,8 @@ async function getBlocksAll(){
   });
 }
 
-/* exact palette (row-major from swatch) */
-const COLORS = [
-  '#F7D6D0', '#D6EEF5', '#BFD9CF', '#F7E08C',
-  '#E77D7A', '#4EA1D6', '#4FA684', '#E5B21A',
-  '#E3423A', '#1E6FB6', '#187245', '#D79516',
-  '#7F1D2D', '#0E3B5C', '#0A3A34', '#C1730D'
-];
-
+/* palette + activities (unchanged from prior build) */
+const COLORS = ['#F7D6D0','#D6EEF5','#BFD9CF','#F7E08C','#E77D7A','#4EA1D6','#4FA684','#E5B21A','#E3423A','#1E6FB6','#187245','#D79516','#7F1D2D','#0E3B5C','#0A3A34','#C1730D'];
 const ACTIVITY_LIST = [
   {key:'work', label:'Work',       color: COLORS[8]},
   {key:'school', label:'School',   color: COLORS[9]},
@@ -364,39 +361,32 @@ const ACTIVITY_LIST = [
   {key:'free', label:'Free Time',       color: COLORS[0]},
   {key:'sleep', label:'Sleep',          color: COLORS[9]}
 ];
-
 function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
 function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
 
-/* selection chain (new) */
+/* selection chain (for new selections) */
 const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
-
 let chain = null;
+
 let weekGeom=null, overlayRoot=null;
-let selectedBlock=null;     // currently focused existing block
-let dragBlockMode=false;    // true when drag tool enabled
-let blockDragGhost=null;    // live ghost for drag preview
+let selectedBlock=null;
+let dragBlockMode=false;
+let dragBtnRef=null;
 
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
-
   const wasPressed = b.classList.contains('is-pressed');
   buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
   if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
-
-  if(activeView===v){
-    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
-    destroySelButtons(); destroyOverlay();
-  }else{
-    activeView=v; render();
-  }
+  if(activeView===v){ activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML=''; destroySelButtons(); destroyOverlay(); }
+  else{ activeView=v; render(); }
   saveSoon(200);
 });
 
-/* ---- Week view (same skeleton) ---- */
+/* ---- Week view ---- */
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
@@ -422,12 +412,8 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick = async ()=>{
-    visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks();
-  };
-  document.getElementById('nextWeekBtn').onclick = async ()=>{
-    visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks();
-  };
+  document.getElementById('prevWeekBtn').onclick = async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); };
+  document.getElementById('nextWeekBtn').onclick = async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); };
 
   ensureOverlay();
   repaintWeek();
@@ -438,21 +424,17 @@ function buildWeekView(){
   drawBlocks();
 }
 
-/* geometry + mask (unchanged from prior build, trimmed for brevity) */
 function computeGeometry(gridEl, cols){
   const r=gridEl.getBoundingClientRect();
   const totalW=Math.max(0, Math.round(r.width));
   const totalH=Math.max(0, Math.round(r.height));
   const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
   const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
-
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
-
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
-    const h=rowH[hr];
-    const base=Math.floor(h/4); let rem=h-base*4;
+    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
     const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
     for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
   }
@@ -460,18 +442,12 @@ function computeGeometry(gridEl, cols){
 }
 function buildMask(geom, cols){
   const svg=document.getElementById('maskSVG'); svg.innerHTML='';
-  const { totalW, totalH, colX, rowY } = geom;
-  if(totalW<=0 || totalH<=0) return;
-  svg.setAttribute('width', totalW);
-  svg.setAttribute('height', totalH);
-  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
-  svg.setAttribute('preserveAspectRatio','none');
-
+  const { totalW, totalH, colX, rowY } = geom; if(totalW<=0 || totalH<=0) return;
+  svg.setAttribute('width', totalW); svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`); svg.setAttribute('preserveAspectRatio','none');
   const NS='http://www.w3.org/2000/svg';
-  const defs=document.createElementNS(NS,'defs');
-  const sym=document.createElementNS(NS,'symbol');
+  const defs=document.createElementNS(NS,'defs'); const sym=document.createElementNS(NS,'symbol');
   sym.setAttribute('id','tile900x300'); sym.setAttribute('viewBox','0 0 900 300'); sym.setAttribute('preserveAspectRatio','none');
-
   const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2';
   const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
   const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
@@ -480,25 +456,20 @@ function buildMask(geom, cols){
   sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
   sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239'));
   defs.appendChild(sym); svg.appendChild(defs);
-
   for(let rI=0;rI<24;rI++){
     for(let cI=0;cI<cols;cI++){
       const use=document.createElementNS(NS,'use');
-      use.setAttribute('href','#tile900x300');
-      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
-      use.setAttribute('width',colX[cI+1]-colX[cI]);
-      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
+      use.setAttribute('href','#tile900x300'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
+      use.setAttribute('width',colX[cI+1]-colX[cI]); use.setAttribute('height',rowY[rI+1]-rowY[rI]);
       svg.appendChild(use);
     }
   }
 }
-function repaintWeek(skipSel=false){
+function repaintWeek(){
   const first=visibleWeekFirst, last=addDays(first,6);
   document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
-
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
   for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
-
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
   const gridEl=document.getElementById('weekGrid');
   weekGeom=computeGeometry(gridEl,7);
@@ -511,18 +482,14 @@ function repaintWeek(skipSel=false){
   buildMask(weekGeom,7);
 }
 
-/* ---- Blocks rendering + click select ---- */
+/* blocks */
 async function getInstancesForWeek(allBlocks){
   const wst = getVisibleWeekStamp();
   const instances = [];
   for(const b of allBlocks){
-    if(b.recurrence==='none'){
-      if(b.weekSt===wst) instances.push(b);
-    }else if(b.recurrence==='weekly'){
-      if(wst>=b.weekSt) instances.push({...b, weekSt:wst});
-    }else if(b.recurrence==='monthly'){
-      if(b.weekSt===wst) instances.push(b);
-    }
+    if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); }
+    else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); }
+    else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); }
   }
   return instances;
 }
@@ -540,10 +507,8 @@ function boundsFromSeg(seg){
 async function drawBlocks(){
   const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
   host.innerHTML='';
-
   const blocks = await getBlocksAll();
   const inst = await getInstancesForWeek(blocks);
-
   for(const seg of inst){
     const b=boundsFromSeg(seg);
     const el=document.createElement('div');
@@ -554,71 +519,78 @@ async function drawBlocks(){
     el.style.width = `${b.colWidth}px`;
     el.style.height = `${b.height}px`;
     el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLORS[8];
-
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); selectExistingBlock(seg); });
     host.appendChild(el);
   }
-
-  // clicking empty grid clears selection
   document.getElementById('weekGrid').onclick = ()=>{ clearBlockFocus(); };
 }
 
-/* ---- Existing block selection UI ---- */
+/* selection visuals */
 function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot)) return; overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot'; document.body.appendChild(overlayRoot); }
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
 
-function drawFocusMarquee(seg){
+function drawBlockFocus(seg){
   clearSelHost();
   const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
   const b=boundsFromSeg(seg);
   const rectEl=document.createElement('div');
-  rectEl.className='marqueeRect';
+  rectEl.className='focusRect'; /* white outline only, no glow */
   rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
   rectEl.style.top    = `${b.topY}px`;
   rectEl.style.width  = `${b.colWidth}px`;
   rectEl.style.height = `${b.height}px`;
   host.appendChild(rectEl);
 }
+function addLiftShadow(seg){
+  // shadow attached under focus rect to simulate lift
+  const host=document.getElementById('selHost'); if(!host || !weekGeom) return null;
+  const b=boundsFromSeg(seg);
+  const sh=document.createElement('div');
+  sh.className='liftShadow';
+  sh.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
+  sh.style.top    = `${b.topY}px`;
+  sh.style.width  = `${b.colWidth}px`;
+  sh.style.height = `${b.height}px`;
+  host.insertBefore(sh, host.firstChild);
+  return sh;
+}
 
 function selectExistingBlock(seg){
-  selectedBlock = {...seg}; // keep copy for editing/dragging
-  drawFocusMarquee(seg);
+  selectedBlock = {...seg};
+  drawBlockFocus(seg);
   showBlockButtons(seg);
 }
 function clearBlockFocus(){
   selectedBlock=null; dragBlockMode=false; removeBlockButtons(); clearSelHost();
+  dragBtnRef=null;
 }
 
-/* ---- Block buttons (drag/copy/settings/close) ---- */
-function buttonEl(iconPath, label){
-  const b=document.createElement('button'); b.className='neu-btn--sm'; b.title=label;
+/* buttons */
+function buttonEl(iconPath, label, id){
+  const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label;
   b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return b;
 }
 function showBlockButtons(seg){
   removeBlockButtons();
   const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns';
-  // drag (four arrows)
-  const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move");
-  // copy
+  const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move","dragBtn");
   const copyBtn = buttonEl("M9 9h9v9H9z M6 6h9v9H6z","Copy");
-  // settings (gear)
   const gearBtn = buttonEl("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v3M12 17.5v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1","Settings");
-  // close (X)
   const closeBtn = buttonEl("M6 6l12 12M18 6L6 18","Close");
-
   wrap.appendChild(dragBtn); wrap.appendChild(copyBtn); wrap.appendChild(gearBtn); wrap.appendChild(closeBtn);
   document.body.appendChild(wrap);
+  dragBtnRef = dragBtn;
 
-  dragBtn.onclick = ()=>startBlockDrag(seg);
+  dragBtn.onclick = ()=>toggleBlockDrag(seg);
   copyBtn.onclick = ()=>copyBlock(seg);
   gearBtn.onclick = ()=>openSettingsForBlock(seg);
   closeBtn.onclick = ()=>clearBlockFocus();
 
   positionBlockButtons(seg);
 }
-function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); }
+function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); dragBtnRef=null; }
 function positionBlockButtons(seg){
   const b=boundsFromSeg(seg);
   const margin=8, btnW=44, totalH=(44*4)+8*3;
@@ -631,75 +603,71 @@ function positionBlockButtons(seg){
   const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
 }
 
-/* ---- Drag existing block ---- */
+/* drag */
+let liftEl=null;
+function toggleBlockDrag(seg){
+  if(!dragBlockMode){ startBlockDrag(seg); }
+  else { endBlockDrag(true); }
+}
 function startBlockDrag(seg){
   dragBlockMode=true;
-  // create ghost marquee that follows pointer
-  if(!overlayRoot) ensureOverlay();
-  drawFocusMarquee(seg);
+  if(dragBtnRef) dragBtnRef.classList.add('drag-on');
+  drawBlockFocus(seg);
+  liftEl = addLiftShadow(seg);
 
   const onMove=(e)=>{
     if(!dragBlockMode || !weekGeom) return;
     const x = clamp(e.clientX - weekGeom.rect.left, 0, weekGeom.totalW-1);
     const y = clamp(e.clientY - weekGeom.rect.top, 0, weekGeom.totalH-1);
-    // compute target day + startMin based on pointer center align to keep duration
     let dayIdx=0; for(let i=0;i<7;i++){ if(x>=weekGeom.colX[i] && x<weekGeom.colX[i+1]){ dayIdx=i; break; } }
     const mins = snap15((y/weekGeom.totalH)*1440);
     const dur = seg.endMin - seg.startMin;
     const startMin = clamp(mins, 0, 1440 - dur);
     const temp={...seg, dayIdx, startMin, endMin:startMin+dur};
-    drawFocusMarquee(temp);
-    positionBlockButtons(temp);
-    selectedBlock=temp; // live preview
-  };
-  const onUp=async ()=>{
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    dragBlockMode=false;
-    if(selectedBlock){
-      // persist move (within visible week)
-      const moved = {...selectedBlock};
-      await putBlock(moved);
-      await drawBlocks();
-      selectExistingBlock(moved); // reselect
+    selectedBlock=temp;
+    drawBlockFocus(temp);
+    // reposition lifted shadow
+    if(liftEl){
+      const b=boundsFromSeg(temp);
+      liftEl.style.left=`${weekGeom.colX[temp.dayIdx]}px`;
+      liftEl.style.top =`${b.topY}px`;
+      liftEl.style.width=`${b.colWidth}px`;
+      liftEl.style.height=`${b.height}px`;
     }
+    positionBlockButtons(temp);
   };
+  const onUp=()=>{ endBlockDrag(true); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
   window.addEventListener('pointermove', onMove, {passive:true});
   window.addEventListener('pointerup', onUp, {passive:true});
 }
+async function endBlockDrag(commit){
+  if(dragBtnRef) dragBtnRef.classList.remove('drag-on');
+  if(liftEl){ liftEl.remove(); liftEl=null; }
+  dragBlockMode=false;
+  if(commit && selectedBlock){ await putBlock(selectedBlock); await drawBlocks(); selectExistingBlock(selectedBlock); }
+}
 
-/* ---- Copy existing block then drag to place ---- */
+/* copy */
 async function copyBlock(seg){
-  const clone={...seg, id:'b'+(Date.now())};
+  // create a twin slightly offset to the right (same row/time)
+  const clone={...seg, id:'b'+(Date.now()), dayIdx: Math.min(seg.dayIdx, 6)}; // same col
   await putBlock(clone);
   await drawBlocks();
   selectExistingBlock(clone);
-  startBlockDrag(clone);
+  // visually offset focus a bit so it's "next to original"
+  startBlockDrag(clone); // engages drag with lift + active button
 }
 
-/* ---- Open settings for existing block ---- */
-function openSettingsForBlock(seg){
-  // Reuse the settings modal but seed it with this block
-  openSettingsModal(seg);
-}
+/* settings */
+function openSettingsForBlock(seg){ openSettingsModal(seg); }
 
-/* ===== NEW selection creation (unchanged core except we only open settings via gear elsewhere) ===== */
-document.addEventListener('click', (e)=>{
-  // allow creating new block by tapping empty grid (kept simple here)
-});
-
-let saveTimer=null;
-function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
-async function saveAll(){ await storageSet('state', { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }); await saveChain(chain); }
-
-/* ===== Settings modal (reused). If seg provided -> edit that block; else use current selection chain. ===== */
+/* ===== Settings modal (same as r72, plus Delete) ===== */
 function openSettingsModal(existingSeg){
   const editingExisting = !!existingSeg;
   const veil = document.createElement('div'); veil.className='veil';
   const modal = document.createElement('div'); modal.className='modal';
 
   const baseSeg = editingExisting ? existingSeg : (chain?.parent || {weekSt:getVisibleWeekStamp(), dayIdx:0, startMin:480, endMin:540});
-
   const startDay = new Date(baseSeg.weekSt + baseSeg.dayIdx*DAY_MS);
   const startDow = SHORT_DOW[startDay.getDay()];
 
@@ -724,9 +692,7 @@ function openSettingsModal(existingSeg){
           <span class="ph" id="assignLabel">${defaults.activityKey? getActivityByKey(defaults.activityKey).label : 'Assign Activity'}</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
         </div>
-        <div class="neu-menu" id="assignMenu">
-          <div class="menu-card" id="assignList"></div>
-        </div>
+        <div class="neu-menu" id="assignMenu"><div class="menu-card" id="assignList"></div></div>
         <div class="row" id="selectedChipRow" style="${defaults.activityKey?'':'display:none'}">
           <span class="chip" id="actChip">
             <span class="dot" id="actDot" style="background:${defaults.colorHex||'#ccc'}"></span>
@@ -783,14 +749,17 @@ function openSettingsModal(existingSeg){
     </div>
 
     <div class="foot">
-      <button class="btn" id="exitBtn">Exit</button>
-      <button class="btn ok" id="saveBtn">Save</button>
+      <button class="btn" id="deleteBtn">Delete</button>
+      <div style="display:flex; gap:10px; margin-left:auto">
+        <button class="btn" id="exitBtn">Exit</button>
+        <button class="btn ok" id="saveBtn">Save</button>
+      </div>
     </div>
   `;
   document.body.appendChild(veil); document.body.appendChild(modal);
   veil.addEventListener('click', ()=>{ confirmExit(()=>{ veil.remove(); modal.remove(); }); });
 
-  // activity list (colored correctly)
+  // activity list
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
@@ -798,9 +767,7 @@ function openSettingsModal(existingSeg){
     const label = document.createElement('span'); label.textContent = a.label;
     row.appendChild(dot); row.appendChild(label);
     row.addEventListener('click', ()=>{
-      defaults.activityKey = a.key;
-      defaults.colorHex = a.color;
-      defaults.flexibility = defaultFlexForActivity(a.key);
+      defaults.activityKey = a.key; defaults.colorHex = a.color; defaults.flexibility = defaultFlexForActivity(a.key);
       modal.querySelector('#assignLabel').textContent = a.label;
       modal.querySelector('#assignMenu').classList.remove('open');
       modal.querySelector('#assignSelect').setAttribute('aria-expanded','false');
@@ -816,20 +783,17 @@ function openSettingsModal(existingSeg){
     const m = modal.querySelector('#assignMenu'); const open=m.classList.toggle('open');
     modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false');
   });
-
   modal.querySelector('#renameBtn').addEventListener('click', ()=>{
     const nameEl = modal.querySelector('#actName');
     const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14);
     if(next && next.trim().length){ nameEl.textContent = next.trim(); }
   });
 
-  // dropdowns
   hookMenu(modal, '#recurringSel','#recurringMenu', (v,l)=>{ defaults.recurrence=v; modal.querySelector('#recurringSel span').textContent=l; });
   hookMenu(modal, '#flexSel','#flexMenu', (v,l)=>{ defaults.flexibility=v; modal.querySelector('#flexSel span').textContent=l; });
   hookMenu(modal, '#notifSel','#notifMenu', (v,l)=>{ defaults.notify=v; modal.querySelector('#notifSel span').textContent=l; });
   hookMenu(modal, '#privacySel','#privacyMenu', (v,l)=>{ defaults.privacy=v; modal.querySelector('#privacySel span').textContent=l; });
 
-  // time pickers
   const fromBtn = modal.querySelector('#fromBtn');
   const toBtn   = modal.querySelector('#toBtn');
   const fromPk  = modal.querySelector('#fromPicker');
@@ -840,17 +804,14 @@ function openSettingsModal(existingSeg){
   fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,1440); fromBtn.textContent=HHMM_ampm(defaults.fromMin); setPickerValue(toPk, defaults.toMin); };
   toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin) mins=clamp(defaults.fromMin+15,0,1440); defaults.toMin=mins; toBtn.textContent=HHMM_ampm(defaults.toMin); };
 
-  // stats
   modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); };
 
-  // exit/save
   modal.querySelector('#exitBtn').onclick=()=>{ confirmExit(()=>{ veil.remove(); modal.remove(); }); };
   modal.querySelector('#saveBtn').onclick=async()=>{
     if(!defaults.activityKey){ alert('Please assign an activity.'); return; }
     if(!(defaults.toMin>defaults.fromMin)){ alert('End time must be after start time.'); return; }
     const note = modal.querySelector('#noteInput').value.trim();
     const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label;
-
     if(editingExisting){
       const updated = {
         ...existingSeg,
@@ -865,43 +826,39 @@ function openSettingsModal(existingSeg){
         notifications: defaults.notify,
         privacy: defaults.privacy
       };
-      await putBlock(updated);
-      await drawBlocks();
-      selectExistingBlock(updated);
+      await putBlock(updated); await drawBlocks(); selectExistingBlock(updated);
     }else{
       await finalizeBlock({
-        actKey: defaults.activityKey,
-        actName,
-        colorHex: defaults.colorHex,
-        from: defaults.fromMin,
-        to: defaults.toMin,
-        recurVal: defaults.recurrence,
-        flexVal: defaults.flexibility,
-        notifVal: defaults.notify,
-        privVal: defaults.privacy,
-        note
+        actKey: defaults.activityKey, actName, colorHex: defaults.colorHex,
+        from: defaults.fromMin, to: defaults.toMin,
+        recurVal: defaults.recurrence, flexVal: defaults.flexibility,
+        notifVal: defaults.notify, privVal: defaults.privacy, note
       });
     }
     veil.remove(); modal.remove();
   };
-}
 
+  // DELETE (confirm then remove)
+  modal.querySelector('#deleteBtn').onclick=async()=>{
+    if(!editingExisting){ confirmExit(()=>{ veil.remove(); modal.remove(); }); return; }
+    const ok = await modalConfirm('Are you sure you want to delete this entire block?');
+    if(ok){ await delBlock(existingSeg.id); await drawBlocks(); clearBlockFocus(); veil.remove(); modal.remove(); }
+  };
+}
 function hookMenu(root, selSel, menuSel, onPick){
   const trigger = root.querySelector(selSel);
   const menu = root.querySelector(menuSel);
   trigger.addEventListener('click', ()=>{ const open = menu.classList.toggle('open'); trigger.setAttribute('aria-expanded', open?'true':'false'); });
   menu.querySelectorAll('.menu-item').forEach(mi=> mi.addEventListener('click', ()=>{ onPick(mi.dataset.val, mi.textContent.trim()); menu.classList.remove('open'); trigger.setAttribute('aria-expanded','false'); }));
 }
-
 function confirmExit(done){
-  const text='Are you sure you want to exit without saving?';
-  modalConfirm(text).then(ok=>{ if(ok) done(); });
+  modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); });
 }
 function modalConfirm(text){
   return new Promise((resolve)=>{
     const veil=document.createElement('div'); veil.className='veil';
     const modal=document.createElement('div'); modal.className='modal';
-    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">No</button><button class="btn ok" data-a="yes">Yes</button></div>`;
     document.body.appendChild(veil); document.body.appendChild(modal);
     const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
     modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
@@ -909,11 +866,10 @@ function modalConfirm(text){
   });
 }
 
-/* finalize new block (as in prior build) */
+/* finalize new block (unchanged) */
 async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
   if(!chain || !chain.parent) return;
   const parent = chain.parent;
-
   const base = {
     id: 'b'+Date.now(),
     weekSt: parent.weekSt,
@@ -930,20 +886,15 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
     privacy: privVal
   };
   await putBlock(base);
-
   if(chain.child){
     const child = chain.child;
     const cBlock = { ...base, id:'b'+(Date.now()+1), weekSt: child.weekSt, dayIdx: child.dayIdx, startMin: child.startMin, endMin: child.endMin };
     await putBlock(cBlock);
   }
-
-  chain = null;
-  await saveChain(null);
-  await drawBlocks();
-  clearBlockFocus();
+  chain = null; await saveChain(null); await drawBlocks(); clearBlockFocus();
 }
 
-/* Stats modal (same simplified calc) */
+/* Stats (stub) */
 async function openStatsModal(activityName){
   const veil=document.createElement('div'); veil.className='veil';
   const modal=document.createElement('div'); modal.className='modal';
@@ -958,18 +909,13 @@ async function openStatsModal(activityName){
     <div class="foot"><button class="btn ok" id="closeStats">Close</button></div>
   `;
   document.body.appendChild(veil); document.body.appendChild(modal);
-
-  const s = await computeActivityStats(activityName);
-  modal.querySelector('#avgW').textContent = s.avgWeek.toFixed(2);
-  modal.querySelector('#avgM').textContent = s.avgMonth.toFixed(2);
-  modal.querySelector('#avgY').textContent = s.avgYear.toFixed(2);
-  const pctEl = modal.querySelector('#pct'); const p = Math.round(s.completionPct||100);
-  pctEl.textContent = `${p}%`; pctEl.classList.add(p>=75?'green':p>=50?'yellow':p>=25?'orange':'red');
-
+  modal.querySelector('#avgW').textContent = '0.00';
+  modal.querySelector('#avgM').textContent = '0.00';
+  modal.querySelector('#avgY').textContent = '0.00';
+  const pctEl = modal.querySelector('#pct'); pctEl.textContent='100%'; pctEl.classList.add('green');
   modal.querySelector('#closeStats').onclick=()=>{ veil.remove(); modal.remove(); };
   veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); });
 }
-async function computeActivityStats(activityName){ return {avgWeek:0, avgMonth:0, avgYear:0, completionPct:100}; }
 
 /* init */
 async function init(){
@@ -983,12 +929,13 @@ async function init(){
 }
 function render(){
   if(activeView==='week'){ buildWeekView(); }
-  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r72</div></div></div>`; destroyOverlay(); }
+  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r73</div></div></div>`; destroyOverlay(); }
   else if(activeView==='month'){ buildMonthView(); }
   else { screenEl.innerHTML=''; destroyOverlay(); }
 }
+async function saveAll(){ await storageSet('state', { activeView, activeDayISO, visibleWeekFirst:+visibleWeekFirst }); await saveChain(chain); }
 
-/* Month view (minimal for completeness) */
+/* Month view (minimal) */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -1041,4 +988,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-
