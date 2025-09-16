@@ -25,7 +25,9 @@
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px; --top-handle-extra:10px; --handle-height-mult:1.6;
+    --handle-gap:10px;
+    --top-handle-extra:10px; /* optical lift + margin fix for top chevrons */
+    --handle-height-mult:1.6;
 
     --stamp-gap:6px; --stamp-h:26px;
 
@@ -117,18 +119,41 @@
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Selector and focus overlays */
+  /* Selector + block focus overlay */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
-  /* Selector tool (turquoise glow) */
+
+  /* Selector tool (glow) */
   .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
-  /* Existing block focus: white outline only */
+
+  /* Existing block focus (no glow) */
   .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
 
-  /* "Lifted" shadow while dragging */
-  .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
+  /* Time stamps */
+  .stamp{
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
+    pointer-events:none; z-index:5;
+    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    height:var(--stamp-h); display:grid; place-items:center;
+  }
 
-  .overlayRoot{ position:fixed; inset:0; z-index:3; pointer-events:none; }
-  .ov-group{ position:absolute; pointer-events:none; }
+  /* Handles */
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px;
+    background:var(--bg);
+    box-shadow: var(--neu-shadow-outer);
+    display:grid; place-items:center;
+  }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+
+  /* Lifted shadow while dragging a block */
+  .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
 
   /* Side buttons */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
@@ -243,7 +268,7 @@
   </main>
 
 <script>
-console.info('Chrono r74 — Restored selector tool on empty grid tap (turquoise glow); coexists with block selection & controls.');
+console.info('Chrono r75 — Selector handles + time stamps restored; top chevron margin fixed; blocks focus = white outline only; everything else preserved.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -275,7 +300,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=29;
+const DB_NAME='chronoDB', DB_VERSION=30;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -341,7 +366,7 @@ async function getBlocksAll(){
   });
 }
 
-/* palette + activities */
+/* palette + activities (fixed, auto-assigned colors) */
 const COLORS = ['#F7D6D0','#D6EEF5','#BFD9CF','#F7E08C','#E77D7A','#4EA1D6','#4FA684','#E5B21A','#E3423A','#1E6FB6','#187245','#D79516','#7F1D2D','#0E3B5C','#0A3A34','#C1730D'];
 const ACTIVITY_LIST = [
   {key:'work', label:'Work',       color: COLORS[8]},
@@ -369,6 +394,12 @@ const CHAIN_KEY='selChain_v12';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
 let chain = null;
+
+/* selector drag state */
+let dragKind=null, dragTarget='parent';
+let dragStartY=0, baseStart=0, baseEnd=0;
+let dragPixels=0, wasDrag=false;
+let crossedTop=false, crossedBottom=false, lastEdgeCrossed=null;
 
 let weekGeom=null, overlayRoot=null;
 let selectedBlock=null;
@@ -527,22 +558,20 @@ async function drawBlocks(){
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectExistingBlock(seg); });
     document.getElementById('blocksHost').appendChild(el);
   }
-  // clicking empty space clears block focus (but selector handled in grid click)
   document.getElementById('weekGrid').onclick = onWeekGridTap;
 }
 
-/* selection visuals (existing block) */
+/* overlays */
 function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot)) return; overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot'; document.body.appendChild(overlayRoot); }
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
 
-/* ---------- SELECTOR TOOL (RESTORED) ---------- */
+/* ---------- SELECTOR TOOL (with stamps + chevrons) ---------- */
 function onWeekGridTap(e){
   const blockEl = e.target.closest('.blockRect');
-  if(blockEl) return; // block click handled elsewhere
+  if(blockEl) return; // handled as existing block
   if(!weekGeom) return;
 
-  // compute day + start minute from click
   const rect = weekGeom.rect;
   const relX = e.clientX - rect.left;
   const relY = e.clientY - rect.top;
@@ -559,22 +588,94 @@ function onWeekGridTap(e){
   showSelectorButtons();
 }
 
+function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
+function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
+
+function chevronsSVG(dir, colW, rowH){
+  const padX = 8;
+  const w = Math.max(24, colW - padX*2);
+  const h = Math.max(44, Math.floor(rowH*parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6));
+  const mid = w/2;
+  const gap = h/6;
+  const span = Math.min(w*0.42, h/4);
+  const triUp = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const triDn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const d1 = (dir==='up'? triUp(gap) : triDn(gap));
+  const d2 = (dir==='up'? triUp(gap*2.2) : triDn(gap*2.2));
+  const d3 = (dir==='up'? triUp(gap*3.4) : triDn(gap*3.4));
+  return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
+}
+
 function drawSelector(){
   const host=document.getElementById('selHost'); if(!host || !weekGeom){ return; }
   host.innerHTML='';
-  if(!chain || !chain.parent) return;
-  const seg = chain.parent;
-  const b=boundsFromSeg(seg);
-  const rectEl=document.createElement('div');
-  rectEl.className='marqueeRect'; // turquoise glow
-  rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
-  rectEl.style.top    = `${b.topY}px`;
-  rectEl.style.width  = `${b.colWidth}px`;
-  rectEl.style.height = `${b.height}px`;
-  host.appendChild(rectEl);
+  if(!chain){ return; }
+
+  const parentHere = segOnThisWeek(chain.parent);
+  const childHere  = segOnThisWeek(chain.child);
+  if(!parentHere && !childHere) return;
+
+  const segs=[];
+  if(parentHere) segs.push({seg:chain.parent, name:'parent'});
+  if(childHere)  segs.push({seg:chain.child,  name:'child'});
+
+  segs.forEach((entry, idx)=>{
+    const seg=entry.seg, name=entry.name;
+    const b=boundsFromSeg(seg);
+
+    const rectEl=document.createElement('div');
+    rectEl.className='marqueeRect';  // glow
+    rectEl.dataset.name=name;
+    rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
+    rectEl.style.top    = `${b.topY}px`;
+    rectEl.style.width  = `${b.colWidth}px`;
+    rectEl.style.height = `${b.height}px`;
+    host.appendChild(rectEl);
+
+    // Stamps + handles (top/bottom depending on chain/visibility)
+    const rowH = weekGeom.rowH[0] || 48;
+    const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
+    const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
+    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
+    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
+    const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
+
+    const group=document.createElement('div'); group.style.position='absolute'; group.style.left = `${weekGeom.colX[seg.dayIdx]}px`; group.style.top = `${b.topY}px`; group.style.width=`${b.colWidth}px`; group.style.height=`${b.height}px`; host.appendChild(group);
+
+    // Render top cluster
+    const topStamp=document.createElement('div'); topStamp.className='stamp';
+    topStamp.textContent = HHMM_ampm(seg.startMin);
+    topStamp.style.left = (b.colWidth/2)+'px';
+    topStamp.style.top  = (- (sGap + sH))+'px';
+    group.appendChild(topStamp);
+
+    const topHandle=document.createElement('div'); topHandle.className='handle top';
+    topHandle.style.left='0px';
+    topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
+    topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
+    topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
+    topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', name), {passive:false});
+    group.appendChild(topHandle);
+
+    // Render bottom cluster
+    const botStamp=document.createElement('div'); botStamp.className='stamp';
+    botStamp.textContent = HHMM_ampm(seg.endMin);
+    botStamp.style.left = (b.colWidth/2)+'px';
+    botStamp.style.top  = (b.height + sGap)+'px';
+    group.appendChild(botStamp);
+
+    const botHandle=document.createElement('div'); botHandle.className='handle bottom';
+    botHandle.style.left='0px';
+    botHandle.style.top = (b.height + sGap + sH + hGap)+'px';
+    botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
+    botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
+    botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', name), {passive:false});
+    group.appendChild(botHandle);
+  });
+
+  positionSelectorButtons();
 }
 
-/* selector buttons (gear + close), separate from block buttons */
 function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); }
 function showSelectorButtons(){
   removeSelectorButtons();
@@ -587,7 +688,7 @@ function showSelectorButtons(){
     <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
   </svg>`;
   gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
-  gear.onclick = ()=> openSettingsModal(null); // new block flow uses chain.parent
+  gear.onclick = ()=> openSettingsModal(null);
 
   const close = document.createElement('button'); close.className='neu-btn--sm'; close.title='Clear';
   close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -615,7 +716,139 @@ function clearSelector(){
   removeSelectorButtons();
 }
 
-/* selection visuals (existing block) */
+/* Drag & spillover for selector */
+function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
+function clampToBudget(seg, which){
+  const minGap=15;
+  const hasChild = !!chain.child && !!chain.dir;
+
+  if(!hasChild){
+    seg.startMin = clamp(seg.startMin, 0, 1440-minGap);
+    seg.endMin   = clamp(seg.endMin, seg.startMin + minGap, 1440);
+    return;
+  }
+
+  const p=chain.parent, c=chain.child;
+  if(chain.dir==='next'){ p.endMin=1440; c.startMin=0; }
+  if(chain.dir==='prev'){ p.startMin=0;  c.endMin=1440; }
+
+  const other = otherSeg(which);
+  const otherDur = other ? (other.endMin - other.startMin) : 0;
+  const maxThis = 1440 - Math.max(minGap, otherDur);
+
+  if(which==='parent'){
+    p.startMin = clamp(p.startMin, 0, 1440-minGap);
+    p.endMin   = clamp(p.endMin,   p.startMin + minGap, 1440);
+    p.endMin   = Math.min(p.endMin, p.startMin + maxThis);
+  }else{
+    c.startMin = clamp(c.startMin, 0, 1440-minGap);
+    c.endMin   = clamp(c.endMin,   c.startMin + minGap, 1440);
+    c.endMin   = Math.min(c.endMin, c.startMin + maxThis);
+  }
+}
+function startDrag(ev, kind, which){
+  if(!chain) return;
+  const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return;
+
+  ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  dragKind = kind; dragTarget = which;
+  dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
+  crossedTop=crossedBottom=false; lastEdgeCrossed=null;
+  wasDrag=false; dragPixels=0;
+
+  const move=(e)=>{
+    const dyPx = e.clientY - dragStartY;
+    dragPixels = Math.max(dragPixels, Math.abs(dyPx));
+    if(dragPixels > 6) wasDrag=true;
+
+    const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+    const snappedDelta = snap15(deltaMinRaw);
+
+    if(dragKind==='top'){ seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15); }
+    else { seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440); }
+
+    clampToBudget(seg, which);
+
+    if(!chain.child){
+      if(seg.startMin===0){ crossedTop=true; lastEdgeCrossed='prev'; }
+      if(seg.endMin===1440){ crossedBottom=true; lastEdgeCrossed='next'; }
+    }
+
+    drawSelector();
+  };
+
+  const up=async (e)=>{
+    seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin);
+    if(seg.endMin - seg.startMin < 15){
+      if(dragKind==='top'){ seg.startMin = seg.endMin - 15; }
+      else { seg.endMin = seg.startMin + 15; }
+    }
+
+    if(!chain.child && wasDrag){
+      const want = lastEdgeCrossed || (crossedTop? 'prev' : (crossedBottom? 'next' : null));
+      if(want) await spilloverConfirm(want);
+    }
+
+    await saveChain(chain).catch(()=>{});
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragKind=null;
+  };
+
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up, {passive:true});
+}
+
+let _modalOpen=false;
+async function spilloverConfirm(direction){
+  if(_modalOpen) return;
+  _modalOpen=true;
+  const res = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
+  _modalOpen=false;
+  if(!res) return;
+  await confirmSpill(direction);
+}
+function modalConfirm(text){
+  return new Promise((resolve)=>{
+    const veil=document.createElement('div'); veil.className='veil';
+    const modal=document.createElement('div'); modal.className='modal';
+    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    document.body.appendChild(veil); document.body.appendChild(modal);
+    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
+    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
+    veil.addEventListener('click', ()=>close(false));
+  });
+}
+async function confirmSpill(direction){
+  if(!chain || !chain.parent) return;
+  const p = chain.parent;
+  let childWeek = p.weekSt;
+  let childDay  = p.dayIdx;
+
+  chain.dir = direction;
+
+  if(direction==='next'){
+    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
+    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
+    const rem = clamp(60, 15, 1440 - (p.endMin - p.startMin));
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:0, endMin:rem };
+    p.endMin = 1440;
+    if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
+  }else{
+    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
+    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
+    const rem = clamp(60, 15, 1440 - (p.endMin - p.startMin));
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:1440 - rem, endMin:1440 };
+    p.startMin = 0;
+    if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); }
+  }
+  await saveChain(chain);
+  repaintWeek(true); drawSelector();
+}
+
+/* ---------- EXISTING BLOCK SELECTION & CONTROLS ---------- */
 function drawBlockFocus(seg){
   clearSelHost();
   const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
@@ -640,19 +873,17 @@ function addLiftShadow(seg){
   host.insertBefore(sh, host.firstChild);
   return sh;
 }
-
 function selectExistingBlock(seg){
   selectedBlock = {...seg};
   drawBlockFocus(seg);
   showBlockButtons(seg);
-  removeSelectorButtons(); // ensure no selector UI when focusing a block
+  removeSelectorButtons();
 }
 function clearBlockFocus(){
   selectedBlock=null; dragBlockMode=false; removeBlockButtons(); clearSelHost();
   dragBtnRef=null;
 }
 
-/* buttons for focused block */
 function buttonEl(iconPath, label, id){
   const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label;
   b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -689,7 +920,7 @@ function positionBlockButtons(seg){
   const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
 }
 
-/* drag */
+/* drag existing block */
 let liftEl=null;
 function toggleBlockDrag(seg){
   if(!dragBlockMode){ startBlockDrag(seg); }
@@ -732,7 +963,7 @@ async function endBlockDrag(commit){
   if(commit && selectedBlock){ await putBlock(selectedBlock); await drawBlocks(); selectExistingBlock(selectedBlock); }
 }
 
-/* copy */
+/* copy existing block (spawns lifted clone ready to place) */
 async function copyBlock(seg){
   const clone={...seg, id:'b'+(Date.now())};
   await putBlock(clone);
@@ -842,7 +1073,7 @@ function openSettingsModal(existingSeg){
   document.body.appendChild(veil); document.body.appendChild(modal);
   veil.addEventListener('click', ()=>{ confirmExit(()=>{ veil.remove(); modal.remove(); }); });
 
-  // activity list
+  // activity list (auto colors)
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
@@ -937,17 +1168,6 @@ function hookMenu(root, selSel, menuSel, onPick){
 function confirmExit(done){
   modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); });
 }
-function modalConfirm(text){
-  return new Promise((resolve)=>{
-    const veil=document.createElement('div'); veil.className='veil';
-    const modal=document.createElement('div'); modal.className='modal';
-    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">No</button><button class="btn ok" data-a="yes">Yes</button></div>`;
-    document.body.appendChild(veil); document.body.appendChild(modal);
-    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
-    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
-    veil.addEventListener('click', ()=>close(false));
-  });
-}
 
 /* finalize new block */
 async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
@@ -1008,7 +1228,7 @@ async function init(){
 }
 function render(){
   if(activeView==='week'){ buildWeekView(); }
-  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r74</div></div></div>`; destroyOverlay(); }
+  else if(activeView==='day'){ screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">Day</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#666"><div class="watermark">Chrono r75</div></div></div>`; destroyOverlay(); }
   else if(activeView==='month'){ buildMonthView(); }
   else { screenEl.innerHTML=''; destroyOverlay(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); }
 }
