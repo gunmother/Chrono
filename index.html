@@ -26,11 +26,11 @@
     /* handles & stamps */
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px;          /* stamp ↔ handle gap (both ends) */
-    --top-handle-extra:10px;     /* mirror bottom spacing */
+    --handle-gap:10px;
+    --top-handle-extra:10px;   /* top tab now mirrors bottom spacing */
     --handle-height-mult:1.6;
 
-    --stamp-gap:6px;             /* selection ↔ stamp gap */
+    --stamp-gap:6px;
     --stamp-h:26px;
 
     /* neumorphic pieces */
@@ -40,6 +40,8 @@
     --neu-shadow-inner:
        inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        inset var(--off)         var(--off)         var(--blur) var(--lo);
+    /* additional drop to bottom-right for modal */
+    --neu-offset-shadow: 8px 10px 20px rgba(0,0,0,.22);
   }
 
   html,body{
@@ -129,9 +131,17 @@
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
   }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Present lens — full hour block (compensates for border thickness) */
+  /* blocks layer: sits UNDER the mask so color peeks through mask gaps */
+  .blocksHost{ position:absolute; inset:0; pointer-events:none; z-index:0; }
+  .blockRect{
+    position:absolute; border-radius:10px; pointer-events:none;
+    box-shadow:none !important; border:none !important; /* no outlines/shadows */
+  }
+
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 } /* above blocks */
+
+  /* Present lens */
   .now{
     position:absolute;
     border:var(--marquee-border) solid #fff;
@@ -143,18 +153,12 @@
     display:none;
   }
 
-  /* Selection & stored blocks */
+  /* Selection */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
   .marqueeRect{
     position:absolute; box-sizing:border-box; background:transparent;
     border:var(--marquee-border) solid #fff; border-radius:12px;
     pointer-events:none; box-shadow: var(--marquee-shadow);
-  }
-  .blockRect{
-    position:absolute; box-sizing:border-box; border-radius:10px;
-    pointer-events:none;
-    box-shadow: var(--neu-shadow-outer);
-    border:1px solid rgba(53,81,105,.25);
   }
 
   .overlayRoot{ position:fixed; inset:0; z-index:3; pointer-events:none; }
@@ -170,7 +174,6 @@
     height:var(--stamp-h); display:grid; place-items:center;
   }
 
-  /* Chevron handles */
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
@@ -183,12 +186,11 @@
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
-  /* Side buttons (Settings / X) */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
   .selBtns > button{ touch-action:manipulation; }
   .selBtnHidden{ display:none !important; }
 
-  /* Month view */
+  /* Month view bits kept unchanged (minor shadow polish) */
   .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr; }
   .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:var(--ink) }
   .month-dow span{ text-align:center }
@@ -196,9 +198,7 @@
   .mcell{ position:relative; background:var(--bg); color:var(--ink); border-radius:8px; box-shadow:-1px -1px 0 0 var(--hi), 1px 1px 0 0 var(--lo); }
   .mcell .date{ position:absolute; top:8px; right:8px; font-weight:800; z-index:2; line-height:1; }
   .mcell.muted{ color:#8da0b3 }
-  .mcell.today{
-    box-shadow: var(--neu-shadow-outer);
-  }
+  .mcell.today{ box-shadow: var(--neu-shadow-outer); }
   .mcell.today::before{
     content:""; position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
     background:var(--pressed-navy);
@@ -208,12 +208,12 @@
     top:6px; right:6px; width:24px; height:24px; display:grid; place-items:center; color:var(--icon-active);
   }
 
-  /* ===== Neumorphic Settings Modal ===== */
+  /* ===== Neumorphic Settings Modal (with extra offset drop) ===== */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
   .modal{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     width:min(92vw, 360px); background:var(--bg); color:var(--ink);
-    border-radius:12px; box-shadow: var(--neu-shadow-outer); z-index:11;
+    border-radius:12px; box-shadow: var(--neu-shadow-outer), var(--neu-offset-shadow); z-index:11;
     display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
   }
   .modal .head{
@@ -235,7 +235,6 @@
   }
 
   .settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; }
-
   .neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow: var(--neu-shadow-inner); display:grid; gap:8px; }
   .label{ font-weight:800; font-size:13px; color:#223; }
 
@@ -255,6 +254,7 @@
   .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
   .menu-dot{ width:12px; height:12px; border-radius:50%; box-shadow: var(--neu-shadow-inner); }
 
+  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .chip{
     display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px;
     background:var(--bg); box-shadow: var(--neu-shadow-outer); font-weight:800; width:fit-content;
@@ -272,7 +272,6 @@
   }
 
   .row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
   .time-row{ display:grid; gap:8px; }
   .time-pair{
@@ -281,10 +280,6 @@
   }
   .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
   .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
-
-  .swatch-grid{ display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; }
-  .sw{ width:32px; height:32px; border-radius:10px; box-shadow: var(--neu-shadow-outer); cursor:pointer; border:1px solid rgba(0,0,0,.08); }
-  .sw.sel{ box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--pressed-navy), var(--neu-shadow-outer); }
 
   /* Stats */
   .stat-line{ display:flex; justify-content:space-between; font-weight:800; padding:8px 0; border-bottom:1px solid #d8e1ec; }
@@ -353,7 +348,7 @@
   </main>
 
 <script>
-console.info('Chrono r70 — neumorphic settings UI, activity ordering, defaults, notes, AM/PM picker, save leaves colored block.');
+console.info('Chrono r71 — modal adds offset shadow; fixed activity colors; blocks layer under mask (no outline/shadows); top chevron spacing mirrored.');
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -378,11 +373,6 @@ function HHMM_ampm(min){
   const m=((Math.round(min)|0)+1440)%1440; let h=Math.floor(m/60), r=m%60;
   const am = h<12; h = (h%12)||12; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')} ${am?'AM':'PM'}`;
 }
-function ampmToMin(str){
-  const m = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i); if(!m) return null;
-  let h=+m[1], mm=+m[2], ap=m[3].toUpperCase(); if(h<1||h>12||mm%15!==0) return null;
-  if(h===12) h=0; if(ap==='PM') h+=12; return h*60+mm;
-}
 
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
@@ -395,7 +385,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=26;
+const DB_NAME='chronoDB', DB_VERSION=27;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -455,51 +445,40 @@ async function getBlocksAll(){
   });
 }
 
-/* ===== Activities & Colors ===== */
-
-/* Ordered list per spec */
-const ACTIVITY_LIST = [
-  {key:'work', label:'Work'},
-  {key:'school', label:'School'},
-  {key:'commute', label:'Commute'},
-  {key:'chores', label:'Chores'},
-  {key:'errands', label:'Errands'},
-  {key:'meal', label:'Meal Time'},
-  {key:'hygiene', label:'Hygiene'},
-  {key:'childcare', label:'Child Care'},
-  {key:'selfcare', label:'Self Care'},
-  {key:'exercise', label:'Exercise'},
-  {key:'family', label:'Family Time'},
-  {key:'hobbies', label:'Hobbies'},
-  {key:'projects', label:'Projects'},
-  {key:'rr', label:'R & R'},
-  {key:'free', label:'Free Time'},
-  {key:'sleep', label:'Sleep'}
-];
-
-/* Preassigned default colors (placeholder tones).
-   ⚠️ Replace with your exact 18-swatch shades when you provide the hex values. */
+/* ===== Activities & Exact Palette =====
+   16 colors sampled to match the 4×4 swatch you provided (row-major). */
 const COLOR_SWATCHES = [
-  '#E5484D','#3E63DD','#22C55E','#EAB308','#F97316','#0EA5E9',
-  '#8B5CF6','#10B981','#EF4444','#7DD3FC','#94A3B8','#F59E0B',
-  '#14B8A6','#F43F5E','#A3E635','#111827','#6EE7B7','#FCA5A5'
+  '#F7D6D0', '#D6EEF5', '#BFD9CF', '#F7E08C',
+  '#E77D7A', '#4EA1D6', '#4FA684', '#E5B21A',
+  '#E3423A', '#1E6FB6', '#187245', '#D79516',
+  '#7F1D2D', '#0E3B5C', '#0A3A34', '#C1730D'
 ];
 
-/* Activity → default swatch index (you can remap after providing exact colors) */
-const ACTIVITY_COLOR = {
-  work:0, school:1, commute:3, chores:10, errands:9, meal:4, hygiene:5, childcare:15,
-  selfcare:6, exercise:2, family:16, hobbies:6, projects:12, rr:13, free:14, sleep:1
-};
+/* Ordered 16 activities (fixed colors; no color editing) */
+const ACTIVITY_LIST = [
+  {key:'work', label:'Work',       color: COLOR_SWATCHES[8]},  // red
+  {key:'school', label:'School',   color: COLOR_SWATCHES[5]},  // blue
+  {key:'commute', label:'Commute', color: COLOR_SWATCHES[7]},  // mustard/yellow
+  {key:'chores', label:'Chores',   color: COLOR_SWATCHES[4]},  // salmon
+  {key:'errands', label:'Errands', color: COLOR_SWATCHES[11]}, // orange/gold
+  {key:'meal', label:'Meal Time',  color: COLOR_SWATCHES[3]},  // pale yellow
+  {key:'hygiene', label:'Hygiene', color: COLOR_SWATCHES[1]},  // light blue
+  {key:'childcare', label:'Child Care', color: COLOR_SWATCHES[12]}, // burgundy
+  {key:'selfcare', label:'Self Care',   color: COLOR_SWATCHES[6]},  // teal
+  {key:'exercise', label:'Exercise',    color: COLOR_SWATCHES[10]}, // green
+  {key:'family', label:'Family Time',   color: COLOR_SWATCHES[15]}, // amber-brown
+  {key:'hobbies', label:'Hobbies',      color: COLOR_SWATCHES[14]}, // dark green
+  {key:'projects', label:'Projects',    color: COLOR_SWATCHES[13]}, // deep navy
+  {key:'rr', label:'R & R',             color: COLOR_SWATCHES[2]},  // sage
+  {key:'free', label:'Free Time',       color: COLOR_SWATCHES[0]},  // light blush
+  {key:'sleep', label:'Sleep',          color: COLOR_SWATCHES[9]}   // royal blue
+];
+
+function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
 
 /* Defaults: Firm for Work, Commute, School, Child Care; Flexible for others */
 function defaultFlexForActivity(key){
   return (key==='work'||key==='commute'||key==='school'||key==='childcare') ? 'firm' : 'flexible';
-}
-
-function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
-function colorForActivity(k){
-  const idx = ACTIVITY_COLOR[k]; const hex = COLOR_SWATCHES[idx ?? 0];
-  return hex || COLOR_SWATCHES[0];
 }
 
 /* selection (in-progress) */
@@ -534,7 +513,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* week view */
 let weekGeom=null;
 let overlayRoot=null;
-let _modalOpen=false;  // single modal guard
+let _modalOpen=false;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -552,10 +531,10 @@ function buildWeekView(){
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
+          <div class="blocksHost" id="blocksHost"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="now" id="nowMagnify" aria-hidden="true"></div>
           <div class="selHost" id="selHost" aria-hidden="false"></div>
-          <div class="selHost" id="blocksHost" aria-hidden="true"></div>
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
@@ -589,7 +568,7 @@ function buildWeekView(){
   loadAndDraw().catch(()=>{});
 }
 
-/* quick flash */
+/* helper UI flashes */
 function pressFlash(btn){
   btn.classList.add('is-pressed');
   btn.querySelector('svg').style.filter = 'drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow))';
@@ -669,6 +648,7 @@ function buildMask(geom, cols){
   const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
   const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
 
+  /* mask tiles which leave gutters/gaps visible */
   sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24));
   sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300));
   sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
@@ -688,7 +668,7 @@ function buildMask(geom, cols){
   }
 }
 
-/* Present lens (full hour block, border compensated) */
+/* Present lens */
 function paintNowMagnifier(geom){
   const nowEl=document.getElementById('nowMagnify');
   const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
@@ -711,7 +691,7 @@ function paintNowMagnifier(geom){
   nowEl.style.display='block';
 }
 
-/* create on tap — prompt if new selection touches edges */
+/* create on tap */
 async function onWeekGridTap(e){
   if(!weekGeom) return;
   destroySelButtons();
@@ -735,7 +715,7 @@ async function onWeekGridTap(e){
   }
 }
 
-/* helpers */
+/* geometry helpers */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 function boundsFromSeg(seg){
@@ -748,7 +728,7 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, offsetTop:0, colWidth, topY, botY, height};
 }
 
-/* chevrons (identical, just flipped) */
+/* chevrons (identical, flipped) */
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
   const w = Math.max(24, colW - padX*2);
@@ -771,7 +751,7 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* draw stored blocks (current week + simple recurrences) */
+/* draw stored blocks (under mask) */
 async function drawBlocks(){
   const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
   host.innerHTML='';
@@ -789,7 +769,7 @@ async function drawBlocks(){
         if(weeksDiff>=0) instances.push({...b, weekSt:wst});
       }
     }else if(b.recurrence==='monthly'){
-      if(b.weekSt===wst) instances.push(b); // (placeholder monthly)
+      if(b.weekSt===wst) instances.push(b); // placeholder monthly
     }
   }
 
@@ -797,23 +777,16 @@ async function drawBlocks(){
     const b=boundsFromSeg(seg);
     const el=document.createElement('div');
     el.className='blockRect';
-    el.style.left = `${b.offsetLeft+2}px`;
-    el.style.top = `${b.topY+2}px`;
-    el.style.width = `${b.colWidth-4}px`;
-    el.style.height = `${b.height-4}px`;
-    const color = seg.colorHex || colorForActivity(seg.activityKey);
-    el.style.background = hexWithAlpha(color, .22);
-    el.style.borderColor = color;
+    el.style.left = `${b.offsetLeft}px`;
+    el.style.top = `${b.topY}px`;
+    el.style.width = `${b.colWidth}px`;
+    el.style.height = `${b.height}px`;
+    el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLOR_SWATCHES[8];
     host.appendChild(el);
   }
 }
-function hexWithAlpha(hex, a){
-  const h = hex.replace('#',''); const bigint=parseInt(h,16);
-  const r=(bigint>>16)&255, g=(bigint>>8)&255, b=(bigint)&255;
-  return `rgba(${r},${g},${b},${a})`;
-}
 
-/* draw selection + side cluster (that avoids handles) */
+/* selection + side cluster */
 function drawSelection(){
   const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   if(!overlayRoot) ensureOverlay();
@@ -833,7 +806,7 @@ function drawSelection(){
 
   const bothVisible = parentHere && childHere;
 
-  const handleCenters=[]; // for avoidance
+  const handleCenters=[];
 
   segs.forEach((entry, idx)=>{
     const seg=entry.seg, name=entry.name;
@@ -910,7 +883,7 @@ function drawSelection(){
 
   ensureSelButtons();
 
-  // Position cluster using union bounds, then nudge to avoid handle overlap
+  // Position side cluster relative to union bounds (unchanged)
   const visibleBounds = segs.map(s=>({name:s.name, b:boundsFromSeg(s.seg)}));
   const topMin = Math.min(...visibleBounds.map(v=>v.b.topY));
   const botMax = Math.max(...visibleBounds.map(v=>v.b.botY));
@@ -962,7 +935,7 @@ function drawSelection(){
   attachViewportRepositioners();
 }
 
-/* Drag & spillover */
+/* Drag & spillover (unchanged logic) */
 function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 function dur(seg){ return seg? seg.endMin - seg.startMin : 0; }
 
@@ -1116,7 +1089,7 @@ function sanitizeChain(){
   if(chain.dir==='prev'){ p.startMin=0; c.endMin=1440; }
 }
 
-/* month & day views (unchanged) */
+/* Month/Day views (unchanged) */
 function buildMonthView(){
   const base = new Date(); activeDayISO = toISO(base);
   const first = new Date(base.getFullYear(), base.getMonth(), 1);
@@ -1189,7 +1162,7 @@ function buildDayView(){
     <div class="wrap">
       <div class="head"><div></div><div class="title">Day</div><div></div></div>
       <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono r70</div>
+        <div class="watermark">Chrono r71</div>
       </div>
     </div>
   `;
@@ -1245,7 +1218,7 @@ function throttle(fn, ms){
   }
 }
 
-/* Side cluster plumbing */
+/* Side cluster */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
   if(window.__selBtns && document.body.contains(window.__selBtns)) return;
@@ -1280,7 +1253,6 @@ function positionSelButtons({left, top}){
   wrap.style.left = `${Math.round(left)}px`;
   wrap.style.top  = `${Math.round(top)}px`;
 }
-
 function repositionSelButtons(){
   if(!chain || !weekGeom || !window.__selBtns) return;
 
@@ -1310,7 +1282,7 @@ function repositionSelButtons(){
   positionSelButtons({left, top});
 }
 
-/* ===== Settings & Stats (Neumorphic) ===== */
+/* ===== Settings (colors fixed, name editable, notes) ===== */
 
 function onGearTap(ev){
   ev.stopPropagation();
@@ -1328,15 +1300,15 @@ function openSettingsModal(){
   const startDow = SHORT_DOW[startDay.getDay()];
 
   const defaults = {
-    activityKey: null, // none selected until user picks (placeholder mode)
+    activityKey: null,
     colorHex: null,
     note: '',
     fromMin: parent?.startMin ?? 480,
     toMin: parent?.endMin ?? 540,
-    recurrence: 'reoccurring', // 'reoccurring' | 'week' | 'month'
-    flexibility: 'flexible',   // default until activity chosen; will update after pick
-    notify: 'reoccurring',     // 'reoccurring' | 'week' | 'month' | 'off'
-    privacy: 'private'         // 'private' | 'visible'
+    recurrence: 'reoccurring',
+    flexibility: 'flexible',
+    notify: 'reoccurring',
+    privacy: 'private'
   };
 
   modal.innerHTML = `
@@ -1365,7 +1337,7 @@ function openSettingsModal(){
         </div>
       </div>
 
-      <!-- Time (AM/PM with day initials; picker-only) -->
+      <!-- Time -->
       <div class="neu-field">
         <div class="time-row">
           <div class="time-pair">
@@ -1377,7 +1349,6 @@ function openSettingsModal(){
             <button class="time-btn" id="toBtn" type="button">${HHMM_ampm(defaults.toMin)}</button>
           </div>
         </div>
-        <!-- hidden inputs to trigger native pickers; keyboard input suppressed -->
         <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
         <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
       </div>
@@ -1418,12 +1389,6 @@ function openSettingsModal(){
       <div class="row">
         <button class="btn" id="statsBtn">Statistics</button>
       </div>
-
-      <!-- Color palette editor (opens from chip edit) -->
-      <div class="neu-field" id="colorField" style="display:none">
-        <div class="label">Choose Color</div>
-        <div class="swatch-grid" id="swatchGrid"></div>
-      </div>
     </div>
 
     <div class="foot">
@@ -1437,16 +1402,16 @@ function openSettingsModal(){
   const closeAll = ()=>{ veil.remove(); modal.remove(); };
   veil.addEventListener('click', ()=>{ confirmExit(closeAll); });
 
-  // Build activity list menu
+  // Build activity list menu (fixed colors)
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
-    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = colorForActivity(a.key);
+    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color;
     const label = document.createElement('span'); label.textContent = a.label;
     row.appendChild(dot); row.appendChild(label);
     row.addEventListener('click', ()=>{
       defaults.activityKey = a.key;
-      defaults.colorHex = colorForActivity(a.key);
+      defaults.colorHex = a.color;
       defaults.flexibility = defaultFlexForActivity(a.key);
       modal.querySelector('#assignLabel').textContent = a.label;
       modal.querySelector('#assignMenu').classList.remove('open');
@@ -1454,7 +1419,7 @@ function openSettingsModal(){
       // reveal chip + note
       modal.querySelector('#selectedChipRow').style.display = '';
       modal.querySelector('#noteRow').style.display = '';
-      const chipDot = modal.querySelector('#actDot'); chipDot.style.background = defaults.colorHex;
+      modal.querySelector('#actDot').style.background = a.color;
       modal.querySelector('#actName').textContent = a.label;
       // reflect default flex in control
       modal.querySelector('#flexSel span').textContent = (defaults.flexibility==='firm'?'Firm':'Flexible');
@@ -1468,30 +1433,12 @@ function openSettingsModal(){
     modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false');
   });
 
-  // Rename & color edit
+  // Rename only (color is fixed)
   modal.querySelector('#renameBtn').addEventListener('click', ()=>{
     const nameEl = modal.querySelector('#actName');
     const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14);
     if(next && next.trim().length){ nameEl.textContent = next.trim(); }
-    // show color palette for this activity
-    buildSwatches();
-    modal.querySelector('#colorField').style.display='';
   });
-
-  function buildSwatches(){
-    const grid = modal.querySelector('#swatchGrid'); grid.innerHTML='';
-    COLOR_SWATCHES.forEach((hex, idx)=>{
-      const sw = document.createElement('div'); sw.className='sw'; sw.style.background=hex;
-      if(hex===defaults.colorHex) sw.classList.add('sel');
-      sw.addEventListener('click', ()=>{
-        defaults.colorHex = hex;
-        grid.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel'));
-        sw.classList.add('sel');
-        modal.querySelector('#actDot').style.background = hex;
-      });
-      grid.appendChild(sw);
-    });
-  }
 
   // Dropdown helpers
   hookMenu(modal, '#recurringSel','#recurringMenu', (val,label)=>{ defaults.recurrence=val; modal.querySelector('#recurringSel span').textContent=label; });
@@ -1499,56 +1446,36 @@ function openSettingsModal(){
   hookMenu(modal, '#notifSel','#notifMenu', (val,label)=>{ defaults.notify=val; modal.querySelector('#notifSel span').textContent=label; });
   hookMenu(modal, '#privacySel','#privacyMenu', (val,label)=>{ defaults.privacy=val; modal.querySelector('#privacySel span').textContent=label; });
 
-  // Time pickers (AM/PM, 15-min, <=24h consecutive)
+  // Time pickers
   const fromBtn = modal.querySelector('#fromBtn');
   const toBtn   = modal.querySelector('#toBtn');
   const fromPk  = modal.querySelector('#fromPicker');
   const toPk    = modal.querySelector('#toPicker');
-  // prevent typing
   fromPk.addEventListener('keydown', e=>e.preventDefault());
   toPk.addEventListener('keydown', e=>e.preventDefault());
-
   function setPickerValue(input, minutes){
     const h = Math.floor(minutes/60), m = minutes%60;
     input.value = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
   setPickerValue(fromPk, defaults.fromMin);
   setPickerValue(toPk, defaults.toMin);
-
   fromBtn.addEventListener('click', ()=>{ fromPk.showPicker?.(); });
   toBtn.addEventListener('click',   ()=>{ toPk.showPicker?.(); });
-
   fromPk.addEventListener('change', ()=>{
     const [h,m]=fromPk.value.split(':').map(Number);
-    const mins = h*60+m;
-    defaults.fromMin = snap15(mins);
-    // enforce at least +15 and <=24h
-    if(defaults.toMin <= defaults.fromMin) defaults.toMin = clamp(defaults.fromMin+15, 0, 24*60);
+    const mins = snap15(h*60+m);
+    defaults.fromMin = mins;
+    if(defaults.toMin <= defaults.fromMin) defaults.toMin = clamp(defaults.fromMin+15, 0, 1440);
     fromBtn.textContent = HHMM_ampm(defaults.fromMin);
-    updateTimeDays();
     setPickerValue(toPk, defaults.toMin);
   });
   toPk.addEventListener('change', ()=>{
     const [h,m]=toPk.value.split(':').map(Number);
-    let mins = h*60+m;
-    mins = snap15(mins);
-    // Block >24h (same-day only unless we have spillover chain)
-    const maxEnd = chain.child ? 1440 : 1440; // still <= 24h window overall
-    if(mins <= defaults.fromMin) mins = clamp(defaults.fromMin+15, 0, maxEnd);
+    let mins = snap15(h*60+m);
+    if(mins <= defaults.fromMin) mins = clamp(defaults.fromMin+15, 0, 1440);
     defaults.toMin = mins;
     toBtn.textContent = HHMM_ampm(defaults.toMin);
-    updateTimeDays();
   });
-
-  function updateTimeDays(){
-    const fromDay = new Date(parent.weekSt + parent.dayIdx*DAY_MS);
-    const toBase = new Date(parent.weekSt + parent.dayIdx*DAY_MS);
-    let toDay = toBase;
-    if(chain.child && defaults.toMin===1440) toDay = addDays(toBase,1);
-    modal.querySelector('#fromDay').textContent = SHORT_DOW[fromDay.getDay()];
-    modal.querySelector('#toDay').textContent   = SHORT_DOW[toDay.getDay()];
-  }
-  updateTimeDays();
 
   // Stats
   modal.querySelector('#statsBtn').addEventListener('click', async ()=>{
@@ -1563,7 +1490,6 @@ function openSettingsModal(){
       alert('Please assign an activity.');
       return;
     }
-    // validate times: consecutive block, <=24h, step 15 ensured by picker
     if(!(defaults.toMin > defaults.fromMin)){
       alert('End time must be after start time.');
       return;
@@ -1572,7 +1498,7 @@ function openSettingsModal(){
     await finalizeBlock({
       actKey: defaults.activityKey,
       actName: modal.querySelector('#actName').textContent,
-      colorHex: defaults.colorHex || colorForActivity(defaults.activityKey),
+      colorHex: defaults.colorHex,     // fixed per activity
       from: defaults.fromMin,
       to: defaults.toMin,
       recurVal: defaults.recurrence,
@@ -1608,12 +1534,11 @@ function confirmExit(done){
   });
 }
 
-/* finalize: save block(s), clear selection, paint colored block(s) */
+/* finalize: save block(s), clear selection, leave colored block(s) under mask */
 async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
   if(!chain || !chain.parent) return;
-
-  // base block for parent segment
   const parent = chain.parent;
+
   const base = {
     id: 'b'+Date.now(),
     weekSt: parent.weekSt,
@@ -1631,7 +1556,6 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
   };
   await putBlock(base);
 
-  // spillover child handled if present (keeps child minutes as set by selector)
   if(chain.child){
     const child = chain.child;
     const cBlock = {
@@ -1645,14 +1569,13 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
     await putBlock(cBlock);
   }
 
-  // clear selection → leave colored blocks
   chain = null;
   await saveChain(null);
   repaintWeek(true); drawSelection(); drawBlocks();
 }
 
-/* Statistics modal */
-async function openStatsModal(activityName, color){
+/* Statistics modal (unchanged core) */
+async function openStatsModal(activityName){
   const veil=document.createElement('div'); veil.className='veil';
   const modal=document.createElement('div'); modal.className='modal';
   modal.innerHTML = `
@@ -1673,7 +1596,6 @@ async function openStatsModal(activityName, color){
   modal.querySelector('#avgW').textContent = stats.avgWeek.toFixed(2);
   modal.querySelector('#avgM').textContent = stats.avgMonth.toFixed(2);
   modal.querySelector('#avgY').textContent = stats.avgYear.toFixed(2);
-
   const pct = stats.completionPct;
   const pctEl = modal.querySelector('#pct');
   pctEl.textContent = `${Math.round(pct)}%`;
@@ -1715,13 +1637,12 @@ async function computeActivityStats(activityName){
   const weekH = sumHours(oneWeek);
   const monthH = sumHours(oneMonth);
   const yearH = sumHours(oneYear);
-
-  const completionPct = 100; // placeholder until completion tracking exists
+  const completionPct = 100; // placeholder
 
   return { avgWeek: weekH, avgMonth: monthH, avgYear: yearH, completionPct };
 }
 
-/* Clear selection */
+/* Clear selection button */
 async function onXTap(ev){
   ev.stopPropagation();
   if(!chain) return;
@@ -1732,7 +1653,7 @@ async function onXTap(ev){
   overlayRoot && (overlayRoot.innerHTML='');
 }
 
-/* viewport listeners once */
+/* viewport handlers */
 let _vpAttached=false;
 function attachViewportRepositioners(){
   if(_vpAttached) return;
@@ -1758,4 +1679,3 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-
