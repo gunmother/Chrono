@@ -3,190 +3,157 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Chrono — r81 (Week-only)</title>
+<title>Chrono â€” r82 (Week-only test build)</title>
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
 <style>
-/* ===========================
-   Chrono r81 — Week-only build
-   Focused fixes:
-   - ISS-001 overlay/clipping: stamps/chevrons render above grid (no cropping)
-   - ISS-002/003 anchored midnight editing (spill forward/back)
-   - ISS-004 no full-day auto-select on back spill; handles remain
-   - ISS-005 unified semantics in Settings for spillover pair
-   =========================== */
-:root{
-  --bg:#e3eaf2; --ink:#42586d;
-  --icon-inactive:#42586d; --icon-active:#4ff7ff;
-  --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
+  :root{
+    --bg:#e3eaf2; --ink:#42586d;
+    --icon-inactive:#42586d; --icon-active:#4ff7ff;
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
 
-  --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
-  --gap:24px; --radius:12px;
+    --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
+    --gap:24px; --radius:12px;
 
-  --border:#c6cfda; --grid-line:#cfd9e5;
-  --chart-bg:#d1dce8; --mask-surface: var(--bg);
+    --border:#c6cfda; --grid-line:#cfd9e5;
+    --chart-bg:#d1dce8; --mask-surface: var(--bg);
 
-  --dow-h:32px; --label-size:12px;
+    --dow-h:32px; --label-size:12px;
 
-  --stamp-gap:6px; --stamp-h:26px;
-  --handle-height-mult:1.6;
-  --handle-gap:10px;
-  --chev-stroke-w:2.2;
-  --handle-stroke:#5e7286;
+    --stamp-gap:6px; --stamp-h:26px;
+    --handle-height-mult:1.6;
+    --handle-gap:10px;
+    --chev-stroke-w:2.2;
+    --handle-stroke:#5e7286;
 
-  --neu-shadow-outer:
-    calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-     var(--off)         var(--off)         var(--blur) var(--lo);
-  --neu-shadow-inner:
-     inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
-     inset var(--off)         var(--off)         var(--blur) var(--lo);
-  --neu-offset-shadow: 8px 10px 20px rgba(0,0,0,.22);
-}
-html,body{
-  height:100%; margin:0; background:var(--bg); color:var(--ink);
-  font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
-  -webkit-tap-highlight-color: transparent;
-}
-*{ box-sizing:border-box; }
-.app{
-  width:clamp(320px, 96vw, 520px);
-  height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
-  margin:max(16px, env(safe-area-inset-top)) auto;
-  display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
-}
-#screen{
-  flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
-  box-shadow: var(--neu-shadow-outer);
-  position:relative; overflow:hidden;
-}
-.controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
-.neu-btn{
-  --btn-d: calc((100% - (3 * var(--gap))) / 4);
-  flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
-  border-radius:50%; border:none; outline:none; cursor:pointer;
-  background:var(--bg); display:grid; place-items:center;
-  box-shadow: var(--neu-shadow-outer);
-  transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
-}
-.neu-btn svg{
-  width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
-  fill:none; stroke-linecap:round; stroke-linejoin:round;
-  filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
-}
-.neu-btn.is-pressed{
-  background:
-    radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
-    var(--pressed-navy);
-  box-shadow:
-     var(--off)         var(--off)         var(--blur) var(--hi),
-    calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
-}
-.neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
-.neu-btn:active{ transform:scale(.985); }
+    --neu-shadow-outer:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    --neu-shadow-inner:
+       inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       inset var(--off)         var(--off)         var(--blur) var(--lo);
+    --neu-offset-shadow: 8px 10px 20px rgba(0,0,0,.22);
+  }
+  html,body{
+    height:100%; margin:0; background:var(--bg); color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  *{ box-sizing:border-box; }
 
-/* Head + grid */
-.wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
-.head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
-.title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .app{
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin:max(16px, env(safe-area-inset-top)) auto;
+    display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
+  }
 
-.grid-area{ position:relative; }
-.top-row{ position:absolute; top:0; left:0; right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0; grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
-.day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) }
+  #screen{
+    flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
+    box-shadow: var(--neu-shadow-outer);
+    position:relative; overflow:hidden;
+  }
 
-.grid{
-  position:absolute; top:var(--dow-h); left:0; right:0; bottom:0;
-  background:var(--chart-bg);
-  border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
-}
-.hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:60px; pointer-events:none; z-index:0 }
-.hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
+  .controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
+  .neu-btn{
+    --btn-d: calc((100% - (3 * var(--gap))) / 4);
+    flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
+    border-radius:50%; border:none; outline:none; cursor:pointer;
+    background:var(--bg); display:grid; place-items:center;
+    box-shadow: var(--neu-shadow-outer);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
+  }
+  .neu-btn svg{
+    width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
+    fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-btn.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
+      var(--pressed-navy);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+  .neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
+  .neu-btn:active{ transform:scale(.985); }
 
-/* columns */
-.gridInner{ position:absolute; inset:0; display:grid; grid-template-columns:60px repeat(7, 1fr); }
-.colHost{ grid-column:2 / -1; position:relative; }
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
-.blocksHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
-.blockRect{ position:absolute; border-radius:10px; border:none; cursor:pointer; }
+  .grid-area{ position:relative; }
+  .grid{
+    position:absolute; top:var(--dow-h); left:0; right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+  }
+  .top-row{ position:absolute; top:0; left:0; right:0; height:var(--dow-h); display:grid; align-items:center; grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:60px; pointer-events:none; z-index:0 }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
 
-/* ===== Overlay fix (ISS-001): Use fixed overlay root outside clipped grid ===== */
-#overlayRoot{ position:fixed; inset:0; pointer-events:none; z-index:999; }
-.overlayLayer{ position:absolute; pointer-events:none; }
-.marqueeRect, .focusRect{
-  position:absolute; box-sizing:border-box; background:transparent;
-  border:5px solid #fff; border-radius:12px;
-}
-.marqueeRect{ box-shadow: 0 0 12px 6px rgba(79,247,255,.75); }
-.focusRect{ box-shadow:none; }
+  .blocksHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
+  .blockRect{ position:absolute; border-radius:10px; border:none; cursor:pointer; }
 
-.stamp{
-  position:absolute; left:50%; transform:translateX(-50%);
-  background:var(--pressed-navy); color:var(--icon-active);
-  border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
-  font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
-  pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
-  box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
-}
+  /* Fixed overlay that is never clipped by the grid */
+  #overlayRoot{ position:fixed; inset:0; pointer-events:none; z-index:999; }
+  .overlayLayer{ position:absolute; pointer-events:none; }
+  .marqueeRect, .focusRect{
+    position:absolute; box-sizing:border-box; background:transparent;
+    border:5px solid #fff; border-radius:12px;
+  }
+  .marqueeRect{ box-shadow: 0 0 12px 6px rgba(79,247,255,.75); }
+  .focusRect{ box-shadow:none; }
 
-/* Handles */
-.handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; touch-action:none; display:grid; place-items:center; }
-.chev-chip{
-  width:100%; height:100%; border-radius:14px;
-  background:var(--bg);
-  box-shadow: var(--neu-shadow-outer);
-  display:grid; place-items:center;
-}
-.chev path{
-  fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
-  filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
-}
-.liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
+  .stamp{
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
+    pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
+    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+  }
 
-/* Selector / block action buttons */
-.selBtns{ position:fixed; z-index:1000; display:grid; gap:8px; pointer-events:auto; }
-.neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; }
-.neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-.neu-btn--sm.drag-on{ background:var(--pressed-navy); }
-.neu-btn--sm.drag-on svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
+  .handle{ position:absolute; left:0; width:100%; cursor:ns-resize; touch-action:none; display:grid; place-items:center;
+           pointer-events:auto; /* allow interaction even though overlayRoot disables it */ }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px;
+    background:var(--bg);
+    box-shadow: var(--neu-shadow-outer);
+    display:grid; place-items:center;
+  }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
 
-/* Modal */
-.veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1100; }
-.modal{
-  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:min(92vw, 360px); background:var(--bg); color:var(--ink);
-  border-radius:12px; box-shadow: var(--neu-shadow-outer), var(--neu-offset-shadow); z-index:1110;
-  display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
-}
-.modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; }
-.modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow:var(--neu-shadow-inner); }
-.btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); }
-.btn.icon{ width:44px; height:44px; display:grid; place-items:center; }
-.btn.icon svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-.settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; }
-.neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow:var(--neu-shadow-inner); display:grid; gap:8px; }
-.neu-select{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); cursor:pointer; user-select:none; }
-.neu-select .ph{ opacity:.7; }
-.neu-select svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-.neu-menu{ display:none; }
-.neu-menu.open{ display:block; }
-.menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow:var(--neu-shadow-outer); overflow:hidden; }
-.menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; }
-.menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
-.menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; border:none; }
-.row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; }
-.dot{ width:12px; height:12px; border-radius:50%; border:none; box-shadow:none; }
-.chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
-.chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
-.note-input{ background:var(--bg); border:none; outline:none; border-radius:12px; padding:10px 12px; font-weight:700; box-shadow:var(--neu-shadow-inner); }
-.row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.time-row{ display:grid; gap:8px; }
-.time-pair{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); }
-.time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
-.time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
+  .selBtns{ position:fixed; z-index:1000; display:grid; gap:8px; pointer-events:auto; }
+  .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
 
-/* Screensaver */
-.screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 }
-.screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; }
+  .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:1100; }
+  .modal{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 360px); background:var(--bg); color:var(--ink);
+    border-radius:12px; box-shadow: var(--neu-shadow-outer), var(--neu-offset-shadow); z-index:1110;
+    display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
+  }
+  .modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; }
+  .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow:var(--neu-shadow-inner); }
+  .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); }
+  .settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; }
+  .neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow:var(--neu-shadow-inner); display:grid; gap:8px; }
+  .neu-select{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); cursor:pointer; user-select:none; }
+  .neu-menu{ display:none; }
+  .neu-menu.open{ display:block; }
+  .menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow:var(--neu-shadow-outer); overflow:hidden; }
+  .menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; }
+  .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
+
+  .screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 }
+  .screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; }
 </style>
 </head>
 <body>
@@ -194,7 +161,7 @@ html,body{
     <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
     <nav class="controls" role="group" aria-label="Primary views">
-      <button class="neu-btn" aria-label="Day view (disabled)" aria-pressed="false" data-view="day" title="Day (disabled)">
+      <button class="neu-btn" aria-label="Day view (disabled)" data-view="day" title="Day (disabled)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="5.5"/>
           <line x1="12" y1="2"  x2="12" y2="5"/>
@@ -220,7 +187,7 @@ html,body{
         </svg>
       </button>
 
-      <button class="neu-btn" aria-label="Month view (disabled)" aria-pressed="false" data-view="month" title="Month (disabled)">
+      <button class="neu-btn" aria-label="Month view (disabled)" data-view="month" title="Month (disabled)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
@@ -232,7 +199,7 @@ html,body{
         </svg>
       </button>
 
-      <button class="neu-btn" aria-label="To-Do (disabled)" aria-pressed="false" data-view="todo" title="To-Do (disabled)">
+      <button class="neu-btn" aria-label="To-Do (disabled)" data-view="todo" title="To-Do (disabled)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="14" rx="3"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
@@ -242,10 +209,10 @@ html,body{
     </nav>
   </main>
 
-<div id="overlayRoot" aria-hidden="true"></div>
+  <div id="overlayRoot" aria-hidden="true"></div>
 
 <script>
-/* Chrono r81 — Week-only build with spillover fixes */
+/* Chrono r82 â€” week-only test build focusing on selector overlay + spillover integrity */
 
 const screenEl = document.getElementById('screen');
 const overlayRoot = document.getElementById('overlayRoot');
@@ -257,26 +224,20 @@ let visibleWeekFirst = weekStart(new Date());
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
 function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
-function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
 
-new ResizeObserver(()=> {
-  const w = screenEl.getBoundingClientRect().width;
-  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-}).observe(screenEl);
-
-/* storage (idb with ls fallback) */
-const DB_NAME='chronoDB', DB_VERSION=33;
+/* storage */
+const DB_NAME='chronoDB', DB_VERSION=34;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -315,7 +276,7 @@ async function storageGet(k){
   });
 }
 
-/* blocks store */
+/* block store */
 async function putBlock(b){
   const db = await idbOpen(); if(!db) return;
   return new Promise((res,rej)=>{
@@ -342,7 +303,7 @@ async function getBlocksAll(){
   });
 }
 
-/* palette + activities */
+/* colors/activities */
 const COLORS = ['#F7D6D0','#D6EEF5','#BFD9CF','#F7E08C','#E77D7A','#4EA1D6','#4FA684','#E5B21A','#E3423A','#1E6FB6','#187245','#D79516','#7F1D2D','#0E3B5C','#0A3A34','#C1730D'];
 const ACTIVITY_LIST = [
   {key:'work', label:'Work',       color: COLORS[8]},
@@ -363,49 +324,6 @@ const ACTIVITY_LIST = [
   {key:'sleep', label:'Sleep',          color: COLORS[9]}
 ];
 function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
-function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
-
-/* ---------- Week view ---------- */
-buttons.forEach(btn=> btn.addEventListener('click', e=>{
-  const b=e.currentTarget; const v=b.dataset.view;
-  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
-  if(v==='week'){ activeView='week'; b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); render(); }
-  else{ activeView=v; render(); }
-}));
-
-function buildWeekView(){
-  screenEl.innerHTML = `
-    <div class="wrap">
-      <div class="head">
-        <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="title" id="weekTitle"></div>
-        <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-      </div>
-
-      <div class="grid-area">
-        <div class="gridInner">
-          <div></div>
-          <div class="top-row" id="dowPills"></div>
-          <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
-            <div class="blocksHost" id="blocksHost"></div>
-          </div>
-          <div class="hours" id="weekHours"></div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(true); };
-  document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(true); };
-  repaintWeek();
-  const grid = document.getElementById('weekGrid');
-  grid.addEventListener('click', onWeekGridTap);
-  new ResizeObserver(()=>{ measureGrid(); drawBlocks(); drawOverlay(); positionSelectorButtons(); positionBlockButtons(currentSelectionPrimary()||null,true); }).observe(grid);
-  drawBlocks();
-}
 
 /* geometry */
 let gridGeom=null;
@@ -422,26 +340,6 @@ function measureGrid(){
   const slotY=[0]; for(let hr=0;hr<24;hr++){ const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4; const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1; for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]); }
   gridGeom={rect:r,totalW,totalH,colW,colX,rowH,rowY,slotY};
 }
-function repaintWeek(measured=false){
-  const first=visibleWeekFirst, last=addDays(first,6);
-  const t=`${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
-  document.getElementById('weekTitle').textContent = t;
-  const pills=document.getElementById('dowPills'); pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
-  const gh=document.getElementById('weekHours'); gh.innerHTML=''; measureGrid(); for(let i=0;i<24;i++){ const s=document.createElement('div'); s.className='hour-stamp'; s.textContent = hourToAMPM(i); s.style.top=((gridGeom.rowY[i]+gridGeom.rowY[i+1])/2)+'px'; gh.appendChild(s); }
-  drawBlocks(); drawOverlay();
-}
-
-/* instances */
-async function getInstancesForWeek(allBlocks){
-  const wst = getVisibleWeekStamp();
-  const instances = [];
-  for(const b of allBlocks){
-    if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); }
-    else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); }
-    else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); }
-  }
-  return instances;
-}
 function idxFromMin(min){ return clamp(Math.round(min/15), 0, 96); }
 function boundsFromSeg(seg){
   const colLeft = gridGeom.colX[seg.dayIdx];
@@ -453,6 +351,66 @@ function boundsFromSeg(seg){
   const botY  = gridGeom.slotY[idx2];
   const height= Math.max(1, botY - topY);
   return {offsetLeft:colLeft, colWidth, topY, botY, height};
+}
+
+/* week view build */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="neu-btn--sm" title="Previous">&#9664;</button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="neu-btn--sm" title="Next">&#9654;</button>
+      </div>
+
+      <div class="grid-area">
+        <div class="top-row" id="dowPills"></div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
+          <div class="blocksHost" id="blocksHost"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(true); };
+  document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(true); };
+
+  const grid = document.getElementById('weekGrid');
+  grid.addEventListener('click', onWeekGridTap);
+  new ResizeObserver(()=>{ measureGrid(); drawBlocks(); drawOverlay(); positionSelectorButtons(); }).observe(grid);
+
+  repaintWeek();
+  drawBlocks();
+}
+
+/* top row + hours + title */
+function repaintWeek(){
+  const first=visibleWeekFirst, last=addDays(first,6);
+  document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} â€“ ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
+
+  const pills=document.getElementById('dowPills'); pills.innerHTML='';
+  for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
+
+  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  measureGrid();
+  for(let i=0;i<24;i++){
+    const s=document.createElement('div'); s.className='hour-stamp';
+    s.textContent = hourToAMPM(i);
+    s.style.top=((gridGeom.rowY[i]+gridGeom.rowY[i+1])/2)+'px';
+    gh.appendChild(s);
+  }
+}
+
+/* blocks render */
+async function getInstancesForWeek(allBlocks){
+  const wst = getVisibleWeekStamp();
+  const instances = [];
+  for(const b of allBlocks){
+    if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); }
+    else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); }
+    else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); }
+  }
+  return instances;
 }
 async function drawBlocks(){
   const host=document.getElementById('blocksHost'); if(!host || !gridGeom) return;
@@ -469,13 +427,13 @@ async function drawBlocks(){
     el.style.top = `${b.topY}px`;
     el.style.width = `${b.colWidth}px`;
     el.style.height = `${b.height}px`;
-    el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLORS[8];
-    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectBlockUnified(seg); });
+    el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || '#E3423A';
+    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectBlock(seg); });
     host.appendChild(el);
   }
 }
 
-/* Busy intervals + clamp */
+/* busy windows + helpers */
 function sortByStart(a,b){ return a.startMin - b.startMin; }
 function sameWeekDay(seg, weekSt, dayIdx){ return seg.weekSt===weekSt && seg.dayIdx===dayIdx; }
 async function dayBusyIntervals(weekSt, dayIdx, excludeGroupIdOrId=null){
@@ -520,17 +478,14 @@ function largestFreeStartingAt(atMin, busy, minLen=15){
   return null;
 }
 
-/* -------- Overlay (ISS-001) -------- */
+/* overlay drawing */
 function clearOverlay(){ overlayRoot.replaceChildren(); }
 function overlayGroup(){ const g=document.createElement('div'); g.className='overlayLayer'; overlayRoot.appendChild(g); return g; }
 
-/* -------- Selector state ---------- */
-const CHAIN_KEY='selChain_v15';
-async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
-async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
-let chain=null; // { parent:{weekSt,dayIdx,startMin,endMin}, child:{...}|null, dir:'next'|'prev'|null }
-
-function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
+/* selector state */
+let chain=null; // { parent:{weekSt,dayIdx,startMin,endMin}, child:{...}|null }
+let selected=null;
+let _modalOpen=false;
 
 function onWeekGridTap(e){
   if(_modalOpen) return;
@@ -542,31 +497,19 @@ function onWeekGridTap(e){
   const minuteFloat = clamp(relY / gridGeom.totalH, 0, 1) * 1440;
   let startMin = snap15(Math.floor(minuteFloat/60)*60);
   let endMin   = clamp(startMin + 60, 0, 1440);
-
-  // find free window
   dayBusyIntervals(getVisibleWeekStamp(), dayIdx, null).then(busy=>{
     const fit = largestFreeStartingAt(startMin, busy, 15);
-    if(!fit) { clearSelector(); return; }
+    if(!fit){ clearSelector(); return; }
     endMin = Math.min(fit.start + 60, fit.end);
     if(endMin - fit.start < 15){ clearSelector(); return; }
-    chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null, dir: null };
-    saveChain(chain);
-    clearBlockFocus();
+    chain = { parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null };
+    selected = null;
     drawOverlay();
     showSelectorButtons();
   });
 }
 
-/* Draw overlay (selector or focus) */
-let _modalOpen=false;
-function drawOverlay(){
-  clearOverlay();
-  if(!gridGeom) return;
-  if(chain){ drawSelectorOverlay(); }
-  else if(selectedGroup){ focusGroup(selectedGroup); }
-  else if(selectedBlock){ drawBlockFocus(selectedBlock); }
-}
-
+/* draw selector overlay (parent + optional child) */
 function chevronsSVG(dir, w, rowH){
   const padX = 8;
   const width = Math.max(24, w - padX*2);
@@ -581,11 +524,11 @@ function chevronsSVG(dir, w, rowH){
   const d3 = (dir==='up'? triUp(gap*3.4) : triDn(gap*3.4));
   return `<div class="chev"><svg width="${width}" height="${h}" viewBox="0 0 ${width} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
 }
+function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 
-let selectedBlock=null, selectedGroup=null, dragBlockMode=false, dragBtnRef=null, liftEl=null;
-
-function drawSelectorOverlay(){
-  if(!chain) return;
+function drawOverlay(){
+  clearOverlay();
+  if(!gridGeom) return;
   const group = overlayGroup();
 
   const rowH = gridGeom.rowH[0] || 48;
@@ -594,503 +537,205 @@ function drawSelectorOverlay(){
   const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
   const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
 
-  const renderEntry = (seg, which, showTop, showBottom)=>{
+  const renderEntry = (seg, showTop, showBottom)=>{
     const b=boundsFromSeg(seg);
+    const x = gridGeom.rect.left + gridGeom.colX[seg.dayIdx];
+    const y = gridGeom.rect.top + b.topY;
+    const w = b.colWidth;
+    const h = b.height;
+
     const rectEl=document.createElement('div'); rectEl.className='marqueeRect';
-    rectEl.style.left   = (gridGeom.rect.left + gridGeom.colX[seg.dayIdx])+'px';
-    rectEl.style.top    = (gridGeom.rect.top + b.topY)+'px';
-    rectEl.style.width  = `${b.colWidth}px`;
-    rectEl.style.height = `${b.height}px`;
+    rectEl.style.left = x+'px'; rectEl.style.top = y+'px'; rectEl.style.width = w+'px'; rectEl.style.height = h+'px';
     group.appendChild(rectEl);
 
-    const container=document.createElement('div');
-    container.style.position='absolute';
-    container.style.left=(gridGeom.rect.left + gridGeom.colX[seg.dayIdx])+'px';
-    container.style.top=(gridGeom.rect.top + b.topY)+'px';
-    container.style.width=`${b.colWidth}px`;
-    container.style.height=`${b.height}px`;
+    const container=document.createElement('div'); container.style.position='absolute';
+    container.style.left=x+'px'; container.style.top=y+'px'; container.style.width=w+'px'; container.style.height=h+'px';
     group.appendChild(container);
 
     if(showTop){
       const topStamp=document.createElement('div'); topStamp.className='stamp';
       topStamp.textContent = HHMM_24(seg.startMin);
-      topStamp.style.left = (b.colWidth/2)+'px';
+      topStamp.style.left = (w/2)+'px';
       topStamp.style.top  = (- (sGap + sH))+'px';
       container.appendChild(topStamp);
 
       const topHandle=document.createElement('div'); topHandle.className='handle top';
-      topHandle.style.left='0px';
-      topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';
-      topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
-      topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
-      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', which), {passive:false});
+      topHandle.style.left='0px'; topHandle.style.top = (- (sGap + sH + hGap + hH))+'px';
+      topHandle.style.width=w+'px'; topHandle.style.height=hH+'px';
+      topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', w, rowH)}</div>`;
+      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', seg), {passive:false});
       container.appendChild(topHandle);
     }
     if(showBottom){
       const botStamp=document.createElement('div'); botStamp.className='stamp';
       botStamp.textContent = HHMM_24(seg.endMin);
-      botStamp.style.left = (b.colWidth/2)+'px';
-      botStamp.style.top  = (b.height + sGap)+'px';
+      botStamp.style.left = (w/2)+'px';
+      botStamp.style.top  = (h + sGap)+'px';
       container.appendChild(botStamp);
 
       const botHandle=document.createElement('div'); botHandle.className='handle bottom';
-      botHandle.style.left='0px';
-      botHandle.style.top = (b.height + sGap + sH + hGap)+'px';
-      botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
-      botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
-      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', which), {passive:false});
+      botHandle.style.left='0px'; botHandle.style.top = (h + sGap + sH + hGap)+'px';
+      botHandle.style.width=w+'px'; botHandle.style.height=hH+'px';
+      botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', w, rowH)}</div>`;
+      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', seg), {passive:false});
       container.appendChild(botHandle);
     }
   };
 
-  const parentHere = segOnThisWeek(chain.parent);
-  const childHere  = segOnThisWeek(chain.child);
+  const pHere = segOnThisWeek(chain?.parent);
+  const cHere = segOnThisWeek(chain?.child);
 
-  if(parentHere && !childHere){ renderEntry(chain.parent,'parent',true,true); }
-  else if(!parentHere && childHere){ renderEntry(chain.child,'child',true,true); }
-  else if(parentHere && childHere){
-    renderEntry(chain.parent,'parent',true,false);
-    renderEntry(chain.child,'child',false,true);
+  if(chain && pHere && !cHere){ renderEntry(chain.parent,true,true); }
+  else if(chain && !pHere && cHere){ renderEntry(chain.child,true,true); }
+  else if(chain && pHere && cHere){
+    renderEntry(chain.parent,true,false);
+    renderEntry(chain.child,false,true);
+  }
+
+  if(selected){
+    const b=boundsFromSeg(selected);
+    const x = gridGeom.rect.left + gridGeom.colX[selected.dayIdx];
+    const y = gridGeom.rect.top + b.topY;
+    const w = b.colWidth, h = b.height;
+    const rectEl=document.createElement('div'); rectEl.className='focusRect';
+    rectEl.style.left = x+'px'; rectEl.style.top = y+'px'; rectEl.style.width = w+'px'; rectEl.style.height = h+'px';
+    group.appendChild(rectEl);
   }
 }
 
-function clearSelector(){ chain=null; saveChain(null); clearOverlay(); removeSelectorButtons(); }
-function clearSelHost(){ /* kept for compatibility */ }
-
-/* Buttons for selector */
-function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); }
-function showSelectorButtons(){
-  removeSelectorButtons();
-  if(!chain || !chain.parent || !gridGeom) return;
-  const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='selectorBtns';
-  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.title='Settings';
-  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>`;
-  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
-  gear.onclick = ()=> openSettingsModal(null);
-  const close = document.createElement('button'); close.className='neu-btn--sm'; close.title='Clear';
-  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-  close.onclick = ()=> clearSelector();
-  wrap.appendChild(gear); wrap.appendChild(close); document.body.appendChild(wrap); positionSelectorButtons();
-}
-function positionSelectorButtons(){
-  const seg = chain?.parent; if(!seg || !gridGeom) return;
-  const b=boundsFromSeg(seg);
-  const margin=8, btnW=44, totalH=(44*2)+8;
-  let left = gridGeom.rect.left + gridGeom.colX[seg.dayIdx] + b.colWidth + margin;
-  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, gridGeom.rect.left + gridGeom.colX[seg.dayIdx] - margin - btnW); }
-  let top = gridGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
-  top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
-  const wrap=document.getElementById('selectorBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
-}
-
-/* Drag logic with anchored midnight constraints (ISS-002/003/004) */
-let dragKind=null, dragTarget='parent', dragStartY=0, baseStart=0, baseEnd=0, dragPixels=0, wasDrag=false, desiredEdgeIntent=null;
-function startDrag(ev, kind, which){
+/* selector interactions */
+let dragKind=null, dragSeg=null, dragStartY=0, baseStart=0, baseEnd=0;
+function startDrag(ev, kind, seg){
   if(!chain) return;
-  const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return;
-  ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId);
-  dragKind = kind; dragTarget = which; dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin; dragPixels=0; wasDrag=false; desiredEdgeIntent=null;
+  ev.preventDefault(); ev.stopPropagation();
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+  dragKind=kind; dragSeg=seg; dragStartY=ev.clientY; baseStart=seg.startMin; baseEnd=seg.endMin;
 
   const move=async (e)=>{
-    if(!gridGeom) return;
+    if(!gridGeom || !dragSeg) return;
     const dyPx = e.clientY - dragStartY;
-    dragPixels = Math.max(dragPixels, Math.abs(dyPx));
     const movedMin = (gridGeom.totalH? (dyPx / gridGeom.totalH) * 1440 : 0);
     const snappedDelta = snap15(movedMin);
 
-    // Desired intent crossing edges only used for initial spill creation. Once chain exists, ignore further spill intents
-    // Enforce anchored midnight: parent.end fixed at 1440, child.start fixed at 0 (when both exist)
-    if(dragTarget==='parent'){
-      if(dragKind==='top'){
-        let newStart = clamp(baseStart + snappedDelta, 0, (chain.child? 1440 : baseEnd-15));
-        const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
-        const c = clampToFreeWindow(newStart, seg.endMin, busy);
-        seg.startMin = Math.min(c.start, seg.endMin-15);
-      }else{
-        // bottom handle on parent only allowed when no child yet
-        if(chain.child){ /* anchored — ignore bottom drag */ }
-        else{
-          let newEnd = clamp(baseEnd + snappedDelta, seg.startMin+15, 1440);
-          const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
-          const c = clampToFreeWindow(seg.startMin, newEnd, busy);
-          seg.endMin = Math.max(c.end, seg.startMin+15);
-          // if user drags beyond 1440, offer spill intent
-          desiredEdgeIntent = (seg.endMin>=1440 && snappedDelta>0)? 'next' : null;
+    const isParent = dragSeg===chain.parent;
+    const isChild  = chain.child && dragSeg===chain.child;
+
+    if(isParent){
+      if(kind==='top'){
+        let newStart = clamp(baseStart + snappedDelta, 0, chain.parent.endMin - 15);
+        const busy = await dayBusyIntervals(chain.parent.weekSt, chain.parent.dayIdx, null);
+        const c = clampToFreeWindow(newStart, chain.parent.endMin, busy);
+        chain.parent.startMin = Math.min(c.start, chain.parent.endMin-15);
+      }else{ // bottom on parent allowed only if no child yet
+        if(!chain.child){
+          let newEnd = clamp(baseEnd + snappedDelta, chain.parent.startMin+15, 1440);
+          const busy = await dayBusyIntervals(chain.parent.weekSt, chain.parent.dayIdx, null);
+          const c = clampToFreeWindow(chain.parent.startMin, newEnd, busy);
+          chain.parent.endMin = Math.max(c.end, chain.parent.startMin+15);
+          if(chain.parent.endMin>=1440){ spilloverConfirm('next'); }
         }
       }
-    }else{
-      // child segment
-      if(dragKind==='bottom'){
-        let newEnd = clamp(baseEnd + snappedDelta, seg.startMin+15, 1440);
-        const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
-        const c = clampToFreeWindow(seg.startMin, newEnd, busy);
-        seg.endMin = Math.max(c.end, seg.startMin+15);
-      }else{
-        // top handle on child is anchored at 0 — ignore
-      }
+    }else if(isChild){
+      if(kind==='bottom'){
+        let newEnd = clamp(baseEnd + snappedDelta, chain.child.startMin+15, 1440);
+        const busy = await dayBusyIntervals(chain.child.weekSt, chain.child.dayIdx, null);
+        const c = clampToFreeWindow(chain.child.startMin, newEnd, busy);
+        chain.child.endMin = Math.max(c.end, chain.child.startMin+15);
+      } // top on child is anchored at 0 â†’ ignore
     }
-    wasDrag = wasDrag || Math.abs(snappedDelta) >= 15;
-    await saveChain(chain);
     drawOverlay();
   };
-
-  const up=async (e)=>{
-    if(!chain) return;
-    const seg = (dragTarget==='parent'? chain.parent : chain.child);
-    seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin);
-    if(seg.endMin - seg.startMin < 15){ if(dragKind==='top'){ seg.startMin = seg.endMin - 15; } else { seg.endMin = seg.startMin + 15; } }
-    // Only initial creation can trigger spill intent. Once child exists, no re-spill allowed by resize.
-    if(!chain.child && dragTarget==='parent' && dragKind==='bottom' && seg.endMin>=1440){
-      await spilloverConfirm('next');
-    }
-    await saveChain(chain);
-    drawOverlay();
+  const up=(e)=>{
+    e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
-    dragKind=null; desiredEdgeIntent=null;
+    dragKind=null; dragSeg=null;
   };
   window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* Spill confirm + creation with anchors (ISS-004 fix for prev) */
-async function spilloverConfirm(direction){
-  if(_modalOpen) return;
-  _modalOpen=true;
-  const res = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
-  _modalOpen=false;
-  if(!res) return;
-  await confirmSpill(direction);
-}
+/* spillover creation */
 function modalConfirm(text){
   return new Promise((resolve)=>{
     const veil=document.createElement('div'); veil.className='veil';
     const modal=document.createElement('div'); modal.className='modal';
-    const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
-    ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel'].forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
-    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"></div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    modal.innerHTML=`<div class="head">${text}</div><div class="settings-wrap" style="padding:16px"> </div><div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
     document.body.appendChild(veil); document.body.appendChild(modal);
     const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
     modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
     veil.addEventListener('click', ()=>close(false));
   });
 }
-async function confirmSpill(direction){
-  if(!chain || !chain.parent) return;
-  const p = chain.parent;
-  let childWeek = p.weekSt;
-  let childDay  = p.dayIdx;
-
-  chain.dir = direction;
-
+async function spilloverConfirm(direction){
+  const ok = await modalConfirm(direction==='next'?'Spill to next day?':'Spill to previous day?');
+  if(!ok) return;
   if(direction==='next'){
-    // Fix parent end at 1440 (clamped to free)
-    const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
-    const parentClamp = clampToFreeWindow(p.startMin, 1440, parentBusy);
-    p.endMin = parentClamp.end;
-
-    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
-    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
-
-    const childBusy = await dayBusyIntervals(childWeek, childDay, null);
-    const freeStart = largestFreeStartingAt(0, childBusy, 15);
-    if(!freeStart){ chain.child=null; await saveChain(chain); repaintWeek(true); drawOverlay(); return; }
-    const rem = Math.max(15, (60 - (p.endMin - p.startMin)));
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: freeStart.start, endMin: Math.max(freeStart.start+15, Math.min(1440, freeStart.start + rem)) };
-    if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
+    const p = chain.parent;
+    // clamp parent to end of day
+    const busyP = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
+    const cP = clampToFreeWindow(p.startMin, 1440, busyP);
+    p.endMin = cP.end;
+    // create child next day anchored at start 0
+    let childDay = (p.dayIdx<6)? p.dayIdx+1 : 0;
+    let childWeek = (p.dayIdx<6)? p.weekSt : p.weekSt + 7*DAY_MS;
+    const busyC = await dayBusyIntervals(childWeek, childDay, null);
+    const fit = largestFreeStartingAt(0, busyC, 15);
+    if(!fit){ chain.child=null; drawOverlay(); return; }
+    const rem = Math.max(15, 60 - (p.endMin - p.startMin));
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: fit.start, endMin: Math.min(1440, fit.start + rem) };
+    if(p.dayIdx===6) visibleWeekFirst = stampToDate(childWeek);
+    drawOverlay();
   }else{
-    // Back spill: parent start fixed at 0 (clamped to free)
-    const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
-    const parentClamp = clampToFreeWindow(0, p.endMin, parentBusy);
-    p.startMin = parentClamp.start;
-
-    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
-    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
-
-    const childBusy = await dayBusyIntervals(childWeek, childDay, null);
-    // pick the last free window and anchor bottom at 1440; choose start near end, not 0
+    const p = chain.parent;
+    // clamp parent to start of day
+    const busyP = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
+    const cP = clampToFreeWindow(0, p.endMin, busyP);
+    p.startMin = cP.start;
+    // create child previous day anchored near 1440
+    let childDay = (p.dayIdx>0)? p.dayIdx-1 : 6;
+    let childWeek = (p.dayIdx>0)? p.weekSt : p.weekSt - 7*DAY_MS;
+    const busyC = await dayBusyIntervals(childWeek, childDay, null);
     const free=[]; let prev=0;
-    for(const b of childBusy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
+    for(const b of busyC){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
     if(prev<1440) free.push({s:prev, e:1440});
-    const last = free.length? free[free.length-1] : null;
-    if(!last){ chain.child=null; await saveChain(chain); repaintWeek(true); drawOverlay(); return; }
+    const last = free.length? free[free.length-1]:null;
+    if(!last){ chain.child=null; drawOverlay(); return; }
     const span = Math.max(15, 60 - (p.endMin - p.startMin));
-    const cEnd = last.e; // near 1440
-    const cStart = clamp(cEnd - span, last.s, cEnd-15);
-    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:cStart, endMin:cEnd };
-    if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); }
+    const end = last.e;
+    const start = clamp(end - span, last.s, end-15);
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:start, endMin:end };
+    if(p.dayIdx===0) visibleWeekFirst = stampToDate(childWeek);
+    drawOverlay();
   }
-  await saveChain(chain);
-  repaintWeek(true); drawOverlay();
 }
 
-/* -------- Existing block selection/focus (kept minimal) -------- */
-function drawBlockFocus(seg){
-  const group = overlayGroup();
+/* selector buttons */
+function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); }
+function showSelectorButtons(){
+  removeSelectorButtons();
+  if(!chain || !gridGeom) return;
+  const seg = chain.parent;
   const b=boundsFromSeg(seg);
-  const rectEl=document.createElement('div'); rectEl.className='focusRect';
-  rectEl.style.left   = (gridGeom.rect.left + gridGeom.colX[seg.dayIdx])+'px';
-  rectEl.style.top    = (gridGeom.rect.top + b.topY)+'px';
-  rectEl.style.width  = `${b.colWidth}px`;
-  rectEl.style.height = `${b.height}px`;
-  group.appendChild(rectEl);
-}
-function focusGroup(groupSegs){ for(const seg of groupSegs){ drawBlockFocus(seg); } }
-function selectBlockUnified(seg){ selectedGroup=null; selectedBlock=null; clearSelector(); selectedBlock={...seg}; drawOverlay(); showBlockButtons(selectedBlock); }
-function currentSelectionPrimary(){ if(selectedGroup && selectedGroup.length){ return selectedGroup[0]; } return selectedBlock; }
-
-/* Block buttons (drag/copy/settings kept basic) */
-function buttonEl(iconPath, label, id){
-  const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label;
-  b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  return b;
-}
-function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); dragBtnRef=null; }
-function showBlockButtons(seg){
-  removeBlockButtons();
-  const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns';
-  const gearBtn = buttonEl("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v3M12 17.5v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1","Settings");
-  const closeBtn = buttonEl("M6 6l12 12M18 6L6 18","Close");
-  wrap.appendChild(gearBtn); wrap.appendChild(closeBtn);
-  document.body.appendChild(wrap);
-  gearBtn.onclick = ()=>openSettingsForSelection();
-  closeBtn.onclick = ()=>{ selectedBlock=null; selectedGroup=null; removeBlockButtons(); clearOverlay(); };
-  positionBlockButtons(seg);
-}
-function positionBlockButtons(seg, silent){
-  if(!seg || !gridGeom) return;
-  const b=boundsFromSeg(seg);
-  const margin=8, btnW=44, totalH=(44*2)+8;
+  const margin=8, btnW=44, totalH=(44*1)+0;
   let left = gridGeom.rect.left + gridGeom.colX[seg.dayIdx] + b.colWidth + margin;
   if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, gridGeom.rect.left + gridGeom.colX[seg.dayIdx] - margin - btnW); }
   let top = gridGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
   top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
-  const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
+
+  const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='selectorBtns';
+  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.title='Settings';
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5" /><path d="M12 2v3M12 17v5M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>`;
+  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
+  gear.onclick = ()=> openSettingsModal();
+  wrap.appendChild(gear);
+  document.body.appendChild(wrap);
+  wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`;
 }
 
-/* Settings (unified semantics for spill selection on creation; ISS-005) */
-function openSettingsForSelection(){
-  if(chain){ openSettingsModal(null); }
-  else if(selectedBlock){ openSettingsModal(selectedBlock); }
-}
-function openSettingsModal(existingSeg){
-  _modalOpen=true;
-  const veil = document.createElement('div'); veil.className='veil';
-  const modal = document.createElement('div'); modal.className='modal';
-  const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
-  ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel'].forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
+function clearSelector(){ chain=null; removeSelectorButtons(); clearOverlay(); }
 
-  let editingExisting = !!existingSeg;
-  let base = editingExisting ? existingSeg : (chain?.parent || {weekSt:getVisibleWeekStamp(), dayIdx:0, startMin:480, endMin:540});
-  let unifiedRange = null;
-
-  // If chain exists (spillover during creation), compute unified start/end across midnight
-  if(!editingExisting && chain){
-    const p = chain.parent;
-    const c = chain.child;
-    const startMinutes = p.startMin;
-    const endMinutes = c ? 1440 + c.endMin : p.endMin;
-    unifiedRange = { startAbs: startMinutes, endAbs: endMinutes };
-  }
-
-  const defaults = {
-    activityKey: editingExisting ? base.activityKey : null,
-    colorHex: editingExisting ? (base.colorHex || (base.activityKey? getActivityByKey(base.activityKey).color : null)) : null,
-    nameOverride: editingExisting ? base.activityName : null,
-    note: editingExisting ? (base.note||'') : '',
-    fromMin: unifiedRange? unifiedRange.startAbs : base.startMin,
-    toMin:   unifiedRange? unifiedRange.endAbs   : base.endMin,
-    recurrence: editingExisting ? base.recurrence : 'weekly',
-    flexibility: editingExisting ? base.flexibility : 'flexible',
-    notifications: editingExisting ? base.notifications : 'reoccurring',
-    privacy: editingExisting ? base.privacy : 'private'
-  };
-
-  modal.innerHTML = \`
-    <div class="head">\${editingExisting? 'Edit Block' : 'New Block'}</div>
-    <div class="settings-wrap" id="settingsWrap">
-      <div class="neu-field" id="assignField">
-        <div class="neu-select" id="assignSelect" role="button" aria-expanded="false">
-          <span class="ph" id="assignLabel">\${defaults.activityKey? getActivityByKey(defaults.activityKey).label : 'Assign Activity'}</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
-        </div>
-        <div class="neu-menu" id="assignMenu"><div class="menu-card" id="assignList"></div></div>
-        <div class="row" id="selectedChipRow" style="\${defaults.activityKey?'':'display:none'}">
-          <span class="chip" id="actChip">
-            <span class="dot" id="actDot" style="background:\${defaults.colorHex||'#ccc'}"></span>
-            <span id="actName">\${defaults.nameOverride || (defaults.activityKey? getActivityByKey(defaults.activityKey).label : '')}</span>
-            <button class="edit" id="renameBtn" title="Rename">
-              <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg>
-            </button>
-          </span>
-        </div>
-        <input class="note-input" id="noteInput" maxlength="80" placeholder="Add a note (e.g., Walk the dog, Bank run)" value="\${(defaults.note||'').replace(/"/g,'&quot;')}" />
-      </div>
-
-      <div class="neu-field">
-        <div class="time-row">
-          <div class="time-pair"><span class="time-day">Start</span><button class="time-btn" id="fromBtn" type="button">\${HHMM_24(defaults.fromMin%1440)}</button></div>
-          <div class="time-pair"><span class="time-day">End</span><button class="time-btn" id="toBtn"   type="button">\${HHMM_24(defaults.toMin%1440)}</button></div>
-        </div>
-        <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
-        <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
-      </div>
-
-      <div class="neu-field">
-        <div class="row4">
-          <div class="neu-select" id="flexSel"><span>\${defaults.flexibility==='firm'?'Firm':'Flexible'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
-          <div class="neu-menu" id="flexMenu"><div class="menu-card">
-            <div class="menu-item" data-val="flexible">Flexible</div>
-            <div class="menu-item" data-val="firm">Firm</div>
-          </div></div>
-
-          <div class="neu-select" id="privacySel"><span>\${defaults.privacy==='private'?'Private':'Visible to connected accounts'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
-          <div class="neu-menu" id="privacyMenu"><div class="menu-card">
-            <div class="menu-item" data-val="private">Private</div>
-            <div class="menu-item" data-val="visible">Visible to connected accounts</div>
-          </div></div>
-        </div>
-      </div>
-
-      <div class="row"><button class="btn" id="statsBtn" disabled>Statistics (coming soon)</button></div>
-    </div>
-
-    <div class="foot">
-      <button class="btn" id="deleteBtn" \${editingExisting?'':'disabled'}>Delete</button>
-      <div style="display:flex; gap:10px; margin-left:auto">
-        <button class="btn" id="exitBtn">Exit</button>
-        <button class="btn ok" id="saveBtn">Save</button>
-      </div>
-    </div>
-  \`;
-  document.body.appendChild(veil); document.body.appendChild(modal);
-  const closeModal = ()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
-
-  // activity list
-  const listEl = modal.querySelector('#assignList');
-  ACTIVITY_LIST.forEach(a=>{
-    const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
-    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color;
-    const label = document.createElement('span'); label.textContent = a.label;
-    row.appendChild(dot); row.appendChild(label);
-    row.addEventListener('click', ()=>{
-      defaults.activityKey = a.key; defaults.colorHex = a.color; defaults.flexibility = defaultFlexForActivity(a.key);
-      modal.querySelector('#assignLabel').textContent = a.label;
-      modal.querySelector('#assignMenu').classList.remove('open');
-      modal.querySelector('#assignSelect').setAttribute('aria-expanded','false');
-      modal.querySelector('#selectedChipRow').style.display = '';
-      modal.querySelector('#actDot').style.background = a.color;
-      const name = modal.querySelector('#actName').textContent || a.label;
-      modal.querySelector('#actName').textContent = name;
-      modal.querySelector('#flexSel span').textContent = (defaults.flexibility==='firm'?'Firm':'Flexible');
-    });
-    listEl.appendChild(row);
-  });
-  modal.querySelector('#assignSelect').addEventListener('click', ()=>{
-    const m = modal.querySelector('#assignMenu'); const open=m.classList.toggle('open');
-    modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false');
-  });
-  modal.querySelector('#renameBtn')?.addEventListener('click', ()=>{
-    const nameEl = modal.querySelector('#actName');
-    const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14);
-    if(next && next.trim().length){ nameEl.textContent = next.trim(); }
-  });
-  hookMenu(modal, '#flexSel','#flexMenu', (v,l)=>{ defaults.flexibility=v; modal.querySelector('#flexSel span').textContent=l; });
-  hookMenu(modal, '#privacySel','#privacyMenu', (v,l)=>{ defaults.privacy=v; modal.querySelector('#privacySel span').textContent=l; });
-
-  // unified time pickers over midnight supported (to may be < from modulo 24h)
-  const fromBtn = modal.querySelector('#fromBtn');
-  const toBtn   = modal.querySelector('#toBtn');
-  const fromPk  = modal.querySelector('#fromPicker');
-  const toPk    = modal.querySelector('#toPicker');
-  function setPickerValue(input, minutes){ const h=Math.floor((minutes%1440)/60), m=(minutes%60); input.value=\`\${String(h).padStart(2,'0')}:\${String(m).padStart(2,'0')}\`; }
-  setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin);
-  fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.();
-  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if((defaults.toMin%1440)<=mins && defaults.toMin<1440) defaults.toMin=mins+15; fromBtn.textContent=HHMM_24(defaults.fromMin%1440); setPickerValue(toPk, defaults.toMin%1440); };
-  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); // allow over-midnight by keeping toMin as absolute if < from
-    if(mins<=defaults.fromMin%1440){ defaults.toMin = 1440 + mins; } else { defaults.toMin = mins; }
-    toBtn.textContent=HHMM_24(defaults.toMin%1440);
-  };
-
-  modal.querySelector('#exitBtn').onclick=()=>{ closeModal(); };
-  modal.querySelector('#deleteBtn').onclick=async()=>{
-    if(!editingExisting) return;
-    await delBlock(existingSeg.id); await drawBlocks(); closeModal();
-  };
-  modal.querySelector('#saveBtn').onclick=async()=>{
-    if(!defaults.activityKey){ alert('Please assign an activity.'); return; }
-    if(!(defaults.toMin>defaults.fromMin)){ alert('End time must be after start time.'); return; }
-    const note = modal.querySelector('#noteInput').value.trim();
-    const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label;
-
-    if(chain){
-      // finalize new block(s) with unified semantics
-      const parent = chain.parent;
-      const absStart = defaults.fromMin;
-      const absEnd = defaults.toMin;
-      const hasChild = absEnd>1440;
-      const firstEnd = hasChild ? 1440 : absEnd;
-      const secondStart = 0;
-      const secondEnd = hasChild ? (absEnd-1440) : null;
-
-      // parent day
-      const busyP = await dayBusyIntervals(parent.weekSt, parent.dayIdx, null);
-      const pClamp = clampToFreeWindow(absStart%1440, firstEnd, busyP);
-      const blockA = {
-        id: 'b'+Date.now(),
-        weekSt: parent.weekSt, dayIdx: parent.dayIdx,
-        startMin: pClamp.start, endMin: pClamp.end,
-        activityKey: defaults.activityKey,
-        activityName: actName,
-        colorHex: defaults.colorHex,
-        note,
-        recurrence: 'weekly',
-        flexibility: defaults.flexibility,
-        notifications: defaults.notifications,
-        privacy: defaults.privacy,
-      };
-      if(hasChild){
-        const nextDayIdx = (parent.dayIdx===6)? 0 : parent.dayIdx+1;
-        const nextWeekSt = (parent.dayIdx===6)? parent.weekSt + 7*DAY_MS : parent.weekSt;
-        const busyC = await dayBusyIntervals(nextWeekSt, nextDayIdx, null);
-        const cClamp = clampToFreeWindow(secondStart, secondEnd, busyC);
-        const groupId = 'g'+Date.now();
-        blockA.groupId = groupId;
-        await putBlock({...blockA});
-        await putBlock({
-          ...blockA, id:'b'+(Date.now()+1),
-          weekSt: nextWeekSt, dayIdx: nextDayIdx,
-          startMin: cClamp.start, endMin: cClamp.end
-        });
-      }else{
-        await putBlock(blockA);
-      }
-      chain=null; await saveChain(null); await drawBlocks(); clearOverlay();
-      closeModal();
-    }else if(editingExisting){
-      const updated = {
-        ...existingSeg,
-        activityKey: defaults.activityKey,
-        activityName: actName,
-        colorHex: defaults.colorHex,
-        startMin: defaults.fromMin%1440,
-        endMin: Math.min(1440, defaults.toMin%1440 || defaults.toMin),
-        note,
-        recurrence: 'weekly',
-        flexibility: defaults.flexibility,
-        notifications: defaults.notifications,
-        privacy: defaults.privacy
-      };
-      const busy = await dayBusyIntervals(updated.weekSt, updated.dayIdx, updated.id);
-      const clamped = clampToFreeWindow(updated.startMin, updated.endMin, busy);
-      updated.startMin = clamped.start; updated.endMin = clamped.end;
-      await putBlock(updated); await drawBlocks(); clearOverlay(); closeModal();
-    }
-  };
-
-  veil.addEventListener('click', ()=>{ closeModal(); });
-}
-
+/* basic settings with unified over-midnight semantics for creation only */
 function hookMenu(root, selSel, menuSel, onPick){
   const trigger = root.querySelector(selSel);
   const menu = root.querySelector(menuSel);
@@ -1098,34 +743,95 @@ function hookMenu(root, selSel, menuSel, onPick){
   menu.querySelectorAll('.menu-item').forEach(mi=> mi.addEventListener('click', ()=>{ onPick(mi.dataset.val, mi.textContent.trim()); menu.classList.remove('open'); trigger.setAttribute('aria-expanded','false'); }));
 }
 
-/* Screensaver for non-week */
-function showScreensaver(){
-  screenEl.innerHTML = \`
-    <div class="screensaver">
-      <div class="wm">Chrono r81 — Week-only build</div>
+function openSettingsModal(){
+  if(!chain) return;
+  _modalOpen=true;
+  const veil=document.createElement('div'); veil.className='veil';
+  const modal=document.createElement('div'); modal.className='modal';
+  const p = chain.parent, c = chain.child;
+  const absStart = p.startMin;
+  const absEnd = c ? 1440 + c.endMin : p.endMin;
+
+  modal.innerHTML = `
+    <div class="head">New Block</div>
+    <div class="settings-wrap">
+      <div class="neu-field">
+        <div>Start: <strong>${HHMM_24(absStart%1440)}</strong></div>
+        <div>End: <strong>${HHMM_24(absEnd%1440)}${absEnd>1440?' (+1d)':''}</strong></div>
+      </div>
+      <div class="neu-field">
+        <div class="neu-select" id="actSel"><span>Assign Activity</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+        <div class="neu-menu" id="actMenu"><div class="menu-card" id="actList"></div></div>
+      </div>
+      <div class="neu-field">
+        <button class="btn" id="saveBtn">Save</button>
+      </div>
     </div>
-  \`;
+    <div class="foot"><button class="btn" id="closeBtn">Close</button></div>
+  `;
+  document.body.appendChild(veil); document.body.appendChild(modal);
+
+  const listEl = modal.querySelector('#actList');
+  ACTIVITY_LIST.forEach(a=>{
+    const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
+    row.innerHTML = `<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${a.color}"></span><span>${a.label}</span>`;
+    row.addEventListener('click', ()=>{ modal.querySelector('#actSel span').textContent = a.label; modal.dataset.actKey = a.key; modal.querySelector('#actMenu').classList.remove('open'); });
+    listEl.appendChild(row);
+  });
+  modal.querySelector('#actSel').addEventListener('click', ()=>{ const m = modal.querySelector('#actMenu'); const open=m.classList.toggle('open'); });
+
+  modal.querySelector('#closeBtn').onclick=()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
+  modal.querySelector('#saveBtn').onclick=async ()=>{
+    const key = modal.dataset.actKey || 'free';
+    const act = getActivityByKey(key);
+    // commit as one or two blocks (storage remains split, semantics unified)
+    const baseId = 'b'+Date.now();
+    const firstEnd = Math.min(1440, absEnd);
+    const blkA = { id: baseId, weekSt:p.weekSt, dayIdx:p.dayIdx, startMin:absStart, endMin:firstEnd, activityKey:key, activityName:act.label, colorHex:act.color, note:'', recurrence:'weekly', flexibility:'flexible', notifications:'reoccurring', privacy:'private' };
+    const busyA = await dayBusyIntervals(blkA.weekSt, blkA.dayIdx, null); const cA = clampToFreeWindow(blkA.startMin, blkA.endMin, busyA); blkA.startMin=cA.start; blkA.endMin=cA.end;
+    await putBlock(blkA);
+    if(absEnd>1440){
+      const nextDayIdx = (p.dayIdx===6)? 0 : p.dayIdx+1;
+      const nextWeekSt = (p.dayIdx===6)? p.weekSt + 7*DAY_MS : p.weekSt;
+      const blkB = { ...blkA, id: 'b'+(Date.now()+1), weekSt:nextWeekSt, dayIdx:nextDayIdx, startMin:0, endMin:absEnd-1440 };
+      const busyB = await dayBusyIntervals(blkB.weekSt, blkB.dayIdx, null); const cB = clampToFreeWindow(blkB.startMin, blkB.endMin, busyB); blkB.startMin=cB.start; blkB.endMin=cB.end;
+      await putBlock(blkB);
+    }
+    veil.remove(); modal.remove(); _modalOpen=false;
+    chain=null; removeSelectorButtons(); drawBlocks(); clearOverlay();
+  };
 }
 
-/* init */
-async function init(){
-  try{
-    const snap = await storageGet('state');
-    if(snap){ activeView = snap.activeView ?? 'week'; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); }
-  }catch{}
-  render();
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); } });
-  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+/* existing block focus (minimal) */
+function selectBlock(seg){ selected={...seg}; drawOverlay(); }
+
+/* controls */
+buttons.forEach(b=>{
+  b.addEventListener('click', (e)=>{
+    const v=e.currentTarget.dataset.view;
+    buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+    if(v==='week'){ activeView='week'; e.currentTarget.classList.add('is-pressed'); e.currentTarget.setAttribute('aria-pressed','true'); render(); }
+    else{ activeView=v; render(); }
+  });
+});
+
+/* render */
+function showScreensaver(){
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r82 â€” Week-only test build</div></div>`;
 }
 function render(){
   if(activeView==='week'){ buildWeekView(); }
-  else { showScreensaver(); }
+  else{ showScreensaver(); }
 }
-async function saveAll(){ await storageSet('state', { activeView, visibleWeekFirst:+visibleWeekFirst }); }
+
+/* init */
+function init(){
+  render();
+}
 init();
 </script>
 
-<!-- Service worker registration (kept) -->
+<!-- Service worker (optional) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
