@@ -101,7 +101,7 @@
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
-  .grid-area{ position:relative; overflow:hidden }
+  .grid-area{ position:relative; overflow:hidden; min-height:360px; }
   .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
   .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
 
@@ -114,6 +114,7 @@
     background:var(--chart-bg);
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
+    cursor:crosshair; /* make it obvious it's interactive */
   }
 
   /* Blocks under mask */
@@ -255,13 +256,13 @@
   <div id="overlay" aria-hidden="true"></div>
 
 <script>
-/* Chrono r80.hotfix — Week-only + reliable selector init */
+/* Chrono r80.fix — reliable selector init + unclipped handles */
 
 const screenEl = document.getElementById('screen');
 const overlayEl = document.getElementById('overlay');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = 'week';              // force default visible week
+let activeView = 'week';
 let visibleWeekFirst = weekStart(new Date());
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -280,12 +281,6 @@ const MIN_PER_DAY = 1440;
 function weekStamp(d){ return +weekStart(d); }
 function stampToDate(st){ return new Date(st); }
 function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
-
-new ResizeObserver(()=> {
-  const w = screenEl.getBoundingClientRect().width;
-  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-  if(activeView==='week'){ repaintWeek(true); drawBlocks(); if(chain) drawSelector(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); }
-}).observe(screenEl);
 
 /* storage */
 const DB_NAME='chronoDB', DB_VERSION=32;
@@ -421,7 +416,7 @@ function buildWeekView(){
         </button>
       </div>
 
-      <div class="grid-area">
+      <div class="grid-area" id="gridArea">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid" tabindex="0"></div>
         <div class="hours" id="weekHours"></div>
@@ -432,14 +427,25 @@ function buildWeekView(){
   document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearSelector(); };
   document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); };
 
+  // ensure layout, THEN measure/bind (handles zero-height race)
   repaintWeek();
-  drawBlocks();
+  requestAnimationFrame(()=>{ repaintWeek(true); bindGridInteractions(); });
+}
 
+function bindGridInteractions(){
   const grid = document.getElementById('weekGrid');
+  if(!grid) return;
+  // build layers if missing
+  let blocksHost=document.getElementById('blocksHost');
+  let selHost=document.getElementById('selHost');
+  let maskSVG=document.querySelector('#weekGrid .mask');
+  if(!blocksHost){ blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost); }
+  if(!maskSVG){ buildMask(); }
+  if(!selHost){ selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost); }
 
-  // robust selector start: pointerdown + click fallback
   const startFromEvent = (clientX, clientY)=>{
-    if(_modalOpen || !weekGeom) return;
+    if(_modalOpen) return;
+    if(!weekGeom || weekGeom.totalH<=0 || weekGeom.totalW<=0){ repaintWeek(true); if(!weekGeom || weekGeom.totalH<=0) return; }
     const rect = weekGeom.rect;
     const relX = clientX - rect.left;
     const relY = clientY - rect.top;
@@ -465,11 +471,16 @@ function buildWeekView(){
     });
   };
 
+  // pointer + click fallback
   grid.addEventListener('pointerdown', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
   grid.addEventListener('click', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
 
+  // resize/scroll
   new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); if(chain) drawSelector(); positionSelectorButtons(); }).observe(grid);
   window.addEventListener('scroll', ()=>{ if(activeView==='week' && (chain||selectedBlock||selectedGroup)) positionSelectorButtons(); }, {passive:true});
+
+  // initial blocks
+  drawBlocks();
 }
 
 function computeGeometry(){
@@ -520,18 +531,14 @@ function buildMask(){
 }
 function repaintWeek(){
   const first=visibleWeekFirst, last=addDays(first,6);
-  const pills=document.getElementById('dowPills'); pills.innerHTML='';
-  for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
-  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  const pills=document.getElementById('dowPills'); if(pills){ pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); } }
+  const gh=document.getElementById('weekHours'); if(gh){ gh.innerHTML=''; }
+  const gridEl=document.getElementById('weekGrid'); if(!gridEl) return;
   computeGeometry();
-  for(let i=0;i<24;i++){
-    const s=document.createElement('div'); s.className='hour-stamp';
-    s.textContent = hourToAMPM(i);
-    s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
-    gh.appendChild(s);
-  }
-  document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
-  buildMask();
+  if(gh){ for(let i=0;i<24;i++){ const s=document.createElement('div'); s.className='hour-stamp'; s.textContent = hourToAMPM(i); s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px'; gh.appendChild(s); } }
+  const titleEl=document.getElementById('weekTitle'); if(titleEl){ titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`; }
+  // ensure one mask at least
+  if(!gridEl.querySelector('.mask')) buildMask();
 }
 
 /* ---------- Interval helpers ---------- */
@@ -602,13 +609,10 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, colWidth, topY, botY, height};
 }
 async function drawBlocks(){
-  const grid=document.getElementById('weekGrid');
-  // prepare layers
+  const grid=document.getElementById('weekGrid'); if(!grid) return;
   let blocksHost=document.getElementById('blocksHost');
   let selHost=document.getElementById('selHost');
-  let maskSVG=document.querySelector('#weekGrid .mask');
   if(!blocksHost){ blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost); }
-  if(!maskSVG){ buildMask(); }
   if(!selHost){ selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost); }
 
   blocksHost.innerHTML='';
@@ -926,11 +930,7 @@ async function selectBlockUnified(seg){
 }
 function drawBlockFocus(seg){
   clearSelHost(); clearOverlay();
-  const host=document.getElementById('selHost'); if(!host || !weekGeom){
-    // ensure hosts exist if something wiped them
-    drawBlocks();
-    return;
-  }
+  const host=document.getElementById('selHost'); if(!host || !weekGeom){ drawBlocks(); return; }
   const b=boundsFromSeg(seg);
   const rectEl=document.createElement('div'); rectEl.className='focusRect';
   rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
@@ -1244,7 +1244,7 @@ function openSettingsModal(existingSeg){
   setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin);
   fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.();
   fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins && defaults.toDow===defaults.fromDow) defaults.toMin=clamp(mins+15,0,MIN_PER_DAY); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%MIN_PER_DAY); };
-  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin && defaults.toDow===defaults.fromDow) { defaults.toDow = defaults.fromDow; mins = clamp(defaults.fromMin+15,0,MIN_PER_DAY); } defaults.toMin=(defaults.toDow===defaults.fromDow? mins : MIN_PER_DAY+mins); toBtn.textContent=HHMM_24(defaults.toMin%MIN_PER_DAY); };
+  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin && defaults.toDow===defaults.fromDow) { mins = clamp(defaults.fromMin+15,0,MIN_PER_DAY); } defaults.toMin=(defaults.toDow===defaults.fromDow? mins : MIN_PER_DAY+mins); toBtn.textContent=HHMM_24(defaults.toMin%MIN_PER_DAY); };
 
   modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); };
 
@@ -1465,7 +1465,7 @@ async function openStatsModal(activityName){
 function showScreensaver(){
   screenEl.innerHTML = `
     <div class="screensaver">
-      <div class="wm">Chrono r80.hotfix — Week-only</div>
+      <div class="wm">Chrono r80.fix — Week-only</div>
     </div>
   `;
 }
@@ -1483,10 +1483,11 @@ async function init(){
   try{
     const snap = await storageGet('state');
     if(snap){
-      activeView = snap.activeView || 'week';   // ensure week default
+      activeView = snap.activeView || 'week';
       if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
     }
-    // visually sync button state
+    // force week if null
+    if(!activeView){ activeView='week'; }
     buttons.forEach(x=>{ x.classList.toggle('is-pressed', x.dataset.view===activeView); x.setAttribute('aria-pressed', x.dataset.view===activeView ? 'true':'false'); });
   }catch{}
   chain = await loadChain();
