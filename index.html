@@ -1,1 +1,1413 @@
-:root{ --bg:#e3eaf2; --ink:#42586d; --icon-inactive:#42586d; --icon-active:#4ff7ff; --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75); --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1; --gap:24px; --radius:12px; --border:#c6cfda; --grid-line:#cfd9e5; --chart-bg:#d1dce8; --mask-surface: var(--bg); --hour-col:64px; --dow-h:32px; --label-size:12px; --marquee-border:5px; --marquee-shadow:0 0 12px 6px var(--turq-glow); /* selector tool only */ --handle-stroke:#5e7286; --chev-stroke-w:2.2; --handle-gap:10px; --top-handle-extra:10px; --handle-height-mult:1.6; --stamp-gap:6px; --stamp-h:26px; --neu-shadow-outer: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); --neu-shadow-inner: inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), inset var(--off) var(--off) var(--blur) var(--lo); --neu-offset-shadow: 8px 10px 20px rgba(0,0,0,.22); } html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden; -webkit-tap-highlight-color: transparent; } *{box-sizing:border-box} .app{ width:clamp(320px, 96vw, 520px); height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))); margin:max(16px, env(safe-area-inset-top)) auto; display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap); } /* Allow selector handles/stamps to render beyond borders */ #screen{ flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg); box-shadow: var(--neu-shadow-outer); position:relative; overflow:visible; /* was hidden; causes cropping */ } /* Controls */ .controls{ display:flex; gap:var(--gap); padding-bottom:2px; } .neu-btn{ --btn-d: calc((100% - (3 * var(--gap))) / 4); flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1; border-radius:50%; border:none; outline:none; cursor:pointer; background:var(--bg); display:grid; place-items:center; box-shadow: var(--neu-shadow-outer); transition: box-shadow .2s ease, background .2s ease, transform .06s ease; } .neu-btn svg{ width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .neu-btn.is-pressed{ background: radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%), var(--pressed-navy); box-shadow: var(--off) var(--off) var(--blur) var(--hi), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo); } .neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); } .neu-btn:active{ transform:scale(.985); } .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; } .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .neu-btn--sm.drag-on{ background:var(--pressed-navy); } .neu-btn--sm.drag-on svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); } /* Layout inside week screen */ .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 } .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; } .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .grid-area{ position:relative; overflow:visible } /* was hidden; would crop handles */ .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 } .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; } .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 } .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px } .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) } .grid{ position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0; background:var(--chart-bg); border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line); z-index:0; } /* Blocks under mask */ .blocksHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; } .blockRect{ position:absolute; border-radius:10px; box-shadow:none; border:none; cursor:pointer; } .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 } /* Selector + block focus overlay */ .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; } .selHost .handle{ pointer-events:auto; } /* ensure handles can capture events */ /* Selector tool (glow) */ .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); } /* Existing block focus (no glow) */ .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; } /* Time stamps (24h) */ .stamp{ position:absolute; left:50%; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active); border:1px solid #273b4d; border-radius:10px; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap; pointer-events:none; z-index:5; box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35); height:var(--stamp-h); display:grid; place-items:center; } /* Handles */ .handle{ position:absolute; left:0; width:100%; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; } .chev-chip{ width:100%; height:100%; border-radius:14px; background:var(--bg); box-shadow: var(--neu-shadow-outer); display:grid; place-items:center; } .chev path{ fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } /* Lifted shadow while dragging a block */ .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; } /* Side buttons */ .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; } /* Modal (neumorphic with offset shadow) */ .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; } .modal{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(92vw, 360px); background:var(--bg); color:var(--ink); border-radius:12px; box-shadow: var(--neu-shadow-outer), var(--neu-offset-shadow); z-index:11; display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden; } .modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; } .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow:var(--neu-shadow-inner); } .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); } .btn.icon{ width:44px; height:44px; display:grid; place-items:center; } .btn.icon svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; } .neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow:var(--neu-shadow-inner); display:grid; gap:8px; } .neu-select{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); cursor:pointer; user-select:none; } .neu-select .ph{ opacity:.7; } .neu-select svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .neu-menu{ display:none; } .neu-menu.open{ display:block; } .menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow:var(--neu-shadow-outer); overflow:hidden; } .menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; } .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); } .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; border:none; } .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; } .dot{ width:12px; height:12px; border-radius:50%; border:none; box-shadow:none; } .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; } .chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .note-input{ background:var(--bg); border:none; outline:none; border-radius:12px; padding:10px 12px; font-weight:700; box-shadow:var(--neu-shadow-inner); } .row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; } .time-row{ display:grid; gap:8px; } .time-pair{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); } .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; } .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; } /* Screensaver watermark */ .screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 } .screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; } /* Chrono r80.fix3 — Week-only selector overlay build. Changes vs your last working: - Default to Week view on first load. - Make selector handles/stamps visible outside grid by removing overflow clipping. - Ensure handles accept pointer events even though overlay uses pointer-events:none. - Leave service worker disabled below to avoid stale cache during testing. */ const screenEl = document.getElementById('screen'); const buttons = [...document.querySelectorAll('.neu-btn')]; let activeView = 'week'; // default to week so chart mounts let visibleWeekFirst = weekStart(new Date()); const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; function toISO(d){ return \`\${d.getFullYear()}-\${String(d.getMonth()+1).padStart(2,'0')}-\${String(d.getDate()).padStart(2,'0')}\`; } function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; } function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; } function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); } function snap15(n){ return 15 * Math.round((+n||0)/15); } function hourToAMPM(h){ return h===0? '12 AM' : h<12? \`\${h} AM\` : h===12? '12 PM' : \`\${h-12} PM\`; } function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return \`\${String(h).padStart(2,'0')}:\${String(r).padStart(2,'0')}\`; } const DAY_MS = 86400000; function weekStamp(d){ return +weekStart(d); } function stampToDate(st){ return new Date(st); } function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); } new ResizeObserver(()=> { const w = screenEl.getBoundingClientRect().width; document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px'); }).observe(screenEl); /* storage */ const DB_NAME='chronoDB', DB_VERSION=32; let dbPromise=null, STORAGE_MODE='idb'; function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } } function idbOpen(){ if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); } if(dbPromise) return dbPromise; dbPromise = new Promise((resolve,reject)=>{ const req = indexedDB.open(DB_NAME, DB_VERSION); req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); if(!db.objectStoreNames.contains('blocks')) db.createObjectStore('blocks',{keyPath:'id'}); }; req.onsuccess = ()=>resolve(req.result); req.onerror = ()=>reject(req.error); }); return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; }); } async function storageSet(k,v){ if(STORAGE_MODE==='ls'){ if(v===undefined) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; } const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); } return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); const store=tx.objectStore('kv'); if(v===undefined) store.delete(k); else store.put({k,v}); tx.oncomplete=()=>res(true); tx.onerror = ()=>rej(tx.error); }); } async function storageGet(k){ if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; } const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); } return new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const req=tx.objectStore('kv').get(k); req.onsuccess=()=>res(req.result? req.result.v:undefined); req.onerror=()=>rej(req.error); }); } /* blocks store */ async function putBlock(b){ const db = await idbOpen(); if(!db) return; return new Promise((res,rej)=>{ const tx=db.transaction('blocks','readwrite'); tx.objectStore('blocks').put(b); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); }); } async function delBlock(id){ const db = await idbOpen(); if(!db) return; return new Promise((res,rej)=>{ const tx=db.transaction('blocks','readwrite'); tx.objectStore('blocks').delete(id); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); }); } async function getBlocksAll(){ const db = await idbOpen(); if(!db) return []; return new Promise((res,rej)=>{ const tx=db.transaction('blocks','readonly'); const req=tx.objectStore('blocks').getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); }); } /* palette + activities */ const COLORS = ['#F7D6D0','#D6EEF5','#BFD9CF','#F7E08C','#E77D7A','#4EA1D6','#4FA684','#E5B21A','#E3423A','#1E6FB6','#187245','#D79516','#7F1D2D','#0E3B5C','#0A3A34','#C1730D']; const ACTIVITY_LIST = [ {key:'work', label:'Work', color: COLORS[8]}, {key:'school', label:'School', color: COLORS[9]}, {key:'commute', label:'Commute', color: COLORS[7]}, {key:'chores', label:'Chores', color: COLORS[4]}, {key:'errands', label:'Errands', color: COLORS[11]}, {key:'meal', label:'Meal Time', color: COLORS[3]}, {key:'hygiene', label:'Hygiene', color: COLORS[1]}, {key:'childcare', label:'Child Care', color: COLORS[12]}, {key:'selfcare', label:'Self Care', color: COLORS[6]}, {key:'exercise', label:'Exercise', color: COLORS[10]}, {key:'family', label:'Family Time', color: COLORS[15]}, {key:'hobbies', label:'Hobbies', color: COLORS[14]}, {key:'projects', label:'Projects', color: COLORS[13]}, {key:'rr', label:'R & R', color: COLORS[2]}, {key:'free', label:'Free Time', color: COLORS[0]}, {key:'sleep', label:'Sleep', color: COLORS[9]} ]; function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; } function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; } /* selection chain (for new selections) */ const CHAIN_KEY='selChain_v14'; async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); } async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; } let chain = null; /* selector & block drag state */ let dragKind=null, dragTarget='parent'; let dragStartY=0, baseStart=0, baseEnd=0; let dragPixels=0, wasDrag=false; let desiredEdgeIntent=null; // 'prev' | 'next' | null let weekGeom=null; let selectedBlock=null; let selectedGroup=null; let dragBlockMode=false; let dragBtnRef=null; let _modalOpen=false; /* controls */ document.querySelector('.controls').addEventListener('click', e=>{ const b=e.target.closest('.neu-btn'); if(!b) return; const v=b.dataset.view; const wasPressed = b.classList.contains('is-pressed'); buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); }); if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); } if(activeView===v){ activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); showScreensaver(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); } else{ activeView=v; render(); } saveSoon(200); }); /* ---- Week view ---- */ function buildWeekView(){ screenEl.innerHTML = \` <div class="wrap"> <div class="head"> <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous"> <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg> </button> <div class="title" id="weekTitle"></div> <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next"> <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg> </button> </div> <div class="grid-area"> <div class="top-row week" id="dowPills"></div> <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid"> <div class="blocksHost" id="blocksHost"></div> <svg class="mask" id="maskSVG" aria-hidden="true"></svg> <div class="selHost" id="selHost"></div> </div> <div class="hours" id="weekHours"></div> </div> </div> \`; document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearSelector(); }; document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); }; repaintWeek(); const grid = document.getElementById('weekGrid'); grid.addEventListener('click', onWeekGridTap); new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); if(chain) drawSelector(); }).observe(grid); window.addEventListener('scroll', ()=>{ if(activeView==='week' && selectedGroup) positionBlockButtons(selectedGroup[0]); if(activeView==='week' && selectedBlock) positionBlockButtons(selectedBlock); if(activeView==='week' && chain) positionSelectorButtons(); }, {passive:true}); drawBlocks(); } function computeGeometry(gridEl, cols){ const r=gridEl.getBoundingClientRect(); const totalW=Math.max(0, Math.round(r.width)); const totalH=Math.max(0, Math.round(r.height)); const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols; const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24; const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); } const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); } const slotY=[0]; for(let hr=0;hr<24;hr++){ const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4; const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1; for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]); } weekGeom={totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r}; } function buildMask(geom, cols){ const svg=document.getElementById('maskSVG'); svg.innerHTML=''; const { totalW, totalH, colX, rowY } = geom; if(totalW<=0 || totalH<=0) return; svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); svg.setAttribute('viewBox', \`0 0 \${totalW} \${totalH}\`); svg.setAttribute('preserveAspectRatio','none'); const NS='http://www.w3.org/2000/svg'; const defs=document.createElementNS(NS,'defs'); const sym=document.createElementNS(NS,'symbol'); sym.setAttribute('id','tile900x300'); sym.setAttribute('viewBox','0 0 900 300'); sym.setAttribute('preserveAspectRatio','none'); const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2'; const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;}; const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;}; sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24)); sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300)); sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24)); sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239')); defs.appendChild(sym); svg.appendChild(defs); for(let rI=0;rI<24;rI++){ for(let cI=0;cI<cols;cI++){ const use=document.createElementNS(NS,'use'); use.setAttribute('href','#tile900x300'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]); use.setAttribute('width',colX[cI+1]-colX[cI]); use.setAttribute('height',rowY[rI+1]-rowY[rI]); svg.appendChild(use); } } } function repaintWeek(){ const first=visibleWeekFirst, last=addDays(first,6); document.getElementById('weekTitle').textContent = \`\${MONTH_INIT[first.getMonth()]} \${first.getDate()} – \${MONTH_INIT[last.getMonth()]} \${last.getDate()}\`; const pills=document.getElementById('dowPills'); pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); } const gh=document.getElementById('weekHours'); gh.innerHTML=''; const gridEl=document.getElementById('weekGrid'); computeGeometry(gridEl,7); for(let i=0;i<24;i++){ const s=document.createElement('div'); s.className='hour-stamp'; s.textContent = hourToAMPM(i); s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px'; gh.appendChild(s); } buildMask(weekGeom,7); } /* ---------- Interval helpers for no-overlap rules ---------- */ function sortByStart(a,b){ return a.startMin - b.startMin; } function sameWeekDay(seg, weekSt, dayIdx){ return seg.weekSt===weekSt && seg.dayIdx===dayIdx; } async function dayBusyIntervals(weekSt, dayIdx, excludeGroupIdOrId=null){ const all = await getBlocksAll(); const instances = await getInstancesForWeek(all); const list = instances .filter(b => sameWeekDay(b, weekSt, dayIdx) && (!excludeGroupIdOrId || (b.groupId||b.id)!==excludeGroupIdOrId)) .map(b => ({startMin:b.startMin, endMin:b.endMin})); list.sort(sortByStart); const merged=[]; for(const it of list){ if(!merged.length || it.startMin>merged[merged.length-1].endMin){ merged.push({...it}); } else { merged[merged.length-1].endMin = Math.max(merged[merged.length-1].endMin, it.endMin); } } return merged; } function clampToFreeWindow(start, end, busy){ let s = clamp(start, 0, 1440-15); let e = clamp(end, s+15, 1440); for(const b of busy){ if(s>=b.startMin && e<=b.endMin){ s = b.endMin; e = Math.max(s+15, e); } if(s < b.endMin && s >= b.startMin && e > b.endMin){ s = b.endMin; } if(e > b.startMin && e <= b.endMin && s < b.startMin){ e = b.startMin; } if(s < b.startMin && e > b.endMin){ if(b.startMin - s >= 15){ e = b.startMin; } else { s = b.endMin; } } s = clamp(s, 0, 1440-15); e = clamp(e, s+15, 1440); } return {start:s, end:e}; } function largestFreeStartingAt(atMin, busy, minLen=15){ const free=[]; let prev=0; for(const b of busy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); } if(prev<1440) free.push({s:prev, e:1440}); for(const f of free){ const s = Math.max(atMin, f.s); const len = f.e - s; if(len>=minLen) return {start:s, end:s+len}; } return null; } /* visible week instances */ async function getInstancesForWeek(allBlocks){ const wst = getVisibleWeekStamp(); const instances = []; for(const b of allBlocks){ if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); } else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); } else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); } } return instances; } function idxFromMin(min){ return clamp(Math.round(min/15), 0, 96); } function boundsFromSeg(seg){ const colLeft = weekGeom.colX[seg.dayIdx]; const colRight= weekGeom.colX[seg.dayIdx+1]; const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0); const idx = idxFromMin(seg.startMin); const idx2= idxFromMin(seg.endMin); const topY = weekGeom.slotY[idx]; const botY = weekGeom.slotY[idx2]; const height= Math.max(1, botY - topY); return {offsetLeft:colLeft, colWidth, topY, botY, height}; } async function drawBlocks(){ const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return; host.innerHTML=''; const blocks = await getBlocksAll(); const inst = await getInstancesForWeek(blocks); for(const seg of inst){ const b=boundsFromSeg(seg); const el=document.createElement('div'); el.className='blockRect'; el.dataset.id = seg.id; el.dataset.groupId = seg.groupId || ''; el.style.left = \`\${b.offsetLeft}px\`; el.style.top = \`\${b.topY}px\`; el.style.width = \`\${b.colWidth}px\`; el.style.height = \`\${b.height}px\`; el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLORS[8]; el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectBlockUnified(seg); }); document.getElementById('blocksHost').appendChild(el); } document.getElementById('weekGrid').onclick = onWeekGridTap; } /* overlays util */ function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); } /* ---------- SELECTOR TOOL ---------- */ async function onWeekGridTap(e){ if(_modalOpen) return; const blockEl = e.target.closest('.blockRect'); if(blockEl) return; if(!weekGeom) return; const rect = weekGeom.rect; const relX = e.clientX - rect.left; const relY = e.clientY - rect.top; let dayIdx=0; for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } } const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440; let startMin = snap15(Math.floor(minuteFloat/60)*60); let endMin = clamp(startMin + 60, 0, 1440); const busy = await dayBusyIntervals(getVisibleWeekStamp(), dayIdx, null); const fit = largestFreeStartingAt(startMin, busy, 15); if(!fit){ clearSelector(); return; } endMin = Math.min(fit.start + 60, fit.end); if(endMin - fit.start < 15){ clearSelector(); return; } chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null, dir: null }; saveChain(chain).catch(()=>{}); clearBlockFocus(); drawSelector(); showSelectorButtons(); } function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); } function chevronsSVG(dir, colW, rowH){ const padX = 8; const w = Math.max(24, colW - padX*2); const h = Math.max(44, Math.floor(rowH*parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6)); const mid = w/2; const gap = h/6; const span = Math.min(w*0.42, h/4); const triUp = (y)=>\`M \${mid-span} \${y+span} L \${mid} \${y} L \${mid+span} \${y+span}\`; const triDn = (y)=>\`M \${mid-span} \${y} L \${mid} \${y+span} L \${mid+span} \${y}\`; const d1 = (dir==='up'? triUp(gap) : triDn(gap)); const d2 = (dir==='up'? triUp(gap*2.2) : triDn(gap*2.2)); const d3 = (dir==='up'? triUp(gap*3.4) : triDn(gap*3.4)); return \`<div class="chev"><svg width="\${w}" height="\${h}" viewBox="0 0 \${w} \${h}" aria-hidden="true"><path d="\${d1}"/><path d="\${d2}"/><path d="\${d3}"/></svg></div>\`; } function drawSelector(){ const host=document.getElementById('selHost'); if(!host || !weekGeom){ return; } host.innerHTML=''; if(!chain){ return; } const parentHere = segOnThisWeek(chain.parent); const childHere = segOnThisWeek(chain.child); if(!parentHere && !childHere) return; const renderEntry = (seg, which, showTop, showBottom)=>{ const b=boundsFromSeg(seg); const rectEl=document.createElement('div'); rectEl.className='marqueeRect'; rectEl.dataset.name=which; rectEl.style.left = \`\${weekGeom.colX[seg.dayIdx]}px\`; rectEl.style.top = \`\${b.topY}px\`; rectEl.style.width = \`\${b.colWidth}px\`; rectEl.style.height = \`\${b.height}px\`; host.appendChild(rectEl); const rowH = weekGeom.rowH[0] || 48; const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6); const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10; const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0; const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6; const sH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26; const group=document.createElement('div'); group.style.position='absolute'; group.style.left = \`\${weekGeom.colX[seg.dayIdx]}px\`; group.style.top = \`\${b.topY}px\`; group.style.width=\`\${b.colWidth}px\`; group.style.height=\`\${b.height}px\`; host.appendChild(group); if(showTop){ const topStamp=document.createElement('div'); topStamp.className='stamp'; topStamp.textContent = HHMM_24(seg.startMin); topStamp.style.left = (b.colWidth/2)+'px'; topStamp.style.top = (- (sGap + sH))+'px'; group.appendChild(topStamp); const topHandle=document.createElement('div'); topHandle.className='handle top'; topHandle.style.left='0px'; topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px'; topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px'; topHandle.innerHTML = \`<div class="chev-chip">\${chevronsSVG('up', b.colWidth, rowH)}</div>\`; topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', which), {passive:false}); group.appendChild(topHandle); } if(showBottom){ const botStamp=document.createElement('div'); botStamp.className='stamp'; botStamp.textContent = HHMM_24(seg.endMin); botStamp.style.left = (b.colWidth/2)+'px'; botStamp.style.top = (b.height + sGap)+'px'; group.appendChild(botStamp); const botHandle=document.createElement('div'); botHandle.className='handle bottom'; botHandle.style.left='0px'; botHandle.style.top = (b.height + sGap + sH + hGap)+'px'; botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px'; botHandle.innerHTML = \`<div class="chev-chip">\${chevronsSVG('down', b.colWidth, rowH)}</div>\`; botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', which), {passive:false}); group.appendChild(botHandle); } }; if(parentHere && !childHere){ renderEntry(chain.parent,'parent',true,true); } else if(!parentHere && childHere){ renderEntry(chain.child,'child',true,true); } else { renderEntry(chain.parent,'parent',true,false); renderEntry(chain.child,'child',false,true); } positionSelectorButtons(); } function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); } function showSelectorButtons(){ removeSelectorButtons(); if(!chain || !chain.parent || !weekGeom) return; const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='selectorBtns'; const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.title='Settings'; gear.innerHTML = \`<svg viewBox="0 0 24 24" aria-hidden="true"> <circle cx="12" cy="12" r="3.5" /> <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /> </svg>\`; gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); }); gear.onclick = ()=> openSettingsModal(null); const close = document.createElement('button'); close.className='neu-btn--sm'; close.title='Clear'; close.innerHTML = \`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\`; close.onclick = ()=> clearSelector(); wrap.appendChild(gear); wrap.appendChild(close); document.body.appendChild(wrap); positionSelectorButtons(); } function positionSelectorButtons(){ const seg = chain?.parent; if(!seg || !weekGeom) return; const b=boundsFromSeg(seg); const margin=8, btnW=44, totalH=(44*2)+8; let left = weekGeom.rect.left + weekGeom.colX[seg.dayIdx] + b.colWidth + margin; if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[seg.dayIdx] - margin - btnW); } let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2); top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top)); const wrap=document.getElementById('selectorBtns'); if(wrap){ wrap.style.left=\`\${Math.round(left)}px\`; wrap.style.top=\`\${Math.round(top)}px\`; } } function clearSelector(){ chain=null; saveChain(null).catch(()=>{}); clearSelHost(); removeSelectorButtons(); } async function clampSelectorAgainstBlocks(seg){ const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null); const clamped = clampToFreeWindow(seg.startMin, seg.endMin, busy); seg.startMin = clamped.start; seg.endMin = clamped.end; } function startDrag(ev, kind, which){ if(!chain || _modalOpen) return; const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return; ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId); dragKind = kind; dragTarget = which; dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin; dragPixels=0; wasDrag=false; desiredEdgeIntent=null; const move=async (e)=>{ if(_modalOpen) return; const dyPx = e.clientY - dragStartY; dragPixels = Math.max(dragPixels, Math.abs(dyPx)); const movedMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0); const snappedDelta = snap15(movedMin); let desiredStart = baseStart, desiredEnd = baseEnd; if(dragKind==='top'){ desiredStart = baseStart + snappedDelta; } else { desiredEnd = baseEnd + snappedDelta; } desiredEdgeIntent = null; if(dragKind==='top' && desiredStart < 0) desiredEdgeIntent='prev'; if(dragKind==='bottom' && desiredEnd > 1440) desiredEdgeIntent='next'; if(dragKind==='top'){ seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15); } else { seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440); } await clampSelectorAgainstBlocks(seg); wasDrag = wasDrag || Math.abs(snappedDelta) >= 15; drawSelector(); }; const up=async (e)=>{ seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin); if(seg.endMin - seg.startMin < 15){ if(dragKind==='top'){ seg.startMin = seg.endMin - 15; } else { seg.endMin = seg.startMin + 15; } } if(!_modalOpen && wasDrag && !chain.child && desiredEdgeIntent){ await spilloverConfirm(desiredEdgeIntent); } await saveChain(chain).catch(()=>{}); e.currentTarget.releasePointerCapture(e.pointerId); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); dragKind=null; desiredEdgeIntent=null; }; window.addEventListener('pointermove', move, {passive:false}); window.addEventListener('pointerup', up, {passive:true}); } async function spilloverConfirm(direction){ if(_modalOpen) return; _modalOpen=true; const res = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?'); _modalOpen=false; if(!res) return; await confirmSpill(direction); } function modalConfirm(text){ return new Promise((resolve)=>{ const veil=document.createElement('div'); veil.className='veil'; const modal=document.createElement('div'); modal.className='modal'; const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); }; ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel'] .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false})); modal.innerHTML=\`<div class="head">\${text}</div> <div class="settings-wrap" style="padding:16px"></div> <div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>\`; document.body.appendChild(veil); document.body.appendChild(modal); const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); }; modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); }); veil.addEventListener('click', ()=>close(false)); }); } async function confirmSpill(direction){ if(!chain || !chain.parent) return; const p = chain.parent; let childWeek = p.weekSt; let childDay = p.dayIdx; chain.dir = direction; if(direction==='next'){ const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null); const parentClamp = clampToFreeWindow(p.startMin, 1440, parentBusy); p.endMin = parentClamp.end; if(p.dayIdx < 6){ childDay = p.dayIdx + 1; childWeek = p.weekSt; } else { childDay = 0; childWeek = p.weekSt + 7*DAY_MS; } const childBusy = await dayBusyIntervals(childWeek, childDay, null); const freeStart = largestFreeStartingAt(0, childBusy, 15); if(!freeStart){ chain.child=null; await saveChain(chain); repaintWeek(true); drawSelector(); return; } chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: freeStart.start, endMin: Math.max(freeStart.start+15, freeStart.start + (60 - (p.endMin - p.startMin))) }; if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); } }else{ const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null); const parentClamp = clampToFreeWindow(0, p.endMin, parentBusy); p.startMin = parentClamp.start; if(p.dayIdx > 0){ childDay = p.dayIdx - 1; childWeek = p.weekSt; } else { childDay = 6; childWeek = p.weekSt - 7*DAY_MS; } const childBusy = await dayBusyIntervals(childWeek, childDay, null); const free=[]; let prev=0; for(const b of childBusy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); } if(prev<1440) free.push({s:prev, e:1440}); const last = free.length? free[free.length-1] : null; if(!last){ chain.child=null; await saveChain(chain); repaintWeek(true); drawSelector(); return; } chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:last.s, endMin:last.e }; if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); } } await saveChain(chain); repaintWeek(true); drawSelector(); } /* ---------- EXISTING BLOCK SELECTION ---------- */ async function selectBlockUnified(seg){ clearSelHost(); selectedGroup=null; selectedBlock=null; if(seg.groupId){ const all = await getBlocksAll(); const group = (await getInstancesForWeek(all)).filter(b => b.groupId===seg.groupId); selectedGroup = group.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt)); focusGroup(selectedGroup); showBlockButtons(selectedGroup[0]); }else{ selectedBlock = {...seg}; drawBlockFocus(selectedBlock); showBlockButtons(selectedBlock); } removeSelectorButtons(); } function drawBlockFocus(seg){ clearSelHost(); const host=document.getElementById('selHost'); if(!host || !weekGeom) return; const b=boundsFromSeg(seg); const rectEl=document.createElement('div'); rectEl.className='focusRect'; rectEl.style.left = \`\${weekGeom.colX[seg.dayIdx]}px\`; rectEl.style.top = \`\${b.topY}px\`; rectEl.style.width = \`\${b.colWidth}px\`; rectEl.style.height = \`\${b.height}px\`; host.appendChild(rectEl); } function focusGroup(group){ clearSelHost(); for(const seg of group){ drawBlockFocus(seg); } } function addLiftShadow(seg){ const host=document.getElementById('selHost'); if(!host || !weekGeom) return null; const b=boundsFromSeg(seg); const sh=document.createElement('div'); sh.className='liftShadow'; sh.style.left = \`\${weekGeom.colX[seg.dayIdx]}px\`; sh.style.top = \`\${b.topY}px\`; sh.style.width = \`\${b.colWidth}px\`; sh.style.height = \`\${b.height}px\`; host.insertBefore(sh, host.firstChild); return sh; } function clearBlockFocus(){ selectedBlock=null; selectedGroup=null; dragBlockMode=false; removeBlockButtons(); clearSelHost(); dragBtnRef=null; } function buttonEl(iconPath, label, id){ const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label; b.innerHTML=\`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="\${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\`; return b; } function showBlockButtons(seg){ removeBlockButtons(); const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns'; const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move","dragBtn"); const copyBtn = buttonEl("M9 9h9v9H9z M6 6h9v9H6z","Copy"); const gearBtn = buttonEl("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v3M12 17.5v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1","Settings"); const closeBtn = buttonEl("M6 6l12 12M18 6L6 18","Close"); wrap.appendChild(dragBtn); wrap.appendChild(copyBtn); wrap.appendChild(gearBtn); wrap.appendChild(closeBtn); document.body.appendChild(wrap); dragBtnRef = dragBtn; dragBtn.onclick = ()=>toggleBlockDrag(seg); copyBtn.onclick = ()=>copyBlockUnified(); gearBtn.onclick = ()=>openSettingsForSelection(); closeBtn.onclick = ()=>clearBlockFocus(); positionBlockButtons(seg); } function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); dragBtnRef=null; } function positionBlockButtons(seg){ const b=boundsFromSeg(seg); const margin=8, btnW=44, totalH=(44*4)+8*3; let left = weekGeom.rect.left + weekGeom.colX[seg.dayIdx] + b.colWidth + margin; if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[seg.dayIdx] - margin - btnW); } let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2); top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top)); const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=\`\${Math.round(left)}px\`; wrap.style.top=\`\${Math.round(top)}px\`; } } /* drag existing block */ let liftEl=null; function toggleBlockDrag(seg){ if(!dragBlockMode){ startBlockDrag(seg); } else { endBlockDrag(true); } } function currentSelectionPrimary(){ if(selectedGroup && selectedGroup.length){ return selectedGroup[0]; } return selectedBlock; } function currentSelectionAllIds(){ if(selectedGroup && selectedGroup.length){ return selectedGroup.map(s=>s.id); } return selectedBlock? [selectedBlock.id] : []; } async function startBlockDrag(seg){ dragBlockMode=true; if(dragBtnRef) dragBtnRef.classList.add('drag-on'); const primary = currentSelectionPrimary(); drawBlockFocus(primary); liftEl = addLiftShadow(primary); const duration = (selectedGroup && selectedGroup.length===2) ? ((selectedGroup[0].weekSt===selectedGroup[1].weekSt && selectedGroup[0].dayIdx===selectedGroup[1].dayIdx) ? (selectedGroup[1].endMin - selectedGroup[0].startMin) : ((1440 - selectedGroup[0].startMin) + selectedGroup[1].endMin)) : (primary.endMin - primary.startMin); const onMove=async (e)=>{ if(!dragBlockMode || !weekGeom) return; const x = clamp(e.clientX - weekGeom.rect.left, 0, weekGeom.totalW-1); const y = clamp(e.clientY - weekGeom.rect.top, 0, weekGeom.totalH-1); let dayIdx=0; for(let i=0;i<7;i++){ if(x>=weekGeom.colX[i] && x<weekGeom.colX[i+1]){ dayIdx=i; break; } } let mins = snap15((y/weekGeom.totalH)*1440); const busy = await dayBusyIntervals(getVisibleWeekStamp(), dayIdx, primary.groupId || primary.id); const free=[]; let prev=0; for(const b of busy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); } if(prev<1440) free.push({s:prev, e:1440}); let startMin=null; for(const f of free){ if(mins>=f.s && mins<=f.e-duration){ startMin = mins; break; } if(mins<f.s && f.e - f.s >= duration){ startMin = f.s; break; } } if(startMin===null){ return; } const temp={...primary, dayIdx, startMin, endMin:startMin+duration}; selectedBlock=temp; selectedGroup=null; drawBlockFocus(temp); if(liftEl){ const b=boundsFromSeg(temp); liftEl.style.left=\`\${weekGeom.colX[temp.dayIdx]}px\`; liftEl.style.top =\`\${b.topY}px\`; liftEl.style.width=\`\${b.colWidth}px\`; liftEl.style.height=\`\${b.height}px\`; } positionBlockButtons(temp); }; const onUp=()=>{ endBlockDrag(true); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); }; window.addEventListener('pointermove', onMove, {passive:true}); window.addEventListener('pointerup', onUp, {passive:true}); } async function endBlockDrag(commit){ if(dragBtnRef) dragBtnRef.classList.remove('drag-on'); if(liftEl){ liftEl.remove(); liftEl=null; } dragBlockMode=false; if(commit && selectedBlock){ await putBlock(selectedBlock); await drawBlocks(); selectBlockUnified(selectedBlock); } } /* copy existing block */ async function copyBlockUnified(){ const ids = currentSelectionAllIds(); if(!ids.length) return; const all = await getBlocksAll(); const selected = all.filter(b=> ids.includes(b.id)); const newGroup = selected[0].groupId ? ('g'+Date.now()) : null; for(const s of selected){ const clone={...s, id:'b'+(Date.now()+Math.floor(Math.random()*1000)), groupId:newGroup||undefined}; await putBlock(clone); } await drawBlocks(); } /* settings modal */ function openSettingsForSelection(){ if(selectedGroup && selectedGroup.length){ openSettingsModal(selectedGroup[0]); } else if(selectedBlock){ openSettingsModal(selectedBlock); } } function openSettingsModal(existingSeg){ _modalOpen=true; const editingExisting = !!existingSeg; const veil = document.createElement('div'); veil.className='veil'; const modal = document.createElement('div'); modal.className='modal'; const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); }; ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel'] .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false})); let baseSeg = editingExisting ? existingSeg : (chain?.parent || {weekSt:getVisibleWeekStamp(), dayIdx:0, startMin:480, endMin:540}); let unified = null; if(editingExisting && existingSeg.groupId){ const group = selectedGroup && selectedGroup.length ? selectedGroup : [existingSeg]; const first = group[0], last = group[group.length-1]; const startDay = new Date(first.weekSt + first.dayIdx*DAY_MS); const endDayDate = new Date(last.weekSt + last.dayIdx*DAY_MS); unified = { weekSt:first.weekSt, fromDayIdx:first.dayIdx, toDayIdx:last.dayIdx, fromMin:first.startMin, toMin:last.endMin, startDow: SHORT_DOW[startDay.getDay()], endDow: SHORT_DOW[endDayDate.getDay()] }; } const startDay = new Date(baseSeg.weekSt + baseSeg.dayIdx*DAY_MS); const startDow = SHORT_DOW[startDay.getDay()]; const defaults = { activityKey: editingExisting ? existingSeg.activityKey : null, colorHex: editingExisting ? (existingSeg.colorHex || getActivityByKey(existingSeg.activityKey).color) : null, nameOverride: editingExisting ? existingSeg.activityName : null, note: editingExisting ? (existingSeg.note||'') : '', fromMin: unified? unified.fromMin : baseSeg.startMin, toMin: unified? unified.toMin : baseSeg.endMin, fromDow: unified? unified.startDow : startDow, toDow: unified? unified.endDow : startDow, recurrence: editingExisting ? (existingSeg.recurrence==='weekly'?'reoccurring':existingSeg.recurrence==='none'?'week':'month') : 'reoccurring', flexibility: editingExisting ? existingSeg.flexibility : 'flexible', notify: editingExisting ? existingSeg.notifications : 'reoccurring', privacy: editingExisting ? existingSeg.privacy : 'private' }; modal.innerHTML = \` <div class="head">Settings</div> <div class="settings-wrap" id="settingsWrap"> <div class="neu-field" id="assignField"> <div class="neu-select" id="assignSelect" role="button" aria-expanded="false"> <span class="ph" id="assignLabel">\${defaults.activityKey? getActivityByKey(defaults.activityKey).label : 'Assign Activity'}</span> <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg> </div> <div class="neu-menu" id="assignMenu"><div class="menu-card" id="assignList"></div></div> <div class="row" id="selectedChipRow" style="\${defaults.activityKey?'':'display:none'}"> <span class="chip" id="actChip"> <span class="dot" id="actDot" style="background:\${defaults.colorHex||'#ccc'}"></span> <span id="actName">\${defaults.nameOverride || (defaults.activityKey? getActivityByKey(defaults.activityKey).label : '')}</span> <button class="edit" id="renameBtn" title="Rename"> <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg> </button> </span> </div> <input class="note-input" id="noteInput" maxlength="80" placeholder="Add a note (e.g., Walk the dog, Bank run)" value="\${(defaults.note||'').replace(/"/g,'&quot;')}" /> </div> <div class="neu-field"> <div class="time-row"> <div class="time-pair"><span class="time-day" id="fromDay">\${defaults.fromDow}</span><button class="time-btn" id="fromBtn" type="button">\${HHMM_24(defaults.fromMin)}</button></div> <div class="time-pair"><span class="time-day" id="toDay">\${defaults.toDow}</span><button class="time-btn" id="toBtn" type="button">\${HHMM_24(defaults.toMin)}</button></div> </div> <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" /> <input id="toPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" /> </div> <div class="neu-field"> <div class="row4"> <div class="neu-select" id="recurringSel"><span>\${defaults.recurrence[0].toUpperCase()+defaults.recurrence.slice(1)}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div> <div class="neu-menu" id="recurringMenu"><div class="menu-card"> <div class="menu-item" data-val="reoccurring">Reoccurring</div> <div class="menu-item" data-val="week">This week</div> <div class="menu-item" data-val="month">This month</div> </div></div> <div class="neu-select" id="flexSel"><span>\${defaults.flexibility==='firm'?'Firm':'Flexible'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div> <div class="neu-menu" id="flexMenu"><div class="menu-card"> <div class="menu-item" data-val="flexible">Flexible</div> <div class="menu-item" data-val="firm">Firm</div> </div></div> <div class="neu-select" id="notifSel"><span>Notifications</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div> <div class="neu-menu" id="notifMenu"><div class="menu-card"> <div class="menu-item" data-val="reoccurring">Reoccurring</div> <div class="menu-item" data-val="week">This week</div> <div class="menu-item" data-val="month">This month</div> <div class="menu-item" data-val="off">Off</div> </div></div> <div class="neu-select" id="privacySel"><span>\${defaults.privacy==='private'?'Private':'Visible to connected accounts'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div> <div class="neu-menu" id="privacyMenu"><div class="menu-card"> <div class="menu-item" data-val="private">Private</div> <div class="menu-item" data-val="visible">Visible to connected accounts</div> </div></div> </div> </div> <div class="row"><button class="btn" id="statsBtn">Statistics</button></div> </div> <div class="foot"> <button class="btn" id="deleteBtn">Delete</button> <div style="display:flex; gap:10px; margin-left:auto"> <button class="btn" id="exitBtn">Exit</button> <button class="btn ok" id="saveBtn">Save</button> </div> </div> \`; document.body.appendChild(veil); document.body.appendChild(modal); const closeModal = ()=>{ veil.remove(); modal.remove(); _modalOpen=false; }; veil.addEventListener('click', ()=>{ confirmExit(()=> closeModal()); }); const listEl = modal.querySelector('#assignList'); ACTIVITY_LIST.forEach(a=>{ const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key; const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color; const label = document.createElement('span'); label.textContent = a.label; row.appendChild(dot); row.appendChild(label); row.addEventListener('click', ()=>{ defaults.activityKey = a.key; defaults.colorHex = a.color; defaults.flexibility = defaultFlexForActivity(a.key); modal.querySelector('#assignLabel').textContent = a.label; modal.querySelector('#assignMenu').classList.remove('open'); modal.querySelector('#assignSelect').setAttribute('aria-expanded','false'); modal.querySelector('#selectedChipRow').style.display = ''; modal.querySelector('#actDot').style.background = a.color; const name = modal.querySelector('#actName').textContent || a.label; modal.querySelector('#actName').textContent = name; modal.querySelector('#flexSel span').textContent = (defaults.flexibility==='firm'?'Firm':'Flexible'); }); listEl.appendChild(row); }); modal.querySelector('#assignSelect').addEventListener('click', ()=>{ const m = modal.querySelector('#assignMenu'); const open=m.classList.toggle('open'); modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false'); }); modal.querySelector('#renameBtn').addEventListener('click', ()=>{ const nameEl = modal.querySelector('#actName'); const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14); if(next && next.trim().length){ nameEl.textContent = next.trim(); } }); hookMenu(modal, '#recurringSel','#recurringMenu', (v,l)=>{ defaults.recurrence=v; modal.querySelector('#recurringSel span').textContent=l; }); hookMenu(modal, '#flexSel','#flexMenu', (v,l)=>{ defaults.flexibility=v; modal.querySelector('#flexSel span').textContent=l; }); hookMenu(modal, '#notifSel','#notifMenu', (v,l)=>{ defaults.notify=v; modal.querySelector('#notifSel span').textContent=l; }); hookMenu(modal, '#privacySel','#privacyMenu', (v,l)=>{ defaults.privacy=v; modal.querySelector('#privacySel span').textContent=l; }); const fromBtn = modal.querySelector('#fromBtn'); const toBtn = modal.querySelector('#toBtn'); const fromPk = modal.querySelector('#fromPicker'); const toPk = modal.querySelector('#toPicker'); function setPickerValue(input, minutes){ const h=Math.floor(minutes/60), m=minutes%60; input.value=\`\${String(h).padStart(2,'0')}:\${String(m).padStart(2,'0')}\`; } setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin); fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.(); fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,2880); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440); }; toPk.onchange =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin && defaults.toDow===defaults.fromDow) mins=clamp(defaults.fromMin+15,0,1440); defaults.toMin=(defaults.toDow===defaults.fromDow? mins : 1440+mins); toBtn.textContent=HHMM_24(defaults.toMin%1440); }; modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); }; modal.querySelector('#exitBtn').onclick=()=>{ confirmExit(()=> closeModal()); }; modal.querySelector('#saveBtn').onclick=async()=>{ if(!defaults.activityKey){ alert('Please assign an activity.'); return; } if(!(defaults.toMin>defaults.fromMin)){ alert('End time must be after start time.'); return; } const note = modal.querySelector('#noteInput').value.trim(); const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label; if(editingExisting){ const updated = { ...existingSeg, activityKey: defaults.activityKey, activityName: actName, colorHex: defaults.colorHex, startMin: defaults.fromMin%1440, endMin: Math.min(1440, defaults.toMin), note, recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'), flexibility: defaults.flexibility, notifications: defaults.notify, privacy: defaults.privacy }; const busy = await dayBusyIntervals(updated.weekSt, updated.dayIdx, updated.id); const clamped = clampToFreeWindow(updated.startMin, updated.endMin, busy); updated.startMin = clamped.start; updated.endMin = clamped.end; await putBlock(updated); await drawBlocks(); selectBlockUnified(updated); }else{ await finalizeBlock({ actKey: defaults.activityKey, actName, colorHex: defaults.colorHex, from: defaults.fromMin, to: defaults.toMin, recurVal: defaults.recurrence, flexVal: defaults.flexibility, notifVal: defaults.notify, privVal: defaults.privacy, note }); } closeModal(); }; modal.querySelector('#deleteBtn').onclick=async()=>{ if(!editingExisting){ confirmExit(()=> closeModal()); return; } const ok = await modalConfirm('Are you sure you want to delete this entire block?'); if(ok){ await delBlock(existingSeg.id); await drawBlocks(); clearBlockFocus(); closeModal(); } }; } function hookMenu(root, selSel, menuSel, onPick){ const trigger = root.querySelector(selSel); const menu = root.querySelector(menuSel); trigger.addEventListener('click', ()=>{ const open = menu.classList.toggle('open'); trigger.setAttribute('aria-expanded', open?'true':'false'); }); menu.querySelectorAll('.menu-item').forEach(mi=> mi.addEventListener('click', ()=>{ onPick(mi.dataset.val, mi.textContent.trim()); menu.classList.remove('open'); trigger.setAttribute('aria-expanded','false'); })); } function confirmExit(done){ modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); }); } /* finalize new block */ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){ if(!chain || !chain.parent) return; const parent = chain.parent; const busyP = await dayBusyIntervals(parent.weekSt, parent.dayIdx, null); const clampedP = clampToFreeWindow(from%1440, Math.min(1440,to), busyP); let pStart = clampedP.start, pEnd = clampedP.end; const base = { id: 'b'+Date.now(), weekSt: parent.weekSt, dayIdx: parent.dayIdx, startMin: pStart, endMin: pEnd, activityKey: actKey, activityName: actName, colorHex, note: note || '', recurrence: (recurVal==='reoccurring' ? 'weekly' : (recurVal==='week' ? 'none' : 'monthly')), flexibility: flexVal, notifications: notifVal, privacy: privVal }; await putBlock(base); chain = null; await saveChain(null); await drawBlocks(); clearBlockFocus(); clearSelector(); } /* Stats (placeholder) */ async function openStatsModal(activityName){ const veil=document.createElement('div'); veil.className='veil'; const modal=document.createElement('div'); modal.className='modal'; const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); }; ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel'] .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false})); _modalOpen=true; modal.innerHTML = \` <div class="head">Statistics — \${activityName}</div> <div class="settings-wrap" id="statsWrap"> <div class="row">Coming soon</div> </div> <div class="foot"><button class="btn ok" id="closeStats">Close</button></div> \`; document.body.appendChild(veil); document.body.appendChild(modal); modal.querySelector('#closeStats').onclick=()=>{ veil.remove(); modal.remove(); _modalOpen=false; }; veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); _modalOpen=false; }); } /* Screensaver (no active view) */ function showScreensaver(){ screenEl.innerHTML = \` <div class="screensaver"> <div class="wm">Chrono r80.fix3 — Week-only build</div> </div> \`; } /* init */ async function init(){ try{ const snap = await storageGet('state'); if(snap){ activeView = snap.activeView ?? 'week'; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); }); const btn = document.querySelector(\`.neu-btn[data-view="\${activeView}"]\`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }catch{} render(); document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); } }); window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); }); } function render(){ if(activeView==='week'){ buildWeekView(); } else if(activeView==='day' || activeView==='month' || activeView==='todo'){ screenEl.innerHTML=\`<div class="wrap"><div class="head"><div></div><div class="title">\${activeView[0].toUpperCase()+activeView.slice(1)} (disabled)</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#667a90"><div>Not available in this build</div></div></div>\`; }else{ showScreensaver(); } } async function saveAll(){ await storageSet('state', { activeView, visibleWeekFirst:+visibleWeekFirst }); } let _saveT=null; function saveSoon(ms=200){ clearTimeout(_saveT); _saveT=setTimeout(()=>saveAll().catch(()=>{}), ms); } init(); 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chrono</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<style>
+  :root{
+    --bg:#e3eaf2; --ink:#42586d;
+    --icon-inactive:#42586d; --icon-active:#4ff7ff;
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
+
+    --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
+    --gap:24px; --radius:12px;
+
+    --border:#c6cfda; --grid-line:#cfd9e5;
+    --chart-bg:#d1dce8; --mask-surface: var(--bg);
+
+    --hour-col:64px; --dow-h:32px; --label-size:12px;
+
+    --marquee-border:5px;
+    --marquee-shadow:0 0 12px 6px var(--turq-glow);
+
+    --handle-stroke:#5e7286;
+    --chev-stroke-w:2.2;
+    --handle-gap:10px;
+    --top-handle-extra:10px;
+    --handle-height-mult:1.6;
+
+    --stamp-gap:6px; --stamp-h:26px;
+
+    --neu-shadow-outer:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    --neu-shadow-inner:
+       inset calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       inset var(--off)         var(--off)         var(--blur) var(--lo);
+    --neu-offset-shadow: 8px 10px 20px rgba(0,0,0,.22);
+  }
+
+  html,body{
+    height:100%; margin:0; background:var(--bg); color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  *{box-sizing:border-box}
+
+  .app{
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin:max(16px, env(safe-area-inset-top)) auto;
+    display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
+  }
+
+  #screen{
+    flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
+    box-shadow: var(--neu-shadow-outer);
+    position:relative; overflow:hidden;
+  }
+
+  /* Controls */
+  .controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
+  .neu-btn{
+    --btn-d: calc((100% - (3 * var(--gap))) / 4);
+    flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
+    border-radius:50%; border:none; outline:none; cursor:pointer;
+    background:var(--bg); display:grid; place-items:center;
+    box-shadow: var(--neu-shadow-outer);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
+  }
+  .neu-btn svg{
+    width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
+    fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-btn.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
+      var(--pressed-navy);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+  .neu-btn.is-pressed svg{
+    stroke:var(--icon-active);
+    filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
+  }
+  .neu-btn:active{ transform:scale(.985); }
+  .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; box-shadow:var(--neu-shadow-outer); display:grid; place-items:center; transition:background .15s ease; }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+  .neu-btn--sm.drag-on{ background:var(--pressed-navy); }
+  .neu-btn--sm.drag-on svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
+
+  /* Layout inside week screen */
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+  .grid-area{ position:relative; overflow:hidden }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
+
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) }
+
+  .grid{
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+    z-index:0;
+  }
+
+  /* Blocks under mask */
+  .blocksHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
+  .blockRect{ position:absolute; border-radius:10px; box-shadow:none; border:none; cursor:pointer; }
+
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
+
+  /* Selector + block focus overlay */
+  .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
+
+  /* Selector (glow) */
+  .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
+
+  /* Focus (no glow) */
+  .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
+
+  /* Stamps */
+  .stamp{
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
+    pointer-events:none; z-index:5;
+    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    height:var(--stamp-h); display:grid; place-items:center;
+  }
+
+  /* Handles */
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:3; touch-action:none; display:grid; place-items:center; }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px;
+    background:var(--bg);
+    box-shadow: var(--neu-shadow-outer);
+    display:grid; place-items:center;
+  }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+
+  .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
+
+  .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
+
+  .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
+  .modal{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 360px); background:var(--bg); color:var(--ink);
+    border-radius:12px; box-shadow: var(--neu-shadow-outer), var(--neu-offset-shadow); z-index:11;
+    display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
+  }
+  .modal .head{ padding:12px 14px; font-weight:800; background:var(--bg); box-shadow: var(--neu-shadow-inner); display:flex; align-items:center; justify-content:center; }
+  .modal .foot{ padding:10px 14px; display:flex; justify-content:space-between; gap:10px; background:var(--bg); box-shadow:var(--neu-shadow-inner); }
+  .btn{ border:none; background:var(--bg); border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; box-shadow:var(--neu-shadow-outer); }
+  .btn.icon{ width:44px; height:44px; display:grid; place-items:center; }
+  .btn.icon svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+
+  .settings-wrap{ padding:14px; display:grid; gap:14px; overflow:auto; }
+  .neu-field{ background:var(--bg); border-radius:12px; padding:10px; box-shadow:var(--neu-shadow-inner); display:grid; gap:8px; }
+  .neu-select{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); cursor:pointer; user-select:none; }
+  .neu-select .ph{ opacity:.7; }
+  .neu-select svg{ width:18px; height:18px; stroke:var(--icon-inactive); fill:none; stroke-width:1.5; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+  .neu-menu{ display:none; }
+  .neu-menu.open{ display:block; }
+  .menu-card{ margin-top:8px; background:var(--bg); border-radius:12px; box-shadow:var(--neu-shadow-outer); overflow:hidden; }
+  .menu-item{ padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px; }
+  .menu-item:not(:last-child){ border-bottom:1px solid var(--grid-line); }
+  .menu-dot{ width:14px; height:14px; border-radius:50%; box-shadow:none; border:none; }
+
+  .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .chip{ display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; background:var(--bg); box-shadow:var(--neu-shadow-outer); font-weight:800; width:fit-content; }
+  .dot{ width:12px; height:12px; border-radius:50%; border:none; box-shadow:none; }
+  .chip .edit{ border:none; background:transparent; display:grid; place-items:center; cursor:pointer; }
+  .chip .edit svg{ width:16px; height:16px; stroke:var(--icon-inactive); fill:none; stroke-width:1.6; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+
+  .note-input{ background:var(--bg); border:none; outline:none; border-radius:12px; padding:10px 12px; font-weight:700; box-shadow:var(--neu-shadow-inner); }
+
+  .row4{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .time-row{ display:grid; gap:8px; }
+  .time-pair{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:var(--bg); box-shadow:var(--neu-shadow-outer); }
+  .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
+  .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
+
+  .screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 }
+  .screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; }
+</style>
+</head>
+<body>
+  <main class="app">
+    <section id="screen" aria-live="polite" aria-label="Content area"></section>
+
+    <nav class="controls" role="group" aria-label="Primary views">
+      <button class="neu-btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="5.5"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18.5"/>
+          <line x1="9" y1="10" x2="9" y2="18.5"/>
+          <line x1="12" y1="10" x2="12" y2="18.5"/>
+          <line x1="15" y1="10" x2="15" y2="18.5"/>
+          <line x1="18" y1="10" x2="18" y2="18.5"/>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="Month view (disabled)" aria-pressed="false" data-view="month" title="Month (disabled)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <g>
+            <circle cx="7" cy="11" r="0.8"/><circle cx="11" cy="11" r="0.8"/><circle cx="15" cy="11" r="0.8"/>
+            <circle cx="7" cy="14" r="0.8"/><circle cx="11" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/>
+            <circle cx="7" cy="17" r="0.8"/><circle cx="11" cy="17" r="0.8"/><circle cx="15" cy="17" r="0.8"/>
+          </g>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="To-Do (disabled)" aria-pressed="false" data-view="todo" title="To-Do (disabled)">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="3"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+<script>
+/* Chrono r81 — Week-only build with UNIFIED blocks (24h cap).
+   Key changes vs r80:
+   - Single block spans up to 24h, can cross midnight and weeks, edited as ONE entity.
+   - New store 'uBlocks' (unified). Legacy 'blocks' gracefully ignored; basic one-time migration from r80 groups.
+   - Dragging handles respects intent; child-piece drag no longer mutates the other edge erroneously.
+   - Creating/editing across midnight/week keeps a single record; UI renders split pieces.
+   - Selector prompts when intent crosses day edges (prev/next) and auto pans to correct week when needed.
+   - Buttons anchor to the piece visible on screen.
+*/
+
+const screenEl = document.getElementById('screen');
+const buttons = [...document.querySelectorAll('.neu-btn')];
+
+let activeView = null;
+let visibleWeekFirst = weekStart(new Date());
+
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function snap15(n){ return 15 * Math.round((+n||0)/15); }
+function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
+function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
+
+const DAY_MS = 86400000;
+function weekStamp(d){ return +weekStart(d); }
+function stampToDate(st){ return new Date(st); }
+function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
+
+new ResizeObserver(()=> {
+  const w = screenEl.getBoundingClientRect().width;
+  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
+}).observe(screenEl);
+
+/* storage */
+const DB_NAME='chronoDB', DB_VERSION=33; // r81 bump
+let dbPromise=null, STORAGE_MODE='idb';
+function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
+function idbOpen(){
+  if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
+      if(!db.objectStoreNames.contains('uBlocks')) db.createObjectStore('uBlocks',{keyPath:'id'}); // unified
+      // legacy store may exist: 'blocks' (ignored except migration)
+      if(!db.objectStoreNames.contains('blocks')) db.createObjectStore('blocks',{keyPath:'id'});
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror   = ()=>reject(req.error);
+  });
+  return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
+}
+async function storageSet(k,v){
+  if(STORAGE_MODE==='ls'){ if(v===undefined) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readwrite');
+    const store=tx.objectStore('kv');
+    if(v===undefined) store.delete(k); else store.put({k,v});
+    tx.oncomplete=()=>res(true); tx.onerror = ()=>rej(tx.error);
+  });
+}
+async function storageGet(k){
+  if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readonly');
+    const req=tx.objectStore('kv').get(k);
+    req.onsuccess=()=>res(req.result? req.result.v:undefined);
+    req.onerror=()=>rej(req.error);
+  });
+}
+
+/* unified blocks store (single record per logical block) */
+async function putU(b){
+  const db = await idbOpen(); if(!db) return;
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('uBlocks','readwrite');
+    tx.objectStore('uBlocks').put(b);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+  });
+}
+async function delU(id){
+  const db = await idbOpen(); if(!db) return;
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('uBlocks','readwrite');
+    tx.objectStore('uBlocks').delete(id);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+  });
+}
+async function getAllU(){
+  const db = await idbOpen(); if(!db) return [];
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('uBlocks','readonly');
+    const req=tx.objectStore('uBlocks').getAll();
+    req.onsuccess=()=>res(req.result||[]);
+    req.onerror=()=>rej(req.error);
+  });
+}
+
+/* one-time migration: r80 grouped pairs -> unified */
+let MIGRATED=false;
+async function migrateLegacy(){
+  if(MIGRATED) return;
+  const migrated = await storageGet('migrated_r81');
+  if(migrated){ MIGRATED=true; return; }
+  const db = await idbOpen(); if(!db) return;
+  const legacy = await new Promise((res,rej)=>{
+    const tx=db.transaction('blocks','readonly');
+    const req=tx.objectStore('blocks').getAll();
+    req.onsuccess=()=>res(req.result||[]);
+    req.onerror=()=>rej(req.error);
+  }).catch(()=>[]);
+  if(!legacy.length){ await storageSet('migrated_r81', true); MIGRATED=true; return; }
+
+  // group by groupId, or singletons
+  const byG = new Map();
+  for(const b of legacy){
+    const key = b.groupId || 'solo:'+b.id;
+    if(!byG.has(key)) byG.set(key, []);
+    byG.get(key).push(b);
+  }
+  for(const [g, arr] of byG){
+    arr.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt));
+    const first = arr[0], last = arr[arr.length-1];
+    // compute absolute start stamp (epoch ms)
+    const baseDate = new Date(first.weekSt + first.dayIdx*DAY_MS);
+    const startStamp = +new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, first.startMin);
+    // compute duration in minutes across segments
+    let duration = 0;
+    if(arr.length===1){ duration = Math.max(15, (first.endMin - first.startMin)); }
+    else {
+      const endDate = new Date(last.weekSt + last.dayIdx*DAY_MS);
+      const endStamp = +new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 0, last.endMin);
+      duration = Math.max(15, Math.round((endStamp - startStamp)/60000));
+    }
+    duration = Math.min(1440, duration);
+    const any = first;
+    const u = {
+      id: 'u'+(first.id || Date.now())+Math.floor(Math.random()*1000),
+      startTs: startStamp,         // epoch ms
+      durationMin: duration,       // 15..1440
+      activityKey: any.activityKey,
+      activityName: any.activityName || null,
+      colorHex: any.colorHex || null,
+      note: any.note || '',
+      recurrence: any.recurrence || 'weekly',
+      flexibility: any.flexibility || 'flexible',
+      notifications: any.notifications || 'reoccurring',
+      privacy: any.privacy || 'private'
+    };
+    await putU(u);
+  }
+  await storageSet('migrated_r81', true);
+  MIGRATED=true;
+}
+
+/* palette + activities */
+const COLORS = ['#F7D6D0','#D6EEF5','#BFD9CF','#F7E08C','#E77D7A','#4EA1D6','#4FA684','#E5B21A','#E3423A','#1E6FB6','#187245','#D79516','#7F1D2D','#0E3B5C','#0A3A34','#C1730D'];
+const ACTIVITY_LIST = [
+  {key:'work', label:'Work',       color: COLORS[8]},
+  {key:'school', label:'School',   color: COLORS[9]},
+  {key:'commute', label:'Commute', color: COLORS[7]},
+  {key:'chores', label:'Chores',   color: COLORS[4]},
+  {key:'errands', label:'Errands', color: COLORS[11]},
+  {key:'meal', label:'Meal Time',  color: COLORS[3]},
+  {key:'hygiene', label:'Hygiene', color: COLORS[1]},
+  {key:'childcare', label:'Child Care', color: COLORS[12]},
+  {key:'selfcare', label:'Self Care',   color: COLORS[6]},
+  {key:'exercise', label:'Exercise',    color: COLORS[10]},
+  {key:'family', label:'Family Time',   color: COLORS[15]},
+  {key:'hobbies', label:'Hobbies',      color: COLORS[14]},
+  {key:'projects', label:'Projects',    color: COLORS[13]},
+  {key:'rr', label:'R & R',             color: COLORS[2]},
+  {key:'free', label:'Free Time',       color: COLORS[0]},
+  {key:'sleep', label:'Sleep',          color: COLORS[9]}
+];
+function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
+function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
+
+/* unified selection state */
+let sel = null; // { id?, startTs, durationMin } for NEW selection (not yet saved)
+let weekGeom=null;
+let focusU=null; // unified block currently focused for edit/drag (object from store)
+let dragKind=null; // 'top'|'bottom'
+let dragStartY=0, baseStartTs=0, baseDuration=0, desiredEdgeIntent=null, wasDrag=false;
+let dragBlockMode=false; let dragBtnRef=null;
+let _modalOpen=false;
+
+/* controls */
+document.querySelector('.controls').addEventListener('click', e=>{
+  const b=e.target.closest('.neu-btn'); if(!b) return;
+  const v=b.dataset.view;
+  const wasPressed = b.classList.contains('is-pressed');
+  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+  if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
+  if(activeView===v){
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+    showScreensaver(); removeBlockButtons(); removeSelectorButtons(); clearSelHost();
+  } else {
+    activeView=v; render();
+  }
+  saveSoon(200);
+});
+
+/* ---- Week view ---- */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg>
+        </button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg>
+        </button>
+      </div>
+
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
+          <div class="blocksHost" id="blocksHost"></div>
+          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="selHost" id="selHost"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearUnifiedSelector(); };
+  document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearUnifiedSelector(); };
+
+  repaintWeek();
+
+  const grid = document.getElementById('weekGrid');
+  grid.addEventListener('click', onWeekGridTap);
+
+  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(focusU) focusUnified(focusU); if(sel) drawUnifiedSelector(); }).observe(grid);
+  window.addEventListener('scroll', ()=>{ if(activeView==='week' && focusU) positionBlockButtons(pieceForVisible(focusU) || focusU); if(activeView==='week' && sel) positionSelectorButtons(); }, {passive:true});
+
+  drawBlocks();
+}
+
+function computeGeometry(gridEl, cols){
+  const r=gridEl.getBoundingClientRect();
+  const totalW=Math.max(0, Math.round(r.width));
+  const totalH=Math.max(0, Math.round(r.height));
+  const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
+  const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+  const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
+  const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+  const slotY=[0];
+  for(let hr=0;hr<24;hr++){
+    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
+    const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
+    for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
+  }
+  weekGeom={totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
+}
+function buildMask(geom, cols){
+  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
+  const { totalW, totalH, colX, rowY } = geom; if(totalW<=0 || totalH<=0) return;
+  svg.setAttribute('width', totalW); svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`); svg.setAttribute('preserveAspectRatio','none');
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs'); const sym=document.createElementNS(NS,'symbol');
+  sym.setAttribute('id','tile900x300'); sym.setAttribute('viewBox','0 0 900 300'); sym.setAttribute('preserveAspectRatio','none');
+  const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2';
+  const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
+  const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
+  sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24));
+  sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300));
+  sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
+  sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239'));
+  defs.appendChild(sym); svg.appendChild(defs);
+  for(let rI=0;rI<24;rI++){
+    for(let cI=0;cI<cols;cI++){
+      const use=document.createElementNS(NS,'use');
+      use.setAttribute('href','#tile900x300'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
+      use.setAttribute('width',colX[cI+1]-colX[cI]); use.setAttribute('height',rowY[rI+1]-rowY[rI]);
+      svg.appendChild(use);
+    }
+  }
+}
+function repaintWeek(){
+  const first=visibleWeekFirst, last=addDays(first,6);
+  document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
+  const pills=document.getElementById('dowPills'); pills.innerHTML='';
+  for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
+  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  const gridEl=document.getElementById('weekGrid');
+  computeGeometry(gridEl,7);
+  for(let i=0;i<24;i++){
+    const s=document.createElement('div'); s.className='hour-stamp';
+    s.textContent = hourToAMPM(i);
+    s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
+    gh.appendChild(s);
+  }
+  buildMask(weekGeom,7);
+}
+
+/* ---------- Unified helpers ---------- */
+function dayStartTs(dayDate){ const d=new Date(dayDate); d.setHours(0,0,0,0); return +d; }
+function piecesForWeek(u){
+  // Return array of visual pieces (0..2) for current visible week.
+  const wst = getVisibleWeekStamp();
+  const weekStartDate = stampToDate(wst);
+  const weekEndTs = wst + 7*DAY_MS;
+
+  // Recurrence weekly: shift by multiples of 7d if startTs < week
+  let sTs = u.startTs;
+  if(u.recurrence==='weekly'){
+    const delta = wst - weekStamp(new Date(u.startTs));
+    if(delta>0){
+      const weeks = Math.floor(delta/(7*DAY_MS));
+      sTs = u.startTs + weeks*7*DAY_MS;
+      if(sTs > wst) sTs -= 7*DAY_MS; // ensure not after
+    }
+  }
+
+  const eTs = sTs + u.durationMin*60000;
+  if(eTs <= wst || sTs >= weekEndTs) return [];
+
+  // compute overlap with each day in the week
+  const pieces=[];
+  for(let d=0; d<7; d++){
+    const dayTs = +new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate()+d,0,0,0,0);
+    const dayEnd = dayTs + DAY_MS;
+    const s = Math.max(sTs, dayTs);
+    const e = Math.min(eTs, dayEnd);
+    if(e> s){
+      const startMin = Math.floor((s - dayTs)/60000);
+      const endMin   = Math.ceil((e - dayTs)/60000);
+      pieces.push({ dayIdx:d, startMin, endMin });
+    }
+  }
+  return pieces;
+}
+function boundsFromPiece(piece){
+  const colLeft = weekGeom.colX[piece.dayIdx];
+  const colRight= weekGeom.colX[piece.dayIdx+1];
+  const colWidth= (colRight - colLeft) - (piece.dayIdx===6?1:0);
+  const idx = clamp(Math.round(piece.startMin/15), 0, 96);
+  const idx2= clamp(Math.round(piece.endMin/15), 0, 96);
+  const topY  = weekGeom.slotY[idx];
+  const botY  = weekGeom.slotY[idx2];
+  const height= Math.max(1, botY - topY);
+  return {offsetLeft:colLeft, colWidth, topY, botY, height};
+}
+
+/* Busy windows (other unified blocks) */
+async function dayBusyIntervals(dayAbsTs, excludeId=null){
+  const all = await getAllU();
+  const list=[];
+  for(const u of all){
+    if(excludeId && u.id===excludeId) continue;
+    const pcs = piecesForSpecificDay(u, dayAbsTs);
+    for(const p of pcs){ list.push({startMin:p.startMin, endMin:p.endMin}); }
+  }
+  list.sort((a,b)=> a.startMin-b.startMin);
+  const merged=[];
+  for(const it of list){
+    if(!merged.length || it.startMin>merged[merged.length-1].endMin){ merged.push({...it}); }
+    else { merged[merged.length-1].endMin = Math.max(merged[merged.length-1].endMin, it.endMin); }
+  }
+  return merged;
+}
+function piecesForSpecificDay(u, dayTs){
+  // Return 0..1 piece for the given dayTs
+  // Align recurrence to the week that contains dayTs
+  let sTs = u.startTs;
+  if(u.recurrence==='weekly'){
+    const uWeek = weekStamp(new Date(u.startTs));
+    const dWeek = weekStamp(new Date(dayTs));
+    const deltaWeeks = Math.floor((dWeek - uWeek)/(7*DAY_MS));
+    sTs = u.startTs + deltaWeeks*7*DAY_MS;
+  }
+  const eTs = sTs + u.durationMin*60000;
+  const dayEnd = dayTs + DAY_MS;
+  const s = Math.max(sTs, dayTs);
+  const e = Math.min(eTs, dayEnd);
+  if(e<=s) return [];
+  return [{ dayIdx: Math.floor((dayTs - getVisibleWeekStamp())/DAY_MS), startMin:Math.floor((s-dayTs)/60000), endMin:Math.ceil((e-dayTs)/60000) }];
+}
+function clampToFreeWindow(start, end, busy){
+  let s = clamp(start, 0, 1440-15);
+  let e = clamp(end, s+15, 1440);
+  for(const b of busy){
+    if(s>=b.startMin && e<=b.endMin){ s=b.endMin; e=Math.max(s+15, e); }
+    if(s < b.endMin && s >= b.startMin && e > b.endMin){ s = b.endMin; }
+    if(e > b.startMin && e <= b.endMin && s < b.startMin){ e = b.startMin; }
+    if(s < b.startMin && e > b.endMin){
+      if(b.startMin - s >= 15){ e = b.startMin; }
+      else { s = b.endMin; }
+    }
+    s = clamp(s, 0, 1440-15);
+    e = clamp(e, s+15, 1440);
+  }
+  return {start:s, end:e};
+}
+
+/* draw blocks */
+async function drawBlocks(){
+  const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
+  host.innerHTML='';
+  const blocks = await getAllU();
+  for(const u of blocks){
+    const pieces = piecesForWeek(u);
+    const color = u.colorHex || getActivityByKey(u.activityKey)?.color || COLORS[8];
+    for(const piece of pieces){
+      const b=boundsFromPiece(piece);
+      const el=document.createElement('div');
+      el.className='blockRect';
+      el.dataset.uid = u.id;
+      el.style.left = `${b.offsetLeft}px`;
+      el.style.top = `${b.topY}px`;
+      el.style.width = `${b.colWidth}px`;
+      el.style.height = `${b.height}px`;
+      el.style.background = color;
+      el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearUnifiedSelector(); focusUnified(u); });
+      host.appendChild(el);
+    }
+  }
+  document.getElementById('weekGrid').onclick = onWeekGridTap;
+}
+
+/* overlays util */
+function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
+
+/* ---------- UNIFIED SELECTOR ---------- */
+function currentWeekRange(){ return [getVisibleWeekStamp(), getVisibleWeekStamp()+7*DAY_MS]; }
+
+function drawUnifiedSelector(){
+  const host=document.getElementById('selHost'); if(!host || !weekGeom || !sel) return;
+  host.innerHTML='';
+
+  const pieces = piecesForWeek(sel);
+  if(!pieces.length) return;
+
+  // Determine first/last visible piece to place stamps/handles
+  const firstP = pieces[0], lastP = pieces[pieces.length-1];
+
+  for(const piece of pieces){
+    const b=boundsFromPiece(piece);
+    const rect=document.createElement('div');
+    rect.className='marqueeRect';
+    rect.style.left   = `${weekGeom.colX[piece.dayIdx]}px`;
+    rect.style.top    = `${b.topY}px`;
+    rect.style.width  = `${b.colWidth}px`;
+    rect.style.height = `${b.height}px`;
+    host.appendChild(rect);
+  }
+
+  // Stamps + handles on ends only
+  addStampAndHandle(firstP, 'top', true);
+  addStampAndHandle(lastP,  'bottom', true);
+
+  function addStampAndHandle(piece, where, show){
+    if(!show) return;
+    const b=boundsFromPiece(piece);
+    const rowH = weekGeom.rowH[0] || 48;
+    const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
+    const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
+    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
+    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
+    const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
+
+    const group=document.createElement('div'); group.style.position='absolute'; group.style.left = `${weekGeom.colX[piece.dayIdx]}px`; group.style.top = `${b.topY}px`; group.style.width=`${b.colWidth}px`; group.style.height=`${b.height}px`; host.appendChild(group);
+
+    const timeMin = (where==='top') ? minuteOfSelStartOnPiece(piece) : minuteOfSelEndOnPiece(piece);
+    const stamp=document.createElement('div'); stamp.className='stamp';
+    stamp.textContent = HHMM_24(timeMin);
+    stamp.style.left = (b.colWidth/2)+'px';
+    stamp.style.top  = (where==='top'? (-(sGap + sH)) : (b.height + sGap))+'px';
+    group.appendChild(stamp);
+
+    const handle=document.createElement('div'); handle.className='handle '+where;
+    handle.style.left='0px';
+    handle.style.top = (where==='top'? (-(sGap + sH + hGap + hH + topExtra)) : (b.height + sGap + sH + hGap))+'px';
+    handle.style.width=b.colWidth+'px'; handle.style.height=hH+'px';
+    handle.innerHTML = `<div class="chev-chip">${chevronsSVG(where==='top'?'up':'down', b.colWidth, rowH)}</div>`;
+    handle.addEventListener('pointerdown', ev=>startUnifiedDrag(ev, where), {passive:false});
+    group.appendChild(handle);
+  }
+}
+
+function minuteOfSelStartOnPiece(piece){
+  // Returns HH:MM for stamp based on absolute sel.startTs within that day
+  const dayTs = getVisibleWeekStamp() + piece.dayIdx*DAY_MS;
+  const mins = Math.max(0, Math.floor((sel.startTs - dayTs)/60000));
+  return mins;
+}
+function minuteOfSelEndOnPiece(piece){
+  const dayTs = getVisibleWeekStamp() + piece.dayIdx*DAY_MS;
+  const endTs = sel.startTs + sel.durationMin*60000;
+  const mins = Math.max(0, Math.floor((endTs - dayTs)/60000));
+  return mins%1440;
+}
+
+function chevronsSVG(dir, colW, rowH){
+  const padX = 8;
+  const w = Math.max(24, colW - padX*2);
+  const h = Math.max(44, Math.floor(rowH*parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6));
+  const mid = w/2;
+  const gap = h/6;
+  const span = Math.min(w*0.42, h/4);
+  const triUp = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const triDn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const d1 = (dir==='up'? triUp(gap) : triDn(gap));
+  const d2 = (dir==='up'? triUp(gap*2.2) : triDn(gap*2.2));
+  const d3 = (dir==='up'? triUp(gap*3.4) : triDn(gap*3.4));
+  return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
+}
+
+function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); }
+function showSelectorButtons(){
+  removeSelectorButtons();
+  if(!sel || !weekGeom) return;
+  const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='selectorBtns';
+
+  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.title='Settings';
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+  </svg>`;
+  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
+  gear.onclick = ()=> openSettingsModal(null); // new selection
+
+  const close = document.createElement('button'); close.className='neu-btn--sm'; close.title='Clear';
+  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  close.onclick = ()=> clearUnifiedSelector();
+
+  wrap.appendChild(gear); wrap.appendChild(close);
+  document.body.appendChild(wrap);
+  positionSelectorButtons();
+}
+function positionSelectorButtons(){
+  if(!sel || !weekGeom) return;
+  const pcs = piecesForWeek(sel); if(!pcs.length) return;
+  const piece = pcs.length===1 ? pcs[0] : pcs[0]; // anchor near first visible piece
+  const b=boundsFromPiece(piece);
+  const margin=8, btnW=44, totalH=(44*2)+8;
+  let left = weekGeom.rect.left + weekGeom.colX[piece.dayIdx] + b.colWidth + margin;
+  if(left + btnW > window.innerWidth - margin){
+    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[piece.dayIdx] - margin - btnW);
+  }
+  let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
+  top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
+  const wrap=document.getElementById('selectorBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
+}
+function clearUnifiedSelector(){
+  sel=null; clearSelHost(); removeSelectorButtons();
+}
+
+/* tap to start unified selection */
+async function onWeekGridTap(e){
+  if(_modalOpen) return;
+  const blockEl = e.target.closest('.blockRect');
+  if(blockEl) return; // handled by focus
+  if(!weekGeom) return;
+
+  const rect = weekGeom.rect;
+  const relX = e.clientX - rect.left;
+  const relY = e.clientY - rect.top;
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  let startMin = snap15(Math.floor(minuteFloat/60)*60);
+  let endMin   = clamp(startMin + 60, 0, 1440);
+
+  const dayTs = getVisibleWeekStamp() + dayIdx*DAY_MS;
+  const busy = await dayBusyIntervals(dayTs, null);
+  const clamped = clampToFreeWindow(startMin, endMin, busy);
+  if(clamped.end - clamped.start < 15){ clearUnifiedSelector(); return; }
+
+  const startTs = dayTs + clamped.start*60000;
+  sel = { startTs, durationMin: clamped.end - clamped.start }; // <=60 now but editable up to 1440
+  drawUnifiedSelector(); showSelectorButtons();
+}
+
+/* drag handles on unified selection */
+function startUnifiedDrag(ev, where){
+  if(!sel || _modalOpen) return;
+  ev.preventDefault(); ev.stopPropagation();
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  dragKind = where;
+  dragStartY = ev.clientY;
+  baseStartTs = sel.startTs;
+  baseDuration= sel.durationMin;
+  desiredEdgeIntent=null; wasDrag=false;
+
+  const move = async (e)=>{
+    if(_modalOpen) return;
+    const dyPx = e.clientY - dragStartY;
+    const movedMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+    const snappedDelta = snap15(movedMin);
+
+    // Desired (unclamped) edge change — to detect crossing day boundary
+    if(where==='top'){
+      const desiredStartTs = baseStartTs + snappedDelta*60000;
+      desiredEdgeIntent = (desiredStartTs < dayStartTs(new Date(baseStartTs))) ? 'prev' : null;
+      // apply within day-by-day constraints (no overlap)
+      applyUnifiedTopDelta(snappedDelta);
+    } else {
+      const desiredEndTs = baseStartTs + baseDuration*60000 + snappedDelta*60000;
+      const endDayEndTs  = dayStartTs(new Date(baseStartTs + baseDuration*60000)) + DAY_MS;
+      desiredEdgeIntent = (desiredEndTs > endDayEndTs) ? 'next' : null;
+      applyUnifiedBottomDelta(snappedDelta);
+    }
+    wasDrag = wasDrag || Math.abs(snappedDelta)>=15;
+    drawUnifiedSelector();
+  };
+
+  const up = async (e)=>{
+    // On release, if intent crossed day edge, ask spill and extend selection accordingly (up to 24h cap)
+    if(!_modalOpen && wasDrag && desiredEdgeIntent){
+      await spilloverConfirmUnified(desiredEdgeIntent);
+    }
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragKind=null; desiredEdgeIntent=null;
+  };
+
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up, {passive:true});
+}
+async function applyUnifiedTopDelta(deltaMin){
+  // Adjust start, keeping end fixed; respect busy windows on affected days; keep duration >=15 and <=1440
+  let newStartTs = baseStartTs + deltaMin*60000;
+  let newEndTs   = baseStartTs + baseDuration*60000;
+  let newDuration= Math.max(15, Math.min(1440, Math.round((newEndTs - newStartTs)/60000)));
+  // Clamp against busy intervals day by day for the top edge
+  // Evaluate in the day where newStartTs sits
+  const dayTs = dayStartTs(new Date(newStartTs));
+  const busy = await dayBusyIntervals(dayTs, null);
+  const startMin = Math.floor((newStartTs - dayTs)/60000);
+  const endMin   = Math.floor((newEndTs - dayTs)/60000);
+  const cl = clampToFreeWindow(startMin, Math.max(startMin+15, endMin), busy);
+  // recompute newStartTs from clamped start
+  const clampedStartTs = dayTs + cl.start*60000;
+  // keep endTs fixed if still after start; else shorten duration
+  if(newEndTs <= clampedStartTs+15*60000) newEndTs = clampedStartTs + 15*60000;
+  sel.startTs = clampedStartTs;
+  sel.durationMin = Math.min(1440, Math.round((newEndTs - clampedStartTs)/60000));
+}
+async function applyUnifiedBottomDelta(deltaMin){
+  // Adjust end, keeping start fixed; respect busy windows; duration 15..1440
+  let newStartTs = baseStartTs;
+  let newEndTs   = baseStartTs + baseDuration*60000 + deltaMin*60000;
+  // Cap to 24h
+  newEndTs = Math.min(newStartTs + 1440*60000, newEndTs);
+  if(newEndTs <= newStartTs + 15*60000) newEndTs = newStartTs + 15*60000;
+
+  // Clamp against busy in the day where end sits
+  const dayTs = dayStartTs(new Date(newEndTs));
+  const busy = await dayBusyIntervals(dayTs, null);
+  const startMin = Math.floor((newStartTs - dayTs)/60000);
+  const endMin   = Math.floor((newEndTs   - dayTs)/60000);
+  const cl = clampToFreeWindow(Math.max(0,startMin), Math.max(Math.max(0,startMin)+15, endMin), busy);
+  const clampedEndTs = dayTs + cl.end*60000;
+  if(clampedEndTs <= newStartTs + 15*60000) sel.durationMin = 15;
+  else sel.durationMin = Math.min(1440, Math.round((clampedEndTs - newStartTs)/60000));
+}
+
+async function spilloverConfirmUnified(direction){
+  if(_modalOpen) return;
+  _modalOpen=true;
+  const ok = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
+  _modalOpen=false;
+  if(!ok) return;
+  // Extend selection to day boundary on that side, then auto-pan weeks if needed
+  if(direction==='next'){
+    const endTs = sel.startTs + sel.durationMin*60000;
+    const endDayEnd = dayStartTs(new Date(endTs)) + DAY_MS;
+    const extra = Math.min(1440 - sel.durationMin, Math.round((endDayEnd - endTs)/60000));
+    sel.durationMin += Math.max(0, extra);
+    const endAfter = sel.startTs + sel.durationMin*60000;
+    const wEnd = getVisibleWeekStamp() + 7*DAY_MS;
+    if(endAfter>=wEnd){ visibleWeekFirst = addDays(visibleWeekFirst,7); repaintWeek(true); drawBlocks(); }
+  }else{
+    const startDayStart = dayStartTs(new Date(sel.startTs));
+    const extra = Math.min(1440 - sel.durationMin, Math.round((sel.startTs - startDayStart)/60000));
+    sel.startTs -= Math.max(0, extra)*60000;
+    sel.durationMin += Math.max(0, extra);
+    const wStart = getVisibleWeekStamp();
+    if(sel.startTs < wStart){ visibleWeekFirst = addDays(visibleWeekFirst,-7); repaintWeek(true); drawBlocks(); }
+  }
+  drawUnifiedSelector();
+}
+
+/* ---- FOCUS EXISTING BLOCKS (unified) ---- */
+function pieceForVisible(u){
+  const pcs = piecesForWeek(u);
+  if(!pcs.length) return null;
+  // center between first and last for positioning; but return first piece
+  return pcs[0];
+}
+function drawBlockFocus(u){
+  clearSelHost();
+  const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
+  const pcs = piecesForWeek(u);
+  for(const p of pcs){
+    const b=boundsFromPiece(p);
+    const rect=document.createElement('div');
+    rect.className='focusRect';
+    rect.style.left   = `${weekGeom.colX[p.dayIdx]}px`;
+    rect.style.top    = `${b.topY}px`;
+    rect.style.width  = `${b.colWidth}px`;
+    rect.style.height = `${b.height}px`;
+    host.appendChild(rect);
+  }
+}
+function focusUnified(u){
+  focusU = {...u};
+  drawBlockFocus(focusU);
+  showBlockButtons(pieceForVisible(focusU) || focusU);
+  removeSelectorButtons(); clearUnifiedSelector();
+}
+function clearFocus(){
+  focusU=null; removeBlockButtons(); clearSelHost(); dragBtnRef=null; dragBlockMode=false;
+}
+
+/* Buttons for focused block */
+function buttonEl(iconPath, label, id){
+  const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label;
+  b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return b;
+}
+function showBlockButtons(segOrU){
+  removeBlockButtons();
+  const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns';
+  const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move","dragBtn");
+  const copyBtn = buttonEl("M9 9h9v9H9z M6 6h9v9H6z","Copy");
+  const gearBtn = buttonEl("M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v3M12 17.5v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1","Settings");
+  const closeBtn = buttonEl("M6 6l12 12M18 6L6 18","Close");
+  wrap.appendChild(dragBtn); wrap.appendChild(copyBtn); wrap.appendChild(gearBtn); wrap.appendChild(closeBtn);
+  document.body.appendChild(wrap);
+  dragBtnRef = dragBtn;
+
+  dragBtn.onclick = ()=>toggleBlockDrag();
+  copyBtn.onclick = ()=>copyUnified();
+  gearBtn.onclick = ()=>openSettingsForExisting();
+  closeBtn.onclick = ()=>clearFocus();
+
+  positionBlockButtons(segOrU);
+}
+function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); dragBtnRef=null; }
+function positionBlockButtons(segOrU){
+  const p = pieceForVisible(focusU); if(!p || !weekGeom) return;
+  const b=boundsFromPiece(p);
+  const margin=8, btnW=44, totalH=(44*4)+8*3;
+  let left = weekGeom.rect.left + weekGeom.colX[p.dayIdx] + b.colWidth + margin;
+  if(left + btnW > window.innerWidth - margin){
+    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[p.dayIdx] - margin - btnW);
+  }
+  let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
+  top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
+  const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
+}
+
+/* drag existing unified block (move in time/day) */
+let liftEl=null;
+function toggleBlockDrag(){
+  if(!dragBlockMode){ startBlockDrag(); }
+  else { endBlockDrag(true); }
+}
+async function startBlockDrag(){
+  if(!focusU) return;
+  dragBlockMode=true;
+  if(dragBtnRef) dragBtnRef.classList.add('drag-on');
+
+  drawBlockFocus(focusU);
+  const p = pieceForVisible(focusU);
+  if(p){
+    const b=boundsFromPiece(p);
+    liftEl = document.createElement('div');
+    liftEl.className='liftShadow';
+    liftEl.style.left=`${weekGeom.colX[p.dayIdx]}px`;
+    liftEl.style.top =`${b.topY}px`;
+    liftEl.style.width=`${b.colWidth}px`;
+    liftEl.style.height=`${b.height}px`;
+    document.getElementById('selHost').insertBefore(liftEl, document.getElementById('selHost').firstChild);
+  }
+
+  const onMove=async (e)=>{
+    if(!dragBlockMode || !weekGeom) return;
+    const x = clamp(e.clientX - weekGeom.rect.left, 0, weekGeom.totalW-1);
+    const y = clamp(e.clientY - weekGeom.rect.top, 0, weekGeom.totalH-1);
+    let dayIdx=0; for(let i=0;i<7;i++){ if(x>=weekGeom.colX[i] && x<weekGeom.colX[i+1]){ dayIdx=i; break; } }
+    let mins = snap15((y/weekGeom.totalH)*1440);
+
+    // Try to place start at that day/min, preserving duration
+    const dayTs = getVisibleWeekStamp() + dayIdx*DAY_MS;
+    const busy = await dayBusyIntervals(dayTs, focusU.id);
+    const candidateStart = mins;
+    const candidateEnd   = candidateStart + focusU.durationMin;
+    let sMin = candidateStart, eMin = Math.min(1440, candidateEnd);
+    // Clamp within free window for the starting day
+    const cl = clampToFreeWindow(sMin, Math.max(sMin+15, Math.min(eMin,1440)), busy);
+    // If duration spills, it's ok; second day's conflicts will be avoided visually (we're just previewing)
+    const preview = { ...focusU, startTs: dayTs + cl.start*60000 };
+    drawBlockFocus(preview);
+    if(liftEl){
+      const pc = piecesForWeek(preview)[0];
+      const bb = boundsFromPiece(pc);
+      liftEl.style.left=`${weekGeom.colX[pc.dayIdx]}px`;
+      liftEl.style.top =`${bb.topY}px`;
+      liftEl.style.width=`${bb.colWidth}px`;
+      liftEl.style.height=`${bb.height}px`;
+    }
+    positionBlockButtons(preview);
+    focusU = preview;
+  };
+  const onUp=()=>{ endBlockDrag(true); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+  window.addEventListener('pointermove', onMove, {passive:true});
+  window.addEventListener('pointerup', onUp, {passive:true});
+}
+async function endBlockDrag(commit){
+  if(dragBtnRef) dragBtnRef.classList.remove('drag-on');
+  if(liftEl){ liftEl.remove(); liftEl=null; }
+  dragBlockMode=false;
+  if(commit && focusU){
+    // Ensure no conflict on start day; if conflict arises on second day, user can adjust after
+    await putU(focusU);
+    await drawBlocks();
+    focusUnified(focusU);
+  }
+}
+
+/* copy unified block: place directly after with nudge to free window */
+async function copyUnified(){
+  if(!focusU) return;
+  const copy = { ...focusU, id:'u'+Date.now()+Math.floor(Math.random()*1000) };
+  // try to place starting at the next free minute on same day after current end
+  const endTs = focusU.startTs + focusU.durationMin*60000;
+  const dayTs = dayStartTs(new Date(endTs));
+  const startMin = Math.min(1439, Math.floor((endTs - dayTs)/60000));
+  const busy = await dayBusyIntervals(dayTs, null);
+  const cl = clampToFreeWindow(startMin, Math.min(1440, startMin+focusU.durationMin), busy);
+  copy.startTs = dayTs + cl.start*60000;
+  await putU(copy);
+  await drawBlocks();
+}
+
+/* settings modal */
+function openSettingsForExisting(){ if(focusU) openSettingsModal(focusU); }
+function openSettingsModal(existing){
+  _modalOpen=true;
+  const veil=document.createElement('div'); veil.className='veil';
+  const modal=document.createElement('div'); modal.className='modal';
+  const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
+  ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
+    .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
+
+  const isEditing = !!existing;
+  const base = isEditing ? existing : (sel || { startTs: Date.now(), durationMin:60 });
+  const start = new Date(base.startTs);
+  const startDow = SHORT_DOW[start.getDay()];
+  const end = new Date(base.startTs + base.durationMin*60000);
+  const endDow = SHORT_DOW[end.getDay()];
+
+  const defaults = {
+    activityKey: isEditing ? existing.activityKey : null,
+    colorHex: isEditing ? (existing.colorHex || getActivityByKey(existing.activityKey).color) : null,
+    nameOverride: isEditing ? existing.activityName : null,
+    note: isEditing ? (existing.note||'') : '',
+    fromMin: start.getHours()*60 + start.getMinutes(),
+    toMin:   end.getHours()*60 + end.getMinutes() + (endDow!==startDow ? 1440 : 0),
+    fromDow: startDow,
+    toDow:   endDow,
+    recurrence: isEditing ? existing.recurrence : 'weekly',
+    flexibility: isEditing ? existing.flexibility : 'flexible',
+    notify: isEditing ? existing.notifications : 'reoccurring',
+    privacy: isEditing ? existing.privacy : 'private'
+  };
+
+  modal.innerHTML = `
+    <div class="head">Settings</div>
+    <div class="settings-wrap" id="settingsWrap">
+      <div class="neu-field" id="assignField">
+        <div class="neu-select" id="assignSelect" role="button" aria-expanded="false">
+          <span class="ph" id="assignLabel">${defaults.activityKey? getActivityByKey(defaults.activityKey).label : 'Assign Activity'}</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6,9 12,15 18,9"/></svg>
+        </div>
+        <div class="neu-menu" id="assignMenu"><div class="menu-card" id="assignList"></div></div>
+        <div class="row" id="selectedChipRow" style="${defaults.activityKey?'':'display:none'}">
+          <span class="chip" id="actChip">
+            <span class="dot" id="actDot" style="background:${(defaults.colorHex||'#ccc')}"></span>
+            <span id="actName">${defaults.nameOverride || (defaults.activityKey? getActivityByKey(defaults.activityKey).label : '')}</span>
+            <button class="edit" id="renameBtn" title="Rename">
+              <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg>
+            </button>
+          </span>
+        </div>
+        <input class="note-input" id="noteInput" maxlength="80" placeholder="Add a note (e.g., Walk the dog, Bank run)" value="${(defaults.note||'').replace(/"/g,'&quot;')}" />
+      </div>
+
+      <div class="neu-field">
+        <div class="time-row">
+          <div class="time-pair"><span class="time-day" id="fromDay">${defaults.fromDow}</span><button class="time-btn" id="fromBtn" type="button">${HHMM_24(defaults.fromMin)}</button></div>
+          <div class="time-pair"><span class="time-day" id="toDay">${defaults.toDow}</span><button class="time-btn" id="toBtn"   type="button">${HHMM_24(defaults.toMin%1440)}</button></div>
+        </div>
+        <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
+        <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
+      </div>
+
+      <div class="neu-field">
+        <div class="row4">
+          <div class="neu-select" id="recurringSel"><span>${defaults.recurrence==='weekly'?'Reoccurring':(defaults.recurrence==='none'?'This week':'This month')}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="recurringMenu"><div class="menu-card">
+            <div class="menu-item" data-val="weekly">Reoccurring</div>
+            <div class="menu-item" data-val="none">This week</div>
+            <div class="menu-item" data-val="monthly">This month</div>
+          </div></div>
+
+          <div class="neu-select" id="flexSel"><span>${defaults.flexibility==='firm'?'Firm':'Flexible'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="flexMenu"><div class="menu-card">
+            <div class="menu-item" data-val="flexible">Flexible</div>
+            <div class="menu-item" data-val="firm">Firm</div>
+          </div></div>
+
+          <div class="neu-select" id="notifSel"><span>Notifications</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="notifMenu"><div class="menu-card">
+            <div class="menu-item" data-val="reoccurring">Reoccurring</div>
+            <div class="menu-item" data-val="week">This week</div>
+            <div class="menu-item" data-val="month">This month</div>
+            <div class="menu-item" data-val="off">Off</div>
+          </div></div>
+
+          <div class="neu-select" id="privacySel"><span>${defaults.privacy==='private'?'Private':'Visible to connected accounts'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-menu" id="privacyMenu"><div class="menu-card">
+            <div class="menu-item" data-val="private">Private</div>
+            <div class="menu-item" data-val="visible">Visible to connected accounts</div>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="row"><button class="btn" id="statsBtn">Statistics</button></div>
+    </div>
+
+    <div class="foot">
+      <button class="btn" id="deleteBtn">Delete</button>
+      <div style="display:flex; gap:10px; margin-left:auto">
+        <button class="btn" id="exitBtn">Exit</button>
+        <button class="btn ok" id="saveBtn">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(veil); document.body.appendChild(modal);
+  const closeModal = ()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
+  veil.addEventListener('click', ()=>{ confirmExit(()=> closeModal()); });
+
+  // activity list
+  const listEl = modal.querySelector('#assignList');
+  ACTIVITY_LIST.forEach(a=>{
+    const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
+    const dot = document.createElement('span'); dot.className='menu-dot'; dot.style.background = a.color;
+    const label = document.createElement('span'); label.textContent = a.label;
+    row.appendChild(dot); row.appendChild(label);
+    row.addEventListener('click', ()=>{
+      defaults.activityKey = a.key; defaults.colorHex = a.color; defaults.flexibility = defaultFlexForActivity(a.key);
+      modal.querySelector('#assignLabel').textContent = a.label;
+      modal.querySelector('#assignMenu').classList.remove('open');
+      modal.querySelector('#assignSelect').setAttribute('aria-expanded','false');
+      modal.querySelector('#selectedChipRow').style.display = '';
+      modal.querySelector('#actDot').style.background = a.color;
+      const name = modal.querySelector('#actName').textContent || a.label;
+      modal.querySelector('#actName').textContent = name;
+      modal.querySelector('#flexSel span').textContent = (defaults.flexibility==='firm'?'Firm':'Flexible');
+    });
+    listEl.appendChild(row);
+  });
+  modal.querySelector('#assignSelect').addEventListener('click', ()=>{
+    const m = modal.querySelector('#assignMenu'); const open=m.classList.toggle('open');
+    modal.querySelector('#assignSelect').setAttribute('aria-expanded', open?'true':'false');
+  });
+  modal.querySelector('#renameBtn').addEventListener('click', ()=>{
+    const nameEl = modal.querySelector('#actName');
+    const next = prompt('Rename activity (max 14 chars):', nameEl.textContent)?.slice(0,14);
+    if(next && next.trim().length){ nameEl.textContent = next.trim(); }
+  });
+
+  hookMenu(modal, '#recurringSel','#recurringMenu', (v,l)=>{ defaults.recurrence=v; modal.querySelector('#recurringSel span').textContent=l; });
+  hookMenu(modal, '#flexSel','#flexMenu', (v,l)=>{ defaults.flexibility=v; modal.querySelector('#flexSel span').textContent=l; });
+  hookMenu(modal, '#notifSel','#notifMenu', (v,l)=>{ defaults.notify=v; modal.querySelector('#notifSel span').textContent=l; });
+  hookMenu(modal, '#privacySel','#privacyMenu', (v,l)=>{ defaults.privacy=v; modal.querySelector('#privacySel span').textContent=l; });
+
+  const fromBtn = modal.querySelector('#fromBtn');
+  const toBtn   = modal.querySelector('#toBtn');
+  const fromPk  = modal.querySelector('#fromPicker');
+  const toPk    = modal.querySelector('#toPicker');
+
+  function setPickerValue(input, minutes){ const h=Math.floor(minutes/60), m=minutes%60; input.value=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+  setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440);
+  fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.();
+
+  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if((defaults.toDow===defaults.fromDow) && defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,2880); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440); };
+  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); // if crosses day, user should set from/to dows manually; we handle up to +24h
+    const sameDay = (defaults.toDow===defaults.fromDow);
+    if(sameDay && mins<=defaults.fromMin) mins=clamp(defaults.fromMin+15,0,1440);
+    defaults.toMin = sameDay? mins : 1440 + mins;
+    defaults.toMin = Math.min(1440, defaults.toMin); // cap 24h
+    toBtn.textContent=HHMM_24(defaults.toMin%1440);
+  };
+
+  modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); };
+  modal.querySelector('#exitBtn').onclick=()=>{ confirmExit(()=> closeModal()); };
+
+  modal.querySelector('#saveBtn').onclick=async()=>{
+    if(!defaults.activityKey){ alert('Please assign an activity.'); return; }
+    if(!(defaults.toMin>defaults.fromMin)){ alert('End time must be after start time.'); return; }
+    const note = modal.querySelector('#noteInput').value.trim();
+    const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label;
+
+    // Build unified record (single item)
+    // Determine absolute start from current visible week + fromDay
+    const fromDayIdx = SHORT_DOW.indexOf(defaults.fromDow);
+    const toDayIdx   = SHORT_DOW.indexOf(defaults.toDow);
+    // anchor to visible week
+    const startAbs = getVisibleWeekStamp() + fromDayIdx*DAY_MS + defaults.fromMin*60000;
+    let duration = defaults.toMin - defaults.fromMin + ((toDayIdx===fromDayIdx)?0: (toDayIdx>fromDayIdx? (toDayIdx-fromDayIdx)*1440 : ((7 - (fromDayIdx - toDayIdx))*1440)););
+    // Cap to 24h
+    duration = Math.max(15, Math.min(1440, duration));
+
+    const record = {
+      id: isEditing ? existing.id : ('u'+Date.now()),
+      startTs: startAbs,
+      durationMin: duration,
+      activityKey: defaults.activityKey,
+      activityName: actName,
+      colorHex: defaults.colorHex,
+      note,
+      recurrence: defaults.recurrence,
+      flexibility: defaults.flexibility,
+      notifications: defaults.notify,
+      privacy: defaults.privacy
+    };
+
+    await putU(record);
+    await drawBlocks();
+    clearUnifiedSelector();
+    focusUnified(record);
+    closeModal();
+  };
+
+  modal.querySelector('#deleteBtn').onclick=async()=>{
+    if(!isEditing){ confirmExit(()=> closeModal()); return; }
+    const ok = await modalConfirm('Delete this block?');
+    if(ok){
+      await delU(existing.id);
+      await drawBlocks(); clearFocus(); closeModal();
+    }
+  };
+}
+
+function hookMenu(root, selSel, menuSel, onPick){
+  const trigger = root.querySelector(selSel);
+  const menu = root.querySelector(menuSel);
+  trigger.addEventListener('click', ()=>{ const open = menu.classList.toggle('open'); trigger.setAttribute('aria-expanded', open?'true':'false'); });
+  menu.querySelectorAll('.menu-item').forEach(mi=> mi.addEventListener('click', ()=>{ onPick(mi.dataset.val, mi.textContent.trim()); menu.classList.remove('open'); trigger.setAttribute('aria-expanded','false'); }));
+}
+function modalConfirm(text){
+  return new Promise((resolve)=>{
+    const veil=document.createElement('div'); veil.className='veil';
+    const modal=document.createElement('div'); modal.className='modal';
+    const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
+    ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
+      .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
+    modal.innerHTML=`<div class="head">${text}</div>
+      <div class="settings-wrap" style="padding:16px"></div>
+      <div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    document.body.appendChild(veil); document.body.appendChild(modal);
+    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
+    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
+    veil.addEventListener('click', ()=>close(false));
+  });
+}
+function confirmExit(done){ modalConfirm('Exit without saving?').then(ok=>{ if(ok) done(); }); }
+
+/* Stats placeholder */
+async function openStatsModal(activityName){
+  const veil=document.createElement('div'); veil.className='veil';
+  const modal=document.createElement('div'); modal.className='modal';
+  const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
+  ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
+    .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
+  _modalOpen=true;
+  modal.innerHTML = `
+    <div class="head">Statistics — ${activityName}</div>
+    <div class="settings-wrap" id="statsWrap">
+      <div class="row">Coming soon</div>
+    </div>
+    <div class="foot"><button class="btn ok" id="closeStats">Close</button></div>
+  `;
+  document.body.appendChild(veil); document.body.appendChild(modal);
+  modal.querySelector('#closeStats').onclick=()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
+  veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); _modalOpen=false; });
+}
+
+/* Screensaver */
+function showScreensaver(){
+  screenEl.innerHTML = `
+    <div class="screensaver">
+      <div class="wm">Chrono r81 — Week-only (Unified 24h blocks)</div>
+    </div>
+  `;
+}
+
+/* init */
+async function init(){
+  try{
+    const snap = await storageGet('state');
+    if(snap){ activeView = snap.activeView ?? null; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); if(activeView){ const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }
+  }catch{}
+  await migrateLegacy();
+  render();
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); } });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+}
+function render(){
+  if(activeView==='week'){ buildWeekView(); }
+  else if(activeView==='day' || activeView==='month' || activeView==='todo'){
+    screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">${activeView[0].toUpperCase()+activeView.slice(1)} (disabled)</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#667a90"><div>Not available in this build</div></div></div>`;
+  }else{
+    showScreensaver();
+  }
+}
+async function saveAll(){ await storageSet('state', { activeView, visibleWeekFirst:+visibleWeekFirst }); }
+
+let _saveT=null;
+function saveSoon(ms=200){ clearTimeout(_saveT); _saveT=setTimeout(()=>saveAll().catch(()=>{}), ms); }
+
+init();
+</script>
+
+<!-- Service worker registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(reg => console.log('SW registered', reg.scope))
+      .catch(err => console.error('SW registration failed', err));
+  });
+}
+</script>
+
+</body>
+</html>
