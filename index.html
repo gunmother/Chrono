@@ -60,7 +60,7 @@
     position:relative; overflow:hidden;
   }
 
-  /* Unclipped overlay root (stamps/handles/focus) */
+  /* Global unclipped overlay for stamps/handles */
   #overlay{ position:fixed; inset:0; pointer-events:none; z-index:9999; }
 
   /* Controls */
@@ -114,7 +114,7 @@
     background:var(--chart-bg);
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
-    cursor:crosshair; /* make it obvious it's interactive */
+    cursor:crosshair;
   }
 
   /* Blocks under mask */
@@ -123,7 +123,7 @@
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* In-grid selection/focus outline (clipped) */
+  /* In-grid selection/focus outline (clipped to grid) */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
   .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
   .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
@@ -256,7 +256,7 @@
   <div id="overlay" aria-hidden="true"></div>
 
 <script>
-/* Chrono r80.fix — reliable selector init + unclipped handles */
+/* Chrono r80.fix2 — selector always initializes, overlay unclipped */
 
 const screenEl = document.getElementById('screen');
 const overlayEl = document.getElementById('overlay');
@@ -427,7 +427,7 @@ function buildWeekView(){
   document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearSelector(); };
   document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); };
 
-  // ensure layout, THEN measure/bind (handles zero-height race)
+  // ensure layout, THEN measure/bind
   repaintWeek();
   requestAnimationFrame(()=>{ repaintWeek(true); bindGridInteractions(); });
 }
@@ -435,13 +435,15 @@ function buildWeekView(){
 function bindGridInteractions(){
   const grid = document.getElementById('weekGrid');
   if(!grid) return;
-  // build layers if missing
-  let blocksHost=document.getElementById('blocksHost');
-  let selHost=document.getElementById('selHost');
-  let maskSVG=document.querySelector('#weekGrid .mask');
-  if(!blocksHost){ blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost); }
-  if(!maskSVG){ buildMask(); }
-  if(!selHost){ selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost); }
+
+  // Build layers once
+  if(!grid.querySelector('#blocksHost')){
+    const blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost);
+  }
+  if(!grid.querySelector('.mask')) buildMask();
+  if(!grid.querySelector('#selHost')){
+    const selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost);
+  }
 
   const startFromEvent = (clientX, clientY)=>{
     if(_modalOpen) return;
@@ -471,15 +473,15 @@ function bindGridInteractions(){
     });
   };
 
-  // pointer + click fallback
+  // pointer + click fallback (mobile/desktop)
   grid.addEventListener('pointerdown', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
   grid.addEventListener('click', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
 
-  // resize/scroll
-  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); if(chain) drawSelector(); positionSelectorButtons(); }).observe(grid);
+  // resize/scroll listeners
+  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) drawBlockFocus(selectedBlock); if(chain) drawSelector(); positionSelectorButtons(); }).observe(grid);
   window.addEventListener('scroll', ()=>{ if(activeView==='week' && (chain||selectedBlock||selectedGroup)) positionSelectorButtons(); }, {passive:true});
 
-  // initial blocks
+  // initial blocks render
   drawBlocks();
 }
 
@@ -502,6 +504,7 @@ function computeGeometry(){
   weekGeom={totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
 }
 function buildMask(){
+  computeGeometry();
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
   svg.classList.add('mask');
   const grid = document.getElementById('weekGrid');
@@ -537,7 +540,6 @@ function repaintWeek(){
   computeGeometry();
   if(gh){ for(let i=0;i<24;i++){ const s=document.createElement('div'); s.className='hour-stamp'; s.textContent = hourToAMPM(i); s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px'; gh.appendChild(s); } }
   const titleEl=document.getElementById('weekTitle'); if(titleEl){ titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`; }
-  // ensure one mask at least
   if(!gridEl.querySelector('.mask')) buildMask();
 }
 
@@ -610,8 +612,8 @@ function boundsFromSeg(seg){
 }
 async function drawBlocks(){
   const grid=document.getElementById('weekGrid'); if(!grid) return;
-  let blocksHost=document.getElementById('blocksHost');
-  let selHost=document.getElementById('selHost');
+  let blocksHost=grid.querySelector('#blocksHost');
+  let selHost=grid.querySelector('#selHost');
   if(!blocksHost){ blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost); }
   if(!selHost){ selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost); }
 
@@ -666,7 +668,7 @@ function drawSelector(){
   const renderEntry = (seg, which, showTop, showBottom)=>{
     const b=boundsFromSeg(seg);
 
-    // in-grid rect
+    // clipped rect inside grid
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=which;
@@ -676,7 +678,7 @@ function drawSelector(){
     rectEl.style.height = `${b.height}px`;
     host.appendChild(rectEl);
 
-    // overlay
+    // overlay outside grid
     const rowH = weekGeom.rowH[0] || 48;
     const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
     const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
@@ -1465,7 +1467,7 @@ async function openStatsModal(activityName){
 function showScreensaver(){
   screenEl.innerHTML = `
     <div class="screensaver">
-      <div class="wm">Chrono r80.fix — Week-only</div>
+      <div class="wm">Chrono r80.fix2 — Week-only</div>
     </div>
   `;
 }
@@ -1486,7 +1488,6 @@ async function init(){
       activeView = snap.activeView || 'week';
       if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
     }
-    // force week if null
     if(!activeView){ activeView='week'; }
     buttons.forEach(x=>{ x.classList.toggle('is-pressed', x.dataset.view===activeView); x.setAttribute('aria-pressed', x.dataset.view===activeView ? 'true':'false'); });
   }catch{}
