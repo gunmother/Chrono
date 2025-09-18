@@ -1,3 +1,4 @@
+<!-- r82 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,7 +26,7 @@
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:10px;
+    --handle-gap:12px;                /* ↑ spacing tune so chevrons never hit stamps */
     --handle-height-mult:1.75;
 
     --stamp-h:26px;
@@ -101,8 +102,8 @@
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
   .grid-area{ position:relative; overflow:hidden }
-  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
-  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:2 }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
@@ -137,9 +138,10 @@
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
     pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    z-index:3; /* stamps must sit ABOVE chevrons/highlights */
   }
 
-  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:5; touch-action:none; display:grid; place-items:center; }
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; display:grid; place-items:center; }
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
     background:var(--bg);
@@ -147,6 +149,7 @@
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        var(--off)         var(--off)         var(--blur) var(--lo);
     display:grid; place-items:center;
+    z-index:2; /* beneath stamps */
   }
   .chev path{
     fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
@@ -156,6 +159,15 @@
   /* Floating buttons */
   .selBtns{ position:fixed; z-index:6; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
+
+  /* Present-day lens */
+  .present-lens{
+    position:absolute; box-sizing:border-box;
+    border:var(--marquee-border) solid #fff;
+    border-radius:12px;
+    box-shadow:var(--marquee-glow); /* turquoise glow outside only */
+    z-index:2; pointer-events:none;
+  }
 
   /* Modal (settings stub) */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
@@ -168,7 +180,7 @@
        0 16px 40px rgba(0,0,0,.28);
     z-index:11; display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
   }
-  .modal .head{ padding:12px 14px; font-weight:800; box-shadow: inset 0 0 0 9999px rgba(0,0,0,0); }
+  .modal .head{ padding:12px 14px; font-weight:800; }
   .modal .body{ padding:14px; display:grid; gap:10px; }
   .modal .foot{ padding:10px 14px; display:flex; justify-content:flex-end; gap:10px; }
   .btn{ border:none; background:var(--bg); border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer;
@@ -181,7 +193,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r81</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r82</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -237,7 +249,8 @@
   </main>
 
 <script>
-/* Chrono r81 — single-block “snake” selector (15-min snap, 24h max),
+/* Chrono r82 — cosmetic fixes + present-day lens
+   Base: r81 (single-block “snake” selector, 15-min snap, 24h max),
    week view active; day/month/todo blank; overlayed handles & stamps;
    persistence via IndexedDB; settings modal stub; watermark on idle. */
 
@@ -245,23 +258,20 @@ const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
 let activeView = 'week';
-let visibleWeekFirst = weekStart(new Date());          // start of visible week
+let visibleWeekFirst = weekStart(new Date());      // start of visible week
 const DAY_MS = 86400000;
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
 function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
-
-function weekStamp(d){ return +weekStart(d); }
-function stampToDate(st){ return new Date(st); }
-function getVisibleWeekStamp(){ return weekStamp(visibleWeekFirst); }
+function getNow(){ return new Date(); }
+function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
 /* ---------- storage (IndexedDB fallback to localStorage) ---------- */
 const DB_NAME='chronoDB', DB_VERSION=40;
@@ -282,12 +292,12 @@ function idbOpen(){
   return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
 }
 async function storageSet(k,v){
-  if(STORAGE_MODE==='ls'){ if(v===undefined) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
+  if(STORAGE_MODE==='ls'){ if(v===undefined||v===null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
   const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
   return new Promise((res,rej)=>{
     const tx=db.transaction('kv','readwrite');
     const store=tx.objectStore('kv');
-    if(v===undefined) store.delete(k); else store.put({k,v});
+    if(v===undefined||v===null) store.delete(k); else store.put({k,v});
     tx.oncomplete=()=>res(true); tx.onerror = ()=>rej(tx.error);
   });
 }
@@ -331,6 +341,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
 /* ---------- week view scaffolding ---------- */
 let weekGeom=null;
 let overlayRoot=null;
+let presentLensEl=null;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -356,19 +367,23 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick = async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); saveSoon(200); };
-  document.getElementById('nextWeekBtn').onclick = async ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); saveSoon(200); };
+  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(200); };
 
   document.getElementById('weekGrid').addEventListener('click', onWeekGridTap, {passive:true});
   ensureOverlay();
 
   repaintWeek();
-  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); }).observe(document.getElementById('weekGrid'));
+  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(document.getElementById('weekGrid'));
 
-  const syncViewport = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); } }, 32);
-  window.addEventListener('scroll', syncViewport, {passive:true});
-  window.addEventListener('orientationchange', syncViewport, {passive:true});
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', syncViewport, {passive:true});
+  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); } }, 32);
+  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('orientationchange', sync, {passive:true});
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
+
+  // present-day lens timer: tick each minute to keep to 15-min grid in real time
+  if(window.__lensTimer){ clearInterval(window.__lensTimer); }
+  window.__lensTimer = setInterval(()=>{ if(activeView==='week') updatePresentLens(); }, 60*1000);
 }
 
 function repaintWeek(skipDraw=false){
@@ -462,7 +477,7 @@ function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* ---------- Wallpaper ---------- */
 function showWallpaper(){
-  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r81</div></div>`;
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r82</div></div>`;
 }
 
 /* ---------- click to create snake ---------- */
@@ -493,7 +508,7 @@ function drawSnake(){
   ensureOverlay();
   host.innerHTML=''; overlayRoot.innerHTML='';
 
-  if(!snake || snake.weekSt!==getVisibleWeekStamp()){ destroySelButtons(); return; }
+  if(!snake || snake.weekSt!==getVisibleWeekStamp()){ destroySelButtons(); updatePresentLens(true); return; }
 
   const startAbs = clamp(snake.startAbs, 0, 7*1440 - 15);
   const endAbs   = clamp(startAbs + snake.dur, startAbs + 15, Math.min(startAbs + 1440, 7*1440));
@@ -513,6 +528,7 @@ function drawSnake(){
   ensureSelButtons();
   repositionSelButtons();
   attachViewportRepositioners();
+  updatePresentLens(true);
 }
 
 function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
@@ -542,21 +558,22 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   group.style.height= height + 'px';
   overlayRoot.appendChild(group);
 
-  const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
+  const handleGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12;
   const rowH0 = weekGeom.rowH[0] || 48;
   const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
   const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
 
+  /* Time stamps: ABOVE chevrons (z-index via CSS). Maintain equal spacing to handles. */
   if(isGlobalStart){
     const topStamp=document.createElement('div'); topStamp.className='stamp';
     topStamp.textContent = HHMM(startMin);
     topStamp.style.left = (colWidth/2)+'px';
-    topStamp.style.top  = (- (gap + stampH))+'px';
+    topStamp.style.top  = (- (handleGap + stampH))+'px';
     group.appendChild(topStamp);
 
     const topHandle=document.createElement('div'); topHandle.className='handle top';
     topHandle.style.left='0px';
-    topHandle.style.top = (- (gap + hH + stampH))+'px';
+    topHandle.style.top = (- (handleGap*2 + hH + stampH))+'px'; /* chevrons spaced equally from stamp as stamp from block */
     topHandle.style.width=colWidth+'px'; topHandle.style.height=hH+'px';
     topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', colWidth, rowH0)}</div>`;
     topHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'top'), {passive:false});
@@ -567,12 +584,12 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
     const botStamp=document.createElement('div'); botStamp.className='stamp';
     botStamp.textContent = HHMM(endMin%1440);
     botStamp.style.left = (colWidth/2)+'px';
-    botStamp.style.top  = (height + gap)+'px';
+    botStamp.style.top  = (height + handleGap)+'px';
     group.appendChild(botStamp);
 
     const botHandle=document.createElement('div'); botHandle.className='handle bottom';
     botHandle.style.left='0px';
-    botHandle.style.top = (height + gap + stampH)+'px';
+    botHandle.style.top = (height + (handleGap*2) + stampH)+'px';
     botHandle.style.width=colWidth+'px'; botHandle.style.height=hH+'px';
     botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', colWidth, rowH0)}</div>`;
     botHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'bottom'), {passive:false});
@@ -629,7 +646,6 @@ function startSnakeDrag(ev, side){
       newStart = clamp(baseStartAbs + snappedDelta, 0, 7*1440 - 15);
       const endAbs = baseStartAbs + baseDur;
       newDur = clamp(endAbs - newStart, 15, 1440);
-      // If we clamped dur at 1440 and moved farther, pull start so end stays fixed
       if(newDur===1440){ newStart = endAbs - 1440; }
     }else{               // move end; start fixed -> duration changes
       const newEnd = clamp(baseStartAbs + baseDur + snappedDelta, baseStartAbs + 15, Math.min(baseStartAbs + 1440, 7*1440));
@@ -661,6 +677,7 @@ function ensureSelButtons(){
   const wrap = document.createElement('div');
   wrap.className='selBtns'; wrap.id='selBtns';
 
+  // Settings gear (explicit gear icon)
   const gear = document.createElement('button');
   gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -685,36 +702,41 @@ function ensureSelButtons(){
 function destroySelButtons(){ if(window.__selBtns){ window.__selBtns.remove(); window.__selBtns=null; } }
 function hideSelButtons(){ if(window.__selBtns) window.__selBtns.classList.add('selBtnHidden'); }
 
-function currentVisibleRect(){
-  if(!snake || snake.weekSt!==getVisibleWeekStamp()) return null;
-  // Use the segment that is on-screen nearest the start
-  const firstDay = Math.floor(snake.startAbs/1440);
-  const host=document.getElementById('selHost'); if(!host) return null;
-  // Try global start day box
-  const colLeft = weekGeom.colX[firstDay], colRight = weekGeom.colX[firstDay+1];
-  const startMin = snake.startAbs - firstDay*1440;
-  const endAbs = snake.startAbs + snake.dur;
-  const firstEndMin = Math.min(1440, endAbs - firstDay*1440);
-  const topY  = minutesToY(startMin), botY=minutesToY(firstEndMin);
-  return new DOMRect(weekGeom.rect.left + colLeft, weekGeom.rect.top + topY, (colRight-colLeft), (botY-topY));
+/* Compute midpoint rect across full selection (for button placement) */
+function selectionMidRect(){
+  if(!snake || snake.weekSt!==getVisibleWeekStamp() || !weekGeom) return null;
+  const startAbs = clamp(snake.startAbs, 0, 7*1440 - 15);
+  const endAbs   = clamp(startAbs + snake.dur, startAbs + 15, Math.min(startAbs + 1440, 7*1440));
+  const midAbs   = startAbs + (endAbs - startAbs)/2;
+
+  const dayIdx = Math.floor(midAbs/1440);
+  const minInDay = midAbs - dayIdx*1440;
+  const yTop = minutesToY(Math.max(0, minInDay-30)); // center 1h window around mid for target
+  const yBot = minutesToY(Math.min(1440, minInDay+30));
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
+  const top = weekGeom.rect.top + yTop;
+  const height = Math.max(1, yBot - yTop);
+  return new DOMRect(left, top, width, height);
 }
 
+/* Place buttons at midpoint; avoid overlap with stamps/chevrons by choosing side with space */
 function repositionSelButtons(){
   const pair = window.__selBtns; if(!pair){ return; }
-  const r = currentVisibleRect();
+  const r = selectionMidRect();
   if(!r){ hideSelButtons(); return; }
   pair.classList.remove('selBtnHidden');
 
   const margin=8, btnW=44, totalH=(44*2)+8;
-  let left = r.right + margin;
-  let top  = r.top + margin;
 
-  if(left + btnW > window.innerWidth - margin){
-    left = Math.max(margin, r.left - margin - btnW);
-  }
-  if(top + totalH > window.innerHeight - margin){
-    top = Math.max(margin, window.innerHeight - margin - totalH);
-  }
+  let preferRight = (window.innerWidth - r.right) >= (r.left);
+  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
+  if(left < margin){ left = r.right + margin; }                          // flip to right if left cramped
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
+
+  let top  = r.top + (r.height/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
   if(top < margin) top = margin;
 
   pair.style.left = `${Math.round(left)}px`;
@@ -732,18 +754,23 @@ function attachViewportRepositioners(){
   if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
 }
 
-/* ---------- settings modal (stub; keeps room for future fields) ---------- */
+/* ---------- settings modal (stub; preserves flow) ---------- */
 function openSettingsModal(ev){
   ev?.stopPropagation?.();
   const veil = document.createElement('div'); veil.className='veil';
   const modal = document.createElement('div'); modal.className='modal';
+  const startAbs = snake? snake.startAbs : 0;
+  const endAbs   = snake? snake.startAbs + snake.dur : 0;
+  const sStartD = Math.floor(startAbs/1440), sStartM = startAbs%1440;
+  const sEndD   = Math.floor(endAbs/1440),   sEndM   = endAbs%1440;
+
   modal.innerHTML = `
     <div class="head">Selection Settings</div>
     <div class="body">
-      <div><strong>Start:</strong> <span id="sStart">—</span></div>
-      <div><strong>End:</strong> <span id="sEnd">—</span></div>
-      <div><strong>Duration:</strong> <span id="sDur">—</span></div>
-      <div style="opacity:.7"><em>Settings UI coming next — this modal is a placeholder so your gear/X flow stays intact.</em></div>
+      <div><strong>Start:</strong> <span>${SHORT_DOW[sStartD]} ${HHMM(sStartM)}</span></div>
+      <div><strong>End:</strong> <span>${SHORT_DOW[sEndD]} ${HHMM(sEndM)}</span></div>
+      <div><strong>Duration:</strong> <span>${snake? snake.dur:0} min</span></div>
+      <div style="opacity:.7"><em>UI coming later — placeholder only.</em></div>
     </div>
     <div class="foot">
       <button class="btn warn" id="clearBtn">Clear</button>
@@ -751,15 +778,6 @@ function openSettingsModal(ev){
     </div>
   `;
   const closeAll=()=>{ veil.remove(); modal.remove(); };
-
-  const startAbs = snake? snake.startAbs : 0;
-  const endAbs   = snake? snake.startAbs + snake.dur : 0;
-  const sStartD = Math.floor(startAbs/1440), sStartM = startAbs%1440;
-  const sEndD   = Math.floor(endAbs/1440),   sEndM   = endAbs%1440;
-
-  modal.querySelector('#sStart').textContent = `${SHORT_DOW[sStartD]} ${HHMM(sStartM)}`;
-  modal.querySelector('#sEnd').textContent   = `${SHORT_DOW[sEndD]} ${HHMM(sEndM)}`;
-  modal.querySelector('#sDur').textContent   = `${snake? snake.dur:0} min`;
 
   modal.querySelector('#closeBtn').onclick = closeAll;
   modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); };
@@ -786,6 +804,47 @@ async function saveAll(){
 }
 let saveTimer=null;
 function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
+
+/* ---------- Present-day lens ---------- */
+function updatePresentLens(forceRecreate=false){
+  if(activeView!=='week' || !weekGeom) return;
+  const host = document.getElementById('selHost'); if(!host) return;
+
+  const now = getNow();
+  const visStart = weekStart(visibleWeekFirst);
+  const todayStart = weekStart(now);
+  const diffDays = Math.round((todayStart - visStart)/DAY_MS);
+  if(diffDays < 0 || diffDays > 6){
+    // current day not visible
+    presentLensEl?.remove(); presentLensEl=null;
+    return;
+  }
+
+  // Compute current 1h slot aligned to 15-min grid, anchored at current minute
+  const mins = now.getHours()*60 + now.getMinutes();
+  const snappedStart = snap15(mins);
+  const startMin = snappedStart;
+  const endMin = Math.min(1440, startMin + 60);
+
+  const colLeft = weekGeom.colX[diffDays];
+  const colRight= weekGeom.colX[diffDays+1];
+  const colWidth= (colRight - colLeft) - (diffDays===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  if(!presentLensEl || forceRecreate){
+    presentLensEl?.remove();
+    presentLensEl = document.createElement('div');
+    presentLensEl.className='present-lens';
+    host.appendChild(presentLensEl);
+  }
+
+  presentLensEl.style.left   = `${colLeft}px`;
+  presentLensEl.style.top    = `${topY}px`;
+  presentLensEl.style.width  = `${colWidth}px`;
+  presentLensEl.style.height = `${height}px`;
+}
 
 /* ---------- init / render ---------- */
 async function init(){
@@ -833,3 +892,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+<!-- r82 EOF -->
