@@ -21,7 +21,7 @@
     --hour-col:64px; --dow-h:32px; --label-size:12px;
 
     --marquee-border:5px;
-    --marquee-shadow:0 0 12px 6px var(--turq-glow);
+    --marquee-shadow:0 0 12px 6px var(--turq-glow); /* selector tool only */
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
@@ -122,13 +122,13 @@
   /* Selector + block focus overlay */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
 
-  /* Selector (glow) */
+  /* Selector tool (glow) */
   .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
 
-  /* Focus (no glow) */
+  /* Existing block focus (no glow) */
   .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
 
-  /* Stamps */
+  /* Time stamps (24h) */
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
     background:var(--pressed-navy); color:var(--icon-active);
@@ -152,10 +152,13 @@
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
+  /* Lifted shadow while dragging a block */
   .liftShadow{ position:absolute; border-radius:14px; background:transparent; box-shadow:0 14px 28px rgba(0,0,0,.28); z-index:-1; }
 
+  /* Side buttons */
   .selBtns{ position:fixed; z-index:4; display:grid; gap:8px; pointer-events:auto; }
 
+  /* Modal (neumorphic with offset shadow) */
   .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
   .modal{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -195,6 +198,7 @@
   .time-btn{ border:none; background:transparent; font-weight:800; cursor:pointer; user-select:none; }
   .time-day{ font-weight:900; letter-spacing:.02em; opacity:.85; }
 
+  /* Screensaver watermark */
   .screensaver{ position:absolute; inset:0; display:grid; place-items:center; color:#667a90 }
   .screensaver .wm{ opacity:.8; font-weight:900; letter-spacing:.06em; }
 </style>
@@ -253,15 +257,12 @@
   </main>
 
 <script>
-/* Chrono r81 — Week-only build with UNIFIED blocks (24h cap).
-   Key changes vs r80:
-   - Single block spans up to 24h, can cross midnight and weeks, edited as ONE entity.
-   - New store 'uBlocks' (unified). Legacy 'blocks' gracefully ignored; basic one-time migration from r80 groups.
-   - Dragging handles respects intent; child-piece drag no longer mutates the other edge erroneously.
-   - Creating/editing across midnight/week keeps a single record; UI renders split pieces.
-   - Selector prompts when intent crosses day edges (prev/next) and auto pans to correct week when needed.
-   - Buttons anchor to the piece visible on screen.
-*/
+/* Chrono r80 — Week-only build.
+   - Fix: spillover prompts only when user drags past day edge (ignores overlap clamping).
+   - Fix: selector cannot overlap existing blocks (hard walls).
+   - Fix: spillover selection behaves as ONE entity; stamps/handles only at global start/end.
+   - UI: 24h selector stamps.
+   - Nuke month/todo/day content; blank screens. Watermark on screensaver (no active view). */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -277,8 +278,8 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function snap15(n){ return 15 * Math.round((+n||0)/15); }
-function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
+function HHMM_24(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 
 const DAY_MS = 86400000;
 function weekStamp(d){ return +weekStart(d); }
@@ -291,7 +292,7 @@ new ResizeObserver(()=> {
 }).observe(screenEl);
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=33; // r81 bump
+const DB_NAME='chronoDB', DB_VERSION=32;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -302,8 +303,6 @@ function idbOpen(){
     req.onupgradeneeded = ()=>{
       const db = req.result;
       if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
-      if(!db.objectStoreNames.contains('uBlocks')) db.createObjectStore('uBlocks',{keyPath:'id'}); // unified
-      // legacy store may exist: 'blocks' (ignored except migration)
       if(!db.objectStoreNames.contains('blocks')) db.createObjectStore('blocks',{keyPath:'id'});
     };
     req.onsuccess = ()=>resolve(req.result);
@@ -332,88 +331,31 @@ async function storageGet(k){
   });
 }
 
-/* unified blocks store (single record per logical block) */
-async function putU(b){
+/* blocks store */
+async function putBlock(b){
   const db = await idbOpen(); if(!db) return;
   return new Promise((res,rej)=>{
-    const tx=db.transaction('uBlocks','readwrite');
-    tx.objectStore('uBlocks').put(b);
+    const tx=db.transaction('blocks','readwrite');
+    tx.objectStore('blocks').put(b);
     tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
   });
 }
-async function delU(id){
+async function delBlock(id){
   const db = await idbOpen(); if(!db) return;
   return new Promise((res,rej)=>{
-    const tx=db.transaction('uBlocks','readwrite');
-    tx.objectStore('uBlocks').delete(id);
+    const tx=db.transaction('blocks','readwrite');
+    tx.objectStore('blocks').delete(id);
     tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
   });
 }
-async function getAllU(){
+async function getBlocksAll(){
   const db = await idbOpen(); if(!db) return [];
   return new Promise((res,rej)=>{
-    const tx=db.transaction('uBlocks','readonly');
-    const req=tx.objectStore('uBlocks').getAll();
-    req.onsuccess=()=>res(req.result||[]);
-    req.onerror=()=>rej(req.error);
-  });
-}
-
-/* one-time migration: r80 grouped pairs -> unified */
-let MIGRATED=false;
-async function migrateLegacy(){
-  if(MIGRATED) return;
-  const migrated = await storageGet('migrated_r81');
-  if(migrated){ MIGRATED=true; return; }
-  const db = await idbOpen(); if(!db) return;
-  const legacy = await new Promise((res,rej)=>{
     const tx=db.transaction('blocks','readonly');
     const req=tx.objectStore('blocks').getAll();
     req.onsuccess=()=>res(req.result||[]);
     req.onerror=()=>rej(req.error);
-  }).catch(()=>[]);
-  if(!legacy.length){ await storageSet('migrated_r81', true); MIGRATED=true; return; }
-
-  // group by groupId, or singletons
-  const byG = new Map();
-  for(const b of legacy){
-    const key = b.groupId || 'solo:'+b.id;
-    if(!byG.has(key)) byG.set(key, []);
-    byG.get(key).push(b);
-  }
-  for(const [g, arr] of byG){
-    arr.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt));
-    const first = arr[0], last = arr[arr.length-1];
-    // compute absolute start stamp (epoch ms)
-    const baseDate = new Date(first.weekSt + first.dayIdx*DAY_MS);
-    const startStamp = +new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, first.startMin);
-    // compute duration in minutes across segments
-    let duration = 0;
-    if(arr.length===1){ duration = Math.max(15, (first.endMin - first.startMin)); }
-    else {
-      const endDate = new Date(last.weekSt + last.dayIdx*DAY_MS);
-      const endStamp = +new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 0, last.endMin);
-      duration = Math.max(15, Math.round((endStamp - startStamp)/60000));
-    }
-    duration = Math.min(1440, duration);
-    const any = first;
-    const u = {
-      id: 'u'+(first.id || Date.now())+Math.floor(Math.random()*1000),
-      startTs: startStamp,         // epoch ms
-      durationMin: duration,       // 15..1440
-      activityKey: any.activityKey,
-      activityName: any.activityName || null,
-      colorHex: any.colorHex || null,
-      note: any.note || '',
-      recurrence: any.recurrence || 'weekly',
-      flexibility: any.flexibility || 'flexible',
-      notifications: any.notifications || 'reoccurring',
-      privacy: any.privacy || 'private'
-    };
-    await putU(u);
-  }
-  await storageSet('migrated_r81', true);
-  MIGRATED=true;
+  });
 }
 
 /* palette + activities */
@@ -439,13 +381,23 @@ const ACTIVITY_LIST = [
 function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
 function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
 
-/* unified selection state */
-let sel = null; // { id?, startTs, durationMin } for NEW selection (not yet saved)
+/* selection chain (for new selections) */
+const CHAIN_KEY='selChain_v14';
+async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
+async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
+let chain = null;
+
+/* selector & block drag state */
+let dragKind=null, dragTarget='parent';
+let dragStartY=0, baseStart=0, baseEnd=0;
+let dragPixels=0, wasDrag=false;
+let desiredEdgeIntent=null; // 'prev' | 'next' | null (computed from raw delta, not clamped)
 let weekGeom=null;
-let focusU=null; // unified block currently focused for edit/drag (object from store)
-let dragKind=null; // 'top'|'bottom'
-let dragStartY=0, baseStartTs=0, baseDuration=0, desiredEdgeIntent=null, wasDrag=false;
-let dragBlockMode=false; let dragBtnRef=null;
+let selectedBlock=null;
+let selectedGroup=null;
+let dragBlockMode=false;
+let dragBtnRef=null;
+
 let _modalOpen=false;
 
 /* controls */
@@ -455,12 +407,8 @@ document.querySelector('.controls').addEventListener('click', e=>{
   const wasPressed = b.classList.contains('is-pressed');
   buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
   if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
-  if(activeView===v){
-    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
-    showScreensaver(); removeBlockButtons(); removeSelectorButtons(); clearSelHost();
-  } else {
-    activeView=v; render();
-  }
+  if(activeView===v){ activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); showScreensaver(); removeBlockButtons(); removeSelectorButtons(); clearSelHost(); }
+  else{ activeView=v; render(); }
   saveSoon(200);
 });
 
@@ -490,16 +438,16 @@ function buildWeekView(){
     </div>
   `;
 
-  document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearUnifiedSelector(); };
-  document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearUnifiedSelector(); };
+  document.getElementById('prevWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); await drawBlocks(); clearSelector(); };
+  document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); };
 
   repaintWeek();
 
   const grid = document.getElementById('weekGrid');
   grid.addEventListener('click', onWeekGridTap);
 
-  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(focusU) focusUnified(focusU); if(sel) drawUnifiedSelector(); }).observe(grid);
-  window.addEventListener('scroll', ()=>{ if(activeView==='week' && focusU) positionBlockButtons(pieceForVisible(focusU) || focusU); if(activeView==='week' && sel) positionSelectorButtons(); }, {passive:true});
+  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); if(chain) drawSelector(); }).observe(grid);
+  window.addEventListener('scroll', ()=>{ if(activeView==='week' && selectedGroup) positionBlockButtons(selectedGroup[0]); if(activeView==='week' && selectedBlock) positionBlockButtons(selectedBlock); if(activeView==='week' && chain) positionSelectorButtons(); }, {passive:true});
 
   drawBlocks();
 }
@@ -562,65 +510,17 @@ function repaintWeek(){
   buildMask(weekGeom,7);
 }
 
-/* ---------- Unified helpers ---------- */
-function dayStartTs(dayDate){ const d=new Date(dayDate); d.setHours(0,0,0,0); return +d; }
-function piecesForWeek(u){
-  // Return array of visual pieces (0..2) for current visible week.
-  const wst = getVisibleWeekStamp();
-  const weekStartDate = stampToDate(wst);
-  const weekEndTs = wst + 7*DAY_MS;
+/* ---------- Interval helpers for no-overlap rules ---------- */
+function sortByStart(a,b){ return a.startMin - b.startMin; }
+function sameWeekDay(seg, weekSt, dayIdx){ return seg.weekSt===weekSt && seg.dayIdx===dayIdx; }
 
-  // Recurrence weekly: shift by multiples of 7d if startTs < week
-  let sTs = u.startTs;
-  if(u.recurrence==='weekly'){
-    const delta = wst - weekStamp(new Date(u.startTs));
-    if(delta>0){
-      const weeks = Math.floor(delta/(7*DAY_MS));
-      sTs = u.startTs + weeks*7*DAY_MS;
-      if(sTs > wst) sTs -= 7*DAY_MS; // ensure not after
-    }
-  }
-
-  const eTs = sTs + u.durationMin*60000;
-  if(eTs <= wst || sTs >= weekEndTs) return [];
-
-  // compute overlap with each day in the week
-  const pieces=[];
-  for(let d=0; d<7; d++){
-    const dayTs = +new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate()+d,0,0,0,0);
-    const dayEnd = dayTs + DAY_MS;
-    const s = Math.max(sTs, dayTs);
-    const e = Math.min(eTs, dayEnd);
-    if(e> s){
-      const startMin = Math.floor((s - dayTs)/60000);
-      const endMin   = Math.ceil((e - dayTs)/60000);
-      pieces.push({ dayIdx:d, startMin, endMin });
-    }
-  }
-  return pieces;
-}
-function boundsFromPiece(piece){
-  const colLeft = weekGeom.colX[piece.dayIdx];
-  const colRight= weekGeom.colX[piece.dayIdx+1];
-  const colWidth= (colRight - colLeft) - (piece.dayIdx===6?1:0);
-  const idx = clamp(Math.round(piece.startMin/15), 0, 96);
-  const idx2= clamp(Math.round(piece.endMin/15), 0, 96);
-  const topY  = weekGeom.slotY[idx];
-  const botY  = weekGeom.slotY[idx2];
-  const height= Math.max(1, botY - topY);
-  return {offsetLeft:colLeft, colWidth, topY, botY, height};
-}
-
-/* Busy windows (other unified blocks) */
-async function dayBusyIntervals(dayAbsTs, excludeId=null){
-  const all = await getAllU();
-  const list=[];
-  for(const u of all){
-    if(excludeId && u.id===excludeId) continue;
-    const pcs = piecesForSpecificDay(u, dayAbsTs);
-    for(const p of pcs){ list.push({startMin:p.startMin, endMin:p.endMin}); }
-  }
-  list.sort((a,b)=> a.startMin-b.startMin);
+async function dayBusyIntervals(weekSt, dayIdx, excludeGroupIdOrId=null){
+  const all = await getBlocksAll();
+  const instances = await getInstancesForWeek(all);
+  const list = instances
+    .filter(b => sameWeekDay(b, weekSt, dayIdx) && (!excludeGroupIdOrId || (b.groupId||b.id)!==excludeGroupIdOrId))
+    .map(b => ({startMin:b.startMin, endMin:b.endMin}));
+  list.sort(sortByStart);
   const merged=[];
   for(const it of list){
     if(!merged.length || it.startMin>merged[merged.length-1].endMin){ merged.push({...it}); }
@@ -628,31 +528,21 @@ async function dayBusyIntervals(dayAbsTs, excludeId=null){
   }
   return merged;
 }
-function piecesForSpecificDay(u, dayTs){
-  // Return 0..1 piece for the given dayTs
-  // Align recurrence to the week that contains dayTs
-  let sTs = u.startTs;
-  if(u.recurrence==='weekly'){
-    const uWeek = weekStamp(new Date(u.startTs));
-    const dWeek = weekStamp(new Date(dayTs));
-    const deltaWeeks = Math.floor((dWeek - uWeek)/(7*DAY_MS));
-    sTs = u.startTs + deltaWeeks*7*DAY_MS;
-  }
-  const eTs = sTs + u.durationMin*60000;
-  const dayEnd = dayTs + DAY_MS;
-  const s = Math.max(sTs, dayTs);
-  const e = Math.min(eTs, dayEnd);
-  if(e<=s) return [];
-  return [{ dayIdx: Math.floor((dayTs - getVisibleWeekStamp())/DAY_MS), startMin:Math.floor((s-dayTs)/60000), endMin:Math.ceil((e-dayTs)/60000) }];
-}
 function clampToFreeWindow(start, end, busy){
+  // Do NOT "invent" time by stretching to 0 or 1440; keep within nearest free window.
   let s = clamp(start, 0, 1440-15);
   let e = clamp(end, s+15, 1440);
+
   for(const b of busy){
-    if(s>=b.startMin && e<=b.endMin){ s=b.endMin; e=Math.max(s+15, e); }
+    // if overlaps completely inside busy, snap right after busy
+    if(s>=b.startMin && e<=b.endMin){ s = b.endMin; e = Math.max(s+15, e); }
+    // if left part collides
     if(s < b.endMin && s >= b.startMin && e > b.endMin){ s = b.endMin; }
+    // if right part collides
     if(e > b.startMin && e <= b.endMin && s < b.startMin){ e = b.startMin; }
+    // if busy in the middle
     if(s < b.startMin && e > b.endMin){
+      // choose the side that keeps at least 15min, prefer left trim
       if(b.startMin - s >= 15){ e = b.startMin; }
       else { s = b.endMin; }
     }
@@ -661,28 +551,59 @@ function clampToFreeWindow(start, end, busy){
   }
   return {start:s, end:e};
 }
+function largestFreeStartingAt(atMin, busy, minLen=15){
+  const free=[]; let prev=0;
+  for(const b of busy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
+  if(prev<1440) free.push({s:prev, e:1440});
+  for(const f of free){
+    const s = Math.max(atMin, f.s);
+    const len = f.e - s;
+    if(len>=minLen) return {start:s, end:s+len};
+  }
+  return null;
+}
 
-/* draw blocks */
+/* visible week instances */
+async function getInstancesForWeek(allBlocks){
+  const wst = getVisibleWeekStamp();
+  const instances = [];
+  for(const b of allBlocks){
+    if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); }
+    else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); }
+    else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); }
+  }
+  return instances;
+}
+function idxFromMin(min){ return clamp(Math.round(min/15), 0, 96); }
+function boundsFromSeg(seg){
+  const colLeft = weekGeom.colX[seg.dayIdx];
+  const colRight= weekGeom.colX[seg.dayIdx+1];
+  const colWidth= (colRight - colLeft) - (seg.dayIdx===6?1:0);
+  const idx = idxFromMin(seg.startMin);
+  const idx2= idxFromMin(seg.endMin);
+  const topY  = weekGeom.slotY[idx];
+  const botY  = weekGeom.slotY[idx2];
+  const height= Math.max(1, botY - topY);
+  return {offsetLeft:colLeft, colWidth, topY, botY, height};
+}
 async function drawBlocks(){
   const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
   host.innerHTML='';
-  const blocks = await getAllU();
-  for(const u of blocks){
-    const pieces = piecesForWeek(u);
-    const color = u.colorHex || getActivityByKey(u.activityKey)?.color || COLORS[8];
-    for(const piece of pieces){
-      const b=boundsFromPiece(piece);
-      const el=document.createElement('div');
-      el.className='blockRect';
-      el.dataset.uid = u.id;
-      el.style.left = `${b.offsetLeft}px`;
-      el.style.top = `${b.topY}px`;
-      el.style.width = `${b.colWidth}px`;
-      el.style.height = `${b.height}px`;
-      el.style.background = color;
-      el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearUnifiedSelector(); focusUnified(u); });
-      host.appendChild(el);
-    }
+  const blocks = await getBlocksAll();
+  const inst = await getInstancesForWeek(blocks);
+  for(const seg of inst){
+    const b=boundsFromSeg(seg);
+    const el=document.createElement('div');
+    el.className='blockRect';
+    el.dataset.id = seg.id;
+    el.dataset.groupId = seg.groupId || '';
+    el.style.left = `${b.offsetLeft}px`;
+    el.style.top = `${b.topY}px`;
+    el.style.width = `${b.colWidth}px`;
+    el.style.height = `${b.height}px`;
+    el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLORS[8];
+    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectBlockUnified(seg); });
+    document.getElementById('blocksHost').appendChild(el);
   }
   document.getElementById('weekGrid').onclick = onWeekGridTap;
 }
@@ -690,75 +611,36 @@ async function drawBlocks(){
 /* overlays util */
 function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
 
-/* ---------- UNIFIED SELECTOR ---------- */
-function currentWeekRange(){ return [getVisibleWeekStamp(), getVisibleWeekStamp()+7*DAY_MS]; }
+/* ---------- SELECTOR TOOL (24h stamps + hard walls + correct spill logic) ---------- */
+async function onWeekGridTap(e){
+  if(_modalOpen) return;
+  const blockEl = e.target.closest('.blockRect');
+  if(blockEl) return;
+  if(!weekGeom) return;
 
-function drawUnifiedSelector(){
-  const host=document.getElementById('selHost'); if(!host || !weekGeom || !sel) return;
-  host.innerHTML='';
+  const rect = weekGeom.rect;
+  const relX = e.clientX - rect.left;
+  const relY = e.clientY - rect.top;
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  let startMin = snap15(Math.floor(minuteFloat/60)*60);
+  let endMin   = clamp(startMin + 60, 0, 1440);
 
-  const pieces = piecesForWeek(sel);
-  if(!pieces.length) return;
+  const busy = await dayBusyIntervals(getVisibleWeekStamp(), dayIdx, null);
+  const fit = largestFreeStartingAt(startMin, busy, 15);
+  if(!fit){ clearSelector(); return; }
+  endMin = Math.min(fit.start + 60, fit.end);
+  if(endMin - fit.start < 15){ clearSelector(); return; }
 
-  // Determine first/last visible piece to place stamps/handles
-  const firstP = pieces[0], lastP = pieces[pieces.length-1];
-
-  for(const piece of pieces){
-    const b=boundsFromPiece(piece);
-    const rect=document.createElement('div');
-    rect.className='marqueeRect';
-    rect.style.left   = `${weekGeom.colX[piece.dayIdx]}px`;
-    rect.style.top    = `${b.topY}px`;
-    rect.style.width  = `${b.colWidth}px`;
-    rect.style.height = `${b.height}px`;
-    host.appendChild(rect);
-  }
-
-  // Stamps + handles on ends only
-  addStampAndHandle(firstP, 'top', true);
-  addStampAndHandle(lastP,  'bottom', true);
-
-  function addStampAndHandle(piece, where, show){
-    if(!show) return;
-    const b=boundsFromPiece(piece);
-    const rowH = weekGeom.rowH[0] || 48;
-    const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
-    const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
-    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
-    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
-    const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
-
-    const group=document.createElement('div'); group.style.position='absolute'; group.style.left = `${weekGeom.colX[piece.dayIdx]}px`; group.style.top = `${b.topY}px`; group.style.width=`${b.colWidth}px`; group.style.height=`${b.height}px`; host.appendChild(group);
-
-    const timeMin = (where==='top') ? minuteOfSelStartOnPiece(piece) : minuteOfSelEndOnPiece(piece);
-    const stamp=document.createElement('div'); stamp.className='stamp';
-    stamp.textContent = HHMM_24(timeMin);
-    stamp.style.left = (b.colWidth/2)+'px';
-    stamp.style.top  = (where==='top'? (-(sGap + sH)) : (b.height + sGap))+'px';
-    group.appendChild(stamp);
-
-    const handle=document.createElement('div'); handle.className='handle '+where;
-    handle.style.left='0px';
-    handle.style.top = (where==='top'? (-(sGap + sH + hGap + hH + topExtra)) : (b.height + sGap + sH + hGap))+'px';
-    handle.style.width=b.colWidth+'px'; handle.style.height=hH+'px';
-    handle.innerHTML = `<div class="chev-chip">${chevronsSVG(where==='top'?'up':'down', b.colWidth, rowH)}</div>`;
-    handle.addEventListener('pointerdown', ev=>startUnifiedDrag(ev, where), {passive:false});
-    group.appendChild(handle);
-  }
+  chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null, dir: null };
+  saveChain(chain).catch(()=>{});
+  clearBlockFocus();
+  drawSelector();
+  showSelectorButtons();
 }
 
-function minuteOfSelStartOnPiece(piece){
-  // Returns HH:MM for stamp based on absolute sel.startTs within that day
-  const dayTs = getVisibleWeekStamp() + piece.dayIdx*DAY_MS;
-  const mins = Math.max(0, Math.floor((sel.startTs - dayTs)/60000));
-  return mins;
-}
-function minuteOfSelEndOnPiece(piece){
-  const dayTs = getVisibleWeekStamp() + piece.dayIdx*DAY_MS;
-  const endTs = sel.startTs + sel.durationMin*60000;
-  const mins = Math.max(0, Math.floor((endTs - dayTs)/60000));
-  return mins%1440;
-}
+function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
 
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
@@ -775,10 +657,86 @@ function chevronsSVG(dir, colW, rowH){
   return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
 }
 
+function drawSelector(){
+  const host=document.getElementById('selHost'); if(!host || !weekGeom){ return; }
+  host.innerHTML='';
+  if(!chain){ return; }
+
+  const parentHere = segOnThisWeek(chain.parent);
+  const childHere  = segOnThisWeek(chain.child);
+  if(!parentHere && !childHere) return;
+
+  // We render as ONE entity:
+  // - If only parent: both stamps + both handles.
+  // - If parent + child: top stamp/handle on parent; bottom stamp/handle on child. No extra stamps.
+  const renderEntry = (seg, which, showTop, showBottom)=>{
+    const b=boundsFromSeg(seg);
+
+    const rectEl=document.createElement('div');
+    rectEl.className='marqueeRect';
+    rectEl.dataset.name=which;
+    rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
+    rectEl.style.top    = `${b.topY}px`;
+    rectEl.style.width  = `${b.colWidth}px`;
+    rectEl.style.height = `${b.height}px`;
+    host.appendChild(rectEl);
+
+    const rowH = weekGeom.rowH[0] || 48;
+    const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
+    const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
+    const topExtra = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-handle-extra'))||0;
+    const sGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-gap'))||6;
+    const sH   = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h'))||26;
+
+    const group=document.createElement('div'); group.style.position='absolute'; group.style.left = `${weekGeom.colX[seg.dayIdx]}px`; group.style.top = `${b.topY}px`; group.style.width=`${b.colWidth}px`; group.style.height=`${b.height}px`; host.appendChild(group);
+
+    if(showTop){
+      const topStamp=document.createElement('div'); topStamp.className='stamp';
+      topStamp.textContent = HHMM_24(seg.startMin);
+      topStamp.style.left = (b.colWidth/2)+'px';
+      topStamp.style.top  = (- (sGap + sH))+'px';
+      group.appendChild(topStamp);
+
+      const topHandle=document.createElement('div'); topHandle.className='handle top';
+      topHandle.style.left='0px';
+      topHandle.style.top = (- (sGap + sH + hGap + hH + topExtra))+'px';
+      topHandle.style.width=b.colWidth+'px'; topHandle.style.height=hH+'px';
+      topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', b.colWidth, rowH)}</div>`;
+      topHandle.addEventListener('pointerdown', ev=>startDrag(ev,'top', which), {passive:false});
+      group.appendChild(topHandle);
+    }
+
+    if(showBottom){
+      const botStamp=document.createElement('div'); botStamp.className='stamp';
+      botStamp.textContent = HHMM_24(seg.endMin);
+      botStamp.style.left = (b.colWidth/2)+'px';
+      botStamp.style.top  = (b.height + sGap)+'px';
+      group.appendChild(botStamp);
+
+      const botHandle=document.createElement('div'); botHandle.className='handle bottom';
+      botHandle.style.left='0px';
+      botHandle.style.top = (b.height + sGap + sH + hGap)+'px';
+      botHandle.style.width=b.colWidth+'px'; botHandle.style.height=hH+'px';
+      botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', b.colWidth, rowH)}</div>`;
+      botHandle.addEventListener('pointerdown', ev=>startDrag(ev,'bottom', which), {passive:false});
+      group.appendChild(botHandle);
+    }
+  };
+
+  if(parentHere && !childHere){ renderEntry(chain.parent,'parent',true,true); }
+  else if(!parentHere && childHere){ renderEntry(chain.child,'child',true,true); }
+  else {
+    renderEntry(chain.parent,'parent',true,false);
+    renderEntry(chain.child,'child',false,true);
+  }
+
+  positionSelectorButtons();
+}
+
 function removeSelectorButtons(){ document.getElementById('selectorBtns')?.remove(); }
 function showSelectorButtons(){
   removeSelectorButtons();
-  if(!sel || !weekGeom) return;
+  if(!chain || !chain.parent || !weekGeom) return;
   const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='selectorBtns';
 
   const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.title='Settings';
@@ -787,99 +745,92 @@ function showSelectorButtons(){
     <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
   </svg>`;
   gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
-  gear.onclick = ()=> openSettingsModal(null); // new selection
+  gear.onclick = ()=> openSettingsModal(null);
 
   const close = document.createElement('button'); close.className='neu-btn--sm'; close.title='Clear';
   close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-  close.onclick = ()=> clearUnifiedSelector();
+  close.onclick = ()=> clearSelector();
 
   wrap.appendChild(gear); wrap.appendChild(close);
   document.body.appendChild(wrap);
   positionSelectorButtons();
 }
 function positionSelectorButtons(){
-  if(!sel || !weekGeom) return;
-  const pcs = piecesForWeek(sel); if(!pcs.length) return;
-  const piece = pcs.length===1 ? pcs[0] : pcs[0]; // anchor near first visible piece
-  const b=boundsFromPiece(piece);
+  const seg = chain?.parent; if(!seg || !weekGeom) return;
+  const b=boundsFromSeg(seg);
   const margin=8, btnW=44, totalH=(44*2)+8;
-  let left = weekGeom.rect.left + weekGeom.colX[piece.dayIdx] + b.colWidth + margin;
+  let left = weekGeom.rect.left + weekGeom.colX[seg.dayIdx] + b.colWidth + margin;
   if(left + btnW > window.innerWidth - margin){
-    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[piece.dayIdx] - margin - btnW);
+    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[seg.dayIdx] - margin - btnW);
   }
   let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
   top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
   const wrap=document.getElementById('selectorBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
 }
-function clearUnifiedSelector(){
-  sel=null; clearSelHost(); removeSelectorButtons();
+function clearSelector(){
+  chain=null; saveChain(null).catch(()=>{});
+  clearSelHost();
+  removeSelectorButtons();
 }
 
-/* tap to start unified selection */
-async function onWeekGridTap(e){
-  if(_modalOpen) return;
-  const blockEl = e.target.closest('.blockRect');
-  if(blockEl) return; // handled by focus
-  if(!weekGeom) return;
+function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
 
-  const rect = weekGeom.rect;
-  const relX = e.clientX - rect.left;
-  const relY = e.clientY - rect.top;
-  let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
-  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  let startMin = snap15(Math.floor(minuteFloat/60)*60);
-  let endMin   = clamp(startMin + 60, 0, 1440);
-
-  const dayTs = getVisibleWeekStamp() + dayIdx*DAY_MS;
-  const busy = await dayBusyIntervals(dayTs, null);
-  const clamped = clampToFreeWindow(startMin, endMin, busy);
-  if(clamped.end - clamped.start < 15){ clearUnifiedSelector(); return; }
-
-  const startTs = dayTs + clamped.start*60000;
-  sel = { startTs, durationMin: clamped.end - clamped.start }; // <=60 now but editable up to 1440
-  drawUnifiedSelector(); showSelectorButtons();
+async function clampSelectorAgainstBlocks(seg){
+  const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
+  const clamped = clampToFreeWindow(seg.startMin, seg.endMin, busy);
+  seg.startMin = clamped.start;
+  seg.endMin   = clamped.end;
 }
 
-/* drag handles on unified selection */
-function startUnifiedDrag(ev, where){
-  if(!sel || _modalOpen) return;
+function startDrag(ev, kind, which){
+  if(!chain || _modalOpen) return;
+  const seg = (which==='parent'? chain.parent : chain.child); if(!seg) return;
+
   ev.preventDefault(); ev.stopPropagation();
   ev.currentTarget.setPointerCapture(ev.pointerId);
 
-  dragKind = where;
-  dragStartY = ev.clientY;
-  baseStartTs = sel.startTs;
-  baseDuration= sel.durationMin;
-  desiredEdgeIntent=null; wasDrag=false;
+  dragKind = kind; dragTarget = which;
+  dragStartY = ev.clientY; baseStart = seg.startMin; baseEnd = seg.endMin;
+  dragPixels=0; wasDrag=false; desiredEdgeIntent=null;
 
-  const move = async (e)=>{
+  const move=async (e)=>{
     if(_modalOpen) return;
     const dyPx = e.clientY - dragStartY;
+    dragPixels = Math.max(dragPixels, Math.abs(dyPx));
     const movedMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
     const snappedDelta = snap15(movedMin);
 
-    // Desired (unclamped) edge change — to detect crossing day boundary
-    if(where==='top'){
-      const desiredStartTs = baseStartTs + snappedDelta*60000;
-      desiredEdgeIntent = (desiredStartTs < dayStartTs(new Date(baseStartTs))) ? 'prev' : null;
-      // apply within day-by-day constraints (no overlap)
-      applyUnifiedTopDelta(snappedDelta);
-    } else {
-      const desiredEndTs = baseStartTs + baseDuration*60000 + snappedDelta*60000;
-      const endDayEndTs  = dayStartTs(new Date(baseStartTs + baseDuration*60000)) + DAY_MS;
-      desiredEdgeIntent = (desiredEndTs > endDayEndTs) ? 'next' : null;
-      applyUnifiedBottomDelta(snappedDelta);
-    }
-    wasDrag = wasDrag || Math.abs(snappedDelta)>=15;
-    drawUnifiedSelector();
+    // Compute desired un-clamped edge to decide spill INTENT
+    let desiredStart = baseStart, desiredEnd = baseEnd;
+    if(dragKind==='top'){ desiredStart = baseStart + snappedDelta; }
+    else { desiredEnd = baseEnd + snappedDelta; }
+
+    desiredEdgeIntent = null;
+    if(dragKind==='top' && desiredStart < 0) desiredEdgeIntent='prev';
+    if(dragKind==='bottom' && desiredEnd > 1440) desiredEdgeIntent='next';
+
+    // Apply constrained movement with hard walls (no overlap)
+    if(dragKind==='top'){ seg.startMin = clamp(baseStart + snappedDelta, 0, baseEnd - 15); }
+    else { seg.endMin = clamp(baseEnd + snappedDelta, baseStart + 15, 1440); }
+    await clampSelectorAgainstBlocks(seg);
+
+    wasDrag = wasDrag || Math.abs(snappedDelta) >= 15;
+    drawSelector();
   };
 
-  const up = async (e)=>{
-    // On release, if intent crossed day edge, ask spill and extend selection accordingly (up to 24h cap)
-    if(!_modalOpen && wasDrag && desiredEdgeIntent){
-      await spilloverConfirmUnified(desiredEdgeIntent);
+  const up=async (e)=>{
+    seg.startMin = snap15(seg.startMin); seg.endMin = snap15(seg.endMin);
+    if(seg.endMin - seg.startMin < 15){
+      if(dragKind==='top'){ seg.startMin = seg.endMin - 15; }
+      else { seg.endMin = seg.startMin + 15; }
     }
+
+    // Spill prompt ONLY if the user's intended move crossed an actual day edge (ignores overlap clamps)
+    if(!_modalOpen && wasDrag && !chain.child && desiredEdgeIntent){
+      await spilloverConfirm(desiredEdgeIntent);
+    }
+
+    await saveChain(chain).catch(()=>{});
     e.currentTarget.releasePointerCapture(e.pointerId);
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
@@ -889,109 +840,136 @@ function startUnifiedDrag(ev, where){
   window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
 }
-async function applyUnifiedTopDelta(deltaMin){
-  // Adjust start, keeping end fixed; respect busy windows on affected days; keep duration >=15 and <=1440
-  let newStartTs = baseStartTs + deltaMin*60000;
-  let newEndTs   = baseStartTs + baseDuration*60000;
-  let newDuration= Math.max(15, Math.min(1440, Math.round((newEndTs - newStartTs)/60000)));
-  // Clamp against busy intervals day by day for the top edge
-  // Evaluate in the day where newStartTs sits
-  const dayTs = dayStartTs(new Date(newStartTs));
-  const busy = await dayBusyIntervals(dayTs, null);
-  const startMin = Math.floor((newStartTs - dayTs)/60000);
-  const endMin   = Math.floor((newEndTs - dayTs)/60000);
-  const cl = clampToFreeWindow(startMin, Math.max(startMin+15, endMin), busy);
-  // recompute newStartTs from clamped start
-  const clampedStartTs = dayTs + cl.start*60000;
-  // keep endTs fixed if still after start; else shorten duration
-  if(newEndTs <= clampedStartTs+15*60000) newEndTs = clampedStartTs + 15*60000;
-  sel.startTs = clampedStartTs;
-  sel.durationMin = Math.min(1440, Math.round((newEndTs - clampedStartTs)/60000));
-}
-async function applyUnifiedBottomDelta(deltaMin){
-  // Adjust end, keeping start fixed; respect busy windows; duration 15..1440
-  let newStartTs = baseStartTs;
-  let newEndTs   = baseStartTs + baseDuration*60000 + deltaMin*60000;
-  // Cap to 24h
-  newEndTs = Math.min(newStartTs + 1440*60000, newEndTs);
-  if(newEndTs <= newStartTs + 15*60000) newEndTs = newStartTs + 15*60000;
 
-  // Clamp against busy in the day where end sits
-  const dayTs = dayStartTs(new Date(newEndTs));
-  const busy = await dayBusyIntervals(dayTs, null);
-  const startMin = Math.floor((newStartTs - dayTs)/60000);
-  const endMin   = Math.floor((newEndTs   - dayTs)/60000);
-  const cl = clampToFreeWindow(Math.max(0,startMin), Math.max(Math.max(0,startMin)+15, endMin), busy);
-  const clampedEndTs = dayTs + cl.end*60000;
-  if(clampedEndTs <= newStartTs + 15*60000) sel.durationMin = 15;
-  else sel.durationMin = Math.min(1440, Math.round((clampedEndTs - newStartTs)/60000));
-}
-
-async function spilloverConfirmUnified(direction){
+async function spilloverConfirm(direction){
   if(_modalOpen) return;
   _modalOpen=true;
-  const ok = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
+  const res = await modalConfirm(direction==='prev' ? 'Spill to previous day?' : 'Spill to next day?');
   _modalOpen=false;
-  if(!ok) return;
-  // Extend selection to day boundary on that side, then auto-pan weeks if needed
+  if(!res) return;
+  await confirmSpill(direction);
+}
+function modalConfirm(text){
+  return new Promise((resolve)=>{
+    const veil=document.createElement('div'); veil.className='veil';
+    const modal=document.createElement('div'); modal.className='modal';
+
+    // Shield ONLY on veil
+    const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
+    ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
+      .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
+
+    modal.innerHTML=`<div class="head">${text}</div>
+      <div class="settings-wrap" style="padding:16px"></div>
+      <div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
+    document.body.appendChild(veil); document.body.appendChild(modal);
+
+    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
+    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
+    veil.addEventListener('click', ()=>close(false));
+  });
+}
+async function confirmSpill(direction){
+  if(!chain || !chain.parent) return;
+  const p = chain.parent;
+  let childWeek = p.weekSt;
+  let childDay  = p.dayIdx;
+
+  chain.dir = direction;
+
   if(direction==='next'){
-    const endTs = sel.startTs + sel.durationMin*60000;
-    const endDayEnd = dayStartTs(new Date(endTs)) + DAY_MS;
-    const extra = Math.min(1440 - sel.durationMin, Math.round((endDayEnd - endTs)/60000));
-    sel.durationMin += Math.max(0, extra);
-    const endAfter = sel.startTs + sel.durationMin*60000;
-    const wEnd = getVisibleWeekStamp() + 7*DAY_MS;
-    if(endAfter>=wEnd){ visibleWeekFirst = addDays(visibleWeekFirst,7); repaintWeek(true); drawBlocks(); }
+    // Parent ends at 1440 (clamped against busy)
+    const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
+    const parentClamp = clampToFreeWindow(p.startMin, 1440, parentBusy);
+    p.endMin = parentClamp.end;
+
+    // Child starts next day at first free window
+    if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
+    else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
+
+    const childBusy = await dayBusyIntervals(childWeek, childDay, null);
+    const freeStart = largestFreeStartingAt(0, childBusy, 15);
+    if(!freeStart){ chain.child=null; await saveChain(chain); repaintWeek(true); drawSelector(); return; }
+    // Single selection continues into child
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: freeStart.start, endMin: Math.max(freeStart.start+15, freeStart.start + (60 - (p.endMin - p.startMin))) };
+    if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
   }else{
-    const startDayStart = dayStartTs(new Date(sel.startTs));
-    const extra = Math.min(1440 - sel.durationMin, Math.round((sel.startTs - startDayStart)/60000));
-    sel.startTs -= Math.max(0, extra)*60000;
-    sel.durationMin += Math.max(0, extra);
-    const wStart = getVisibleWeekStamp();
-    if(sel.startTs < wStart){ visibleWeekFirst = addDays(visibleWeekFirst,-7); repaintWeek(true); drawBlocks(); }
+    // Parent starts at 0 (clamped)
+    const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
+    const parentClamp = clampToFreeWindow(0, p.endMin, parentBusy);
+    p.startMin = parentClamp.start;
+
+    // Child goes to previous day at last free slot
+    if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
+    else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
+
+    const childBusy = await dayBusyIntervals(childWeek, childDay, null);
+    const free=[]; let prev=0;
+    for(const b of childBusy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
+    if(prev<1440) free.push({s:prev, e:1440});
+    const last = free.length? free[free.length-1] : null;
+    if(!last){ chain.child=null; await saveChain(chain); repaintWeek(true); drawSelector(); return; }
+    chain.child = { weekSt: childWeek, dayIdx: childDay, startMin:last.s, endMin:last.e };
+    if(p.dayIdx === 0){ visibleWeekFirst = stampToDate(childWeek); }
   }
-  drawUnifiedSelector();
+  await saveChain(chain);
+  repaintWeek(true); drawSelector();
 }
 
-/* ---- FOCUS EXISTING BLOCKS (unified) ---- */
-function pieceForVisible(u){
-  const pcs = piecesForWeek(u);
-  if(!pcs.length) return null;
-  // center between first and last for positioning; but return first piece
-  return pcs[0];
+/* ---------- EXISTING BLOCK SELECTION (Unified for spillover) ---------- */
+async function selectBlockUnified(seg){
+  clearSelHost();
+  selectedGroup=null; selectedBlock=null;
+  if(seg.groupId){
+    const all = await getBlocksAll();
+    const group = (await getInstancesForWeek(all)).filter(b => b.groupId===seg.groupId);
+    selectedGroup = group.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt));
+    focusGroup(selectedGroup);
+    showBlockButtons(selectedGroup[0]);
+  }else{
+    selectedBlock = {...seg};
+    drawBlockFocus(selectedBlock);
+    showBlockButtons(selectedBlock);
+  }
+  removeSelectorButtons();
 }
-function drawBlockFocus(u){
+function drawBlockFocus(seg){
   clearSelHost();
   const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
-  const pcs = piecesForWeek(u);
-  for(const p of pcs){
-    const b=boundsFromPiece(p);
-    const rect=document.createElement('div');
-    rect.className='focusRect';
-    rect.style.left   = `${weekGeom.colX[p.dayIdx]}px`;
-    rect.style.top    = `${b.topY}px`;
-    rect.style.width  = `${b.colWidth}px`;
-    rect.style.height = `${b.height}px`;
-    host.appendChild(rect);
-  }
+  const b=boundsFromSeg(seg);
+  const rectEl=document.createElement('div');
+  rectEl.className='focusRect';
+  rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
+  rectEl.style.top    = `${b.topY}px`;
+  rectEl.style.width  = `${b.colWidth}px`;
+  rectEl.style.height = `${b.height}px`;
+  host.appendChild(rectEl);
 }
-function focusUnified(u){
-  focusU = {...u};
-  drawBlockFocus(focusU);
-  showBlockButtons(pieceForVisible(focusU) || focusU);
-  removeSelectorButtons(); clearUnifiedSelector();
+function focusGroup(group){ clearSelHost(); for(const seg of group){ drawBlockFocus(seg); } }
+
+function addLiftShadow(seg){
+  const host=document.getElementById('selHost'); if(!host || !weekGeom) return null;
+  const b=boundsFromSeg(seg);
+  const sh=document.createElement('div');
+  sh.className='liftShadow';
+  sh.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
+  sh.style.top    = `${b.topY}px`;
+  sh.style.width  = `${b.colWidth}px`;
+  sh.style.height = `${b.height}px`;
+  host.insertBefore(sh, host.firstChild);
+  return sh;
 }
-function clearFocus(){
-  focusU=null; removeBlockButtons(); clearSelHost(); dragBtnRef=null; dragBlockMode=false;
+function clearBlockFocus(){
+  selectedBlock=null; selectedGroup=null; dragBlockMode=false; removeBlockButtons(); clearSelHost();
+  dragBtnRef=null;
 }
 
-/* Buttons for focused block */
 function buttonEl(iconPath, label, id){
   const b=document.createElement('button'); b.className='neu-btn--sm'; if(id) b.id=id; b.title=label;
   b.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${iconPath}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return b;
 }
-function showBlockButtons(segOrU){
+function showBlockButtons(seg){
   removeBlockButtons();
   const wrap=document.createElement('div'); wrap.className='selBtns'; wrap.id='blockBtns';
   const dragBtn = buttonEl("M12 2v6M12 16v6M2 12h6M16 12h6M7 7l5-5 5 5M7 17l5 5 5-5M7 7l-5 5 5 5M17 7l5 5-5 5","Move","dragBtn");
@@ -1002,50 +980,53 @@ function showBlockButtons(segOrU){
   document.body.appendChild(wrap);
   dragBtnRef = dragBtn;
 
-  dragBtn.onclick = ()=>toggleBlockDrag();
-  copyBtn.onclick = ()=>copyUnified();
-  gearBtn.onclick = ()=>openSettingsForExisting();
-  closeBtn.onclick = ()=>clearFocus();
+  dragBtn.onclick = ()=>toggleBlockDrag(seg);
+  copyBtn.onclick = ()=>copyBlockUnified();
+  gearBtn.onclick = ()=>openSettingsForSelection();
+  closeBtn.onclick = ()=>clearBlockFocus();
 
-  positionBlockButtons(segOrU);
+  positionBlockButtons(seg);
 }
 function removeBlockButtons(){ document.getElementById('blockBtns')?.remove(); dragBtnRef=null; }
-function positionBlockButtons(segOrU){
-  const p = pieceForVisible(focusU); if(!p || !weekGeom) return;
-  const b=boundsFromPiece(p);
+function positionBlockButtons(seg){
+  const b=boundsFromSeg(seg);
   const margin=8, btnW=44, totalH=(44*4)+8*3;
-  let left = weekGeom.rect.left + weekGeom.colX[p.dayIdx] + b.colWidth + margin;
+  let left = weekGeom.rect.left + weekGeom.colX[seg.dayIdx] + b.colWidth + margin;
   if(left + btnW > window.innerWidth - margin){
-    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[p.dayIdx] - margin - btnW);
+    left = Math.max(margin, weekGeom.rect.left + weekGeom.colX[seg.dayIdx] - margin - btnW);
   }
   let top = weekGeom.rect.top + b.topY + (b.height/2) - (totalH/2);
   top = Math.max(margin, Math.min(window.innerHeight - margin - totalH, top));
   const wrap=document.getElementById('blockBtns'); if(wrap){ wrap.style.left=`${Math.round(left)}px`; wrap.style.top=`${Math.round(top)}px`; }
 }
 
-/* drag existing unified block (move in time/day) */
+/* drag existing block */
 let liftEl=null;
-function toggleBlockDrag(){
-  if(!dragBlockMode){ startBlockDrag(); }
+function toggleBlockDrag(seg){
+  if(!dragBlockMode){ startBlockDrag(seg); }
   else { endBlockDrag(true); }
 }
-async function startBlockDrag(){
-  if(!focusU) return;
+function currentSelectionPrimary(){
+  if(selectedGroup && selectedGroup.length){ return selectedGroup[0]; }
+  return selectedBlock;
+}
+function currentSelectionAllIds(){
+  if(selectedGroup && selectedGroup.length){ return selectedGroup.map(s=>s.id); }
+  return selectedBlock? [selectedBlock.id] : [];
+}
+async function startBlockDrag(seg){
   dragBlockMode=true;
   if(dragBtnRef) dragBtnRef.classList.add('drag-on');
 
-  drawBlockFocus(focusU);
-  const p = pieceForVisible(focusU);
-  if(p){
-    const b=boundsFromPiece(p);
-    liftEl = document.createElement('div');
-    liftEl.className='liftShadow';
-    liftEl.style.left=`${weekGeom.colX[p.dayIdx]}px`;
-    liftEl.style.top =`${b.topY}px`;
-    liftEl.style.width=`${b.colWidth}px`;
-    liftEl.style.height=`${b.height}px`;
-    document.getElementById('selHost').insertBefore(liftEl, document.getElementById('selHost').firstChild);
-  }
+  const primary = currentSelectionPrimary();
+  drawBlockFocus(primary);
+  liftEl = addLiftShadow(primary);
+
+  const duration = (selectedGroup && selectedGroup.length===2)
+    ? ((selectedGroup[0].weekSt===selectedGroup[1].weekSt && selectedGroup[0].dayIdx===selectedGroup[1].dayIdx)
+        ? (selectedGroup[1].endMin - selectedGroup[0].startMin)
+        : ((1440 - selectedGroup[0].startMin) + selectedGroup[1].endMin))
+    : (primary.endMin - primary.startMin);
 
   const onMove=async (e)=>{
     if(!dragBlockMode || !weekGeom) return;
@@ -1054,27 +1035,27 @@ async function startBlockDrag(){
     let dayIdx=0; for(let i=0;i<7;i++){ if(x>=weekGeom.colX[i] && x<weekGeom.colX[i+1]){ dayIdx=i; break; } }
     let mins = snap15((y/weekGeom.totalH)*1440);
 
-    // Try to place start at that day/min, preserving duration
-    const dayTs = getVisibleWeekStamp() + dayIdx*DAY_MS;
-    const busy = await dayBusyIntervals(dayTs, focusU.id);
-    const candidateStart = mins;
-    const candidateEnd   = candidateStart + focusU.durationMin;
-    let sMin = candidateStart, eMin = Math.min(1440, candidateEnd);
-    // Clamp within free window for the starting day
-    const cl = clampToFreeWindow(sMin, Math.max(sMin+15, Math.min(eMin,1440)), busy);
-    // If duration spills, it's ok; second day's conflicts will be avoided visually (we're just previewing)
-    const preview = { ...focusU, startTs: dayTs + cl.start*60000 };
-    drawBlockFocus(preview);
-    if(liftEl){
-      const pc = piecesForWeek(preview)[0];
-      const bb = boundsFromPiece(pc);
-      liftEl.style.left=`${weekGeom.colX[pc.dayIdx]}px`;
-      liftEl.style.top =`${bb.topY}px`;
-      liftEl.style.width=`${bb.colWidth}px`;
-      liftEl.style.height=`${bb.height}px`;
+    const busy = await dayBusyIntervals(getVisibleWeekStamp(), dayIdx, primary.groupId || primary.id);
+    const free=[]; let prev=0;
+    for(const b of busy){ if(b.startMin>prev) free.push({s:prev, e:b.startMin}); prev=Math.max(prev,b.endMin); }
+    if(prev<1440) free.push({s:prev, e:1440});
+    let startMin=null;
+    for(const f of free){
+      if(mins>=f.s && mins<=f.e-duration){ startMin = mins; break; }
+      if(mins<f.s && f.e - f.s >= duration){ startMin = f.s; break; }
     }
-    positionBlockButtons(preview);
-    focusU = preview;
+    if(startMin===null){ return; }
+    const temp={...primary, dayIdx, startMin, endMin:startMin+duration};
+    selectedBlock=temp; selectedGroup=null;
+    drawBlockFocus(temp);
+    if(liftEl){
+      const b=boundsFromSeg(temp);
+      liftEl.style.left=`${weekGeom.colX[temp.dayIdx]}px`;
+      liftEl.style.top =`${b.topY}px`;
+      liftEl.style.width=`${b.colWidth}px`;
+      liftEl.style.height=`${b.height}px`;
+    }
+    positionBlockButtons(temp);
   };
   const onUp=()=>{ endBlockDrag(true); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
   window.addEventListener('pointermove', onMove, {passive:true});
@@ -1084,59 +1065,71 @@ async function endBlockDrag(commit){
   if(dragBtnRef) dragBtnRef.classList.remove('drag-on');
   if(liftEl){ liftEl.remove(); liftEl=null; }
   dragBlockMode=false;
-  if(commit && focusU){
-    // Ensure no conflict on start day; if conflict arises on second day, user can adjust after
-    await putU(focusU);
+  if(commit && selectedBlock){
+    await putBlock(selectedBlock);
     await drawBlocks();
-    focusUnified(focusU);
+    selectBlockUnified(selectedBlock);
   }
 }
 
-/* copy unified block: place directly after with nudge to free window */
-async function copyUnified(){
-  if(!focusU) return;
-  const copy = { ...focusU, id:'u'+Date.now()+Math.floor(Math.random()*1000) };
-  // try to place starting at the next free minute on same day after current end
-  const endTs = focusU.startTs + focusU.durationMin*60000;
-  const dayTs = dayStartTs(new Date(endTs));
-  const startMin = Math.min(1439, Math.floor((endTs - dayTs)/60000));
-  const busy = await dayBusyIntervals(dayTs, null);
-  const cl = clampToFreeWindow(startMin, Math.min(1440, startMin+focusU.durationMin), busy);
-  copy.startTs = dayTs + cl.start*60000;
-  await putU(copy);
+/* copy existing block — unified */
+async function copyBlockUnified(){
+  const ids = currentSelectionAllIds();
+  if(!ids.length) return;
+  const all = await getBlocksAll();
+  const selected = all.filter(b=> ids.includes(b.id));
+  const newGroup = selected[0].groupId ? ('g'+Date.now()) : null;
+  for(const s of selected){
+    const clone={...s, id:'b'+(Date.now()+Math.floor(Math.random()*1000)), groupId:newGroup||undefined};
+    await putBlock(clone);
+  }
   await drawBlocks();
 }
 
-/* settings modal */
-function openSettingsForExisting(){ if(focusU) openSettingsModal(focusU); }
-function openSettingsModal(existing){
+/* settings modal (veil-only shielding; true colors; unified spillover) */
+function openSettingsForSelection(){
+  if(selectedGroup && selectedGroup.length){ openSettingsModal(selectedGroup[0]); }
+  else if(selectedBlock){ openSettingsModal(selectedBlock); }
+}
+function openSettingsModal(existingSeg){
   _modalOpen=true;
-  const veil=document.createElement('div'); veil.className='veil';
-  const modal=document.createElement('div'); modal.className='modal';
+  const editingExisting = !!existingSeg;
+  const veil = document.createElement('div'); veil.className='veil';
+  const modal = document.createElement('div'); modal.className='modal';
+
   const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
   ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
     .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
 
-  const isEditing = !!existing;
-  const base = isEditing ? existing : (sel || { startTs: Date.now(), durationMin:60 });
-  const start = new Date(base.startTs);
-  const startDow = SHORT_DOW[start.getDay()];
-  const end = new Date(base.startTs + base.durationMin*60000);
-  const endDow = SHORT_DOW[end.getDay()];
+  let baseSeg = editingExisting ? existingSeg : (chain?.parent || {weekSt:getVisibleWeekStamp(), dayIdx:0, startMin:480, endMin:540});
+  let unified = null;
+  if(editingExisting && existingSeg.groupId){
+    const group = selectedGroup && selectedGroup.length ? selectedGroup : [existingSeg];
+    const first = group[0], last = group[group.length-1];
+    const startDay = new Date(first.weekSt + first.dayIdx*DAY_MS);
+    const endDayDate = new Date(last.weekSt + last.dayIdx*DAY_MS);
+    unified = {
+      weekSt:first.weekSt, fromDayIdx:first.dayIdx, toDayIdx:last.dayIdx,
+      fromMin:first.startMin, toMin:last.endMin, startDow: SHORT_DOW[startDay.getDay()], endDow: SHORT_DOW[endDayDate.getDay()]
+    };
+  }
+
+  const startDay = new Date(baseSeg.weekSt + baseSeg.dayIdx*DAY_MS);
+  const startDow = SHORT_DOW[startDay.getDay()];
 
   const defaults = {
-    activityKey: isEditing ? existing.activityKey : null,
-    colorHex: isEditing ? (existing.colorHex || getActivityByKey(existing.activityKey).color) : null,
-    nameOverride: isEditing ? existing.activityName : null,
-    note: isEditing ? (existing.note||'') : '',
-    fromMin: start.getHours()*60 + start.getMinutes(),
-    toMin:   end.getHours()*60 + end.getMinutes() + (endDow!==startDow ? 1440 : 0),
-    fromDow: startDow,
-    toDow:   endDow,
-    recurrence: isEditing ? existing.recurrence : 'weekly',
-    flexibility: isEditing ? existing.flexibility : 'flexible',
-    notify: isEditing ? existing.notifications : 'reoccurring',
-    privacy: isEditing ? existing.privacy : 'private'
+    activityKey: editingExisting ? existingSeg.activityKey : null,
+    colorHex: editingExisting ? (existingSeg.colorHex || getActivityByKey(existingSeg.activityKey).color) : null,
+    nameOverride: editingExisting ? existingSeg.activityName : null,
+    note: editingExisting ? (existingSeg.note||'') : '',
+    fromMin: unified? unified.fromMin : baseSeg.startMin,
+    toMin:   unified? unified.toMin   : baseSeg.endMin,
+    fromDow: unified? unified.startDow : startDow,
+    toDow:   unified? unified.endDow   : startDow,
+    recurrence: editingExisting ? (existingSeg.recurrence==='weekly'?'reoccurring':existingSeg.recurrence==='none'?'week':'month') : 'reoccurring',
+    flexibility: editingExisting ? existingSeg.flexibility : 'flexible',
+    notify: editingExisting ? existingSeg.notifications : 'reoccurring',
+    privacy: editingExisting ? existingSeg.privacy : 'private'
   };
 
   modal.innerHTML = `
@@ -1150,7 +1143,7 @@ function openSettingsModal(existing){
         <div class="neu-menu" id="assignMenu"><div class="menu-card" id="assignList"></div></div>
         <div class="row" id="selectedChipRow" style="${defaults.activityKey?'':'display:none'}">
           <span class="chip" id="actChip">
-            <span class="dot" id="actDot" style="background:${(defaults.colorHex||'#ccc')}"></span>
+            <span class="dot" id="actDot" style="background:${defaults.colorHex||'#ccc'}"></span>
             <span id="actName">${defaults.nameOverride || (defaults.activityKey? getActivityByKey(defaults.activityKey).label : '')}</span>
             <button class="edit" id="renameBtn" title="Rename">
               <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg>
@@ -1163,7 +1156,7 @@ function openSettingsModal(existing){
       <div class="neu-field">
         <div class="time-row">
           <div class="time-pair"><span class="time-day" id="fromDay">${defaults.fromDow}</span><button class="time-btn" id="fromBtn" type="button">${HHMM_24(defaults.fromMin)}</button></div>
-          <div class="time-pair"><span class="time-day" id="toDay">${defaults.toDow}</span><button class="time-btn" id="toBtn"   type="button">${HHMM_24(defaults.toMin%1440)}</button></div>
+          <div class="time-pair"><span class="time-day" id="toDay">${defaults.toDow}</span><button class="time-btn" id="toBtn"   type="button">${HHMM_24(defaults.toMin)}</button></div>
         </div>
         <input id="fromPicker" type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
         <input id="toPicker"   type="time" step="900" style="position:absolute;opacity:0;width:0;height:0;border:0;padding:0" />
@@ -1171,11 +1164,11 @@ function openSettingsModal(existing){
 
       <div class="neu-field">
         <div class="row4">
-          <div class="neu-select" id="recurringSel"><span>${defaults.recurrence==='weekly'?'Reoccurring':(defaults.recurrence==='none'?'This week':'This month')}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
+          <div class="neu-select" id="recurringSel"><span>${defaults.recurrence[0].toUpperCase()+defaults.recurrence.slice(1)}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
           <div class="neu-menu" id="recurringMenu"><div class="menu-card">
-            <div class="menu-item" data-val="weekly">Reoccurring</div>
-            <div class="menu-item" data-val="none">This week</div>
-            <div class="menu-item" data-val="monthly">This month</div>
+            <div class="menu-item" data-val="reoccurring">Reoccurring</div>
+            <div class="menu-item" data-val="week">This week</div>
+            <div class="menu-item" data-val="month">This month</div>
           </div></div>
 
           <div class="neu-select" id="flexSel"><span>${defaults.flexibility==='firm'?'Firm':'Flexible'}</span><svg viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg></div>
@@ -1215,7 +1208,7 @@ function openSettingsModal(existing){
   const closeModal = ()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
   veil.addEventListener('click', ()=>{ confirmExit(()=> closeModal()); });
 
-  // activity list
+  // activity list (true colors)
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
@@ -1254,66 +1247,119 @@ function openSettingsModal(existing){
   const toBtn   = modal.querySelector('#toBtn');
   const fromPk  = modal.querySelector('#fromPicker');
   const toPk    = modal.querySelector('#toPicker');
-
   function setPickerValue(input, minutes){ const h=Math.floor(minutes/60), m=minutes%60; input.value=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
-  setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440);
+  setPickerValue(fromPk, defaults.fromMin); setPickerValue(toPk, defaults.toMin);
   fromBtn.onclick=()=>fromPk.showPicker?.(); toBtn.onclick=()=>toPk.showPicker?.();
-
-  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if((defaults.toDow===defaults.fromDow) && defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,2880); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440); };
-  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); // if crosses day, user should set from/to dows manually; we handle up to +24h
-    const sameDay = (defaults.toDow===defaults.fromDow);
-    if(sameDay && mins<=defaults.fromMin) mins=clamp(defaults.fromMin+15,0,1440);
-    defaults.toMin = sameDay? mins : 1440 + mins;
-    defaults.toMin = Math.min(1440, defaults.toMin); // cap 24h
-    toBtn.textContent=HHMM_24(defaults.toMin%1440);
-  };
+  fromPk.onchange=()=>{ const [h,m]=fromPk.value.split(':').map(Number); const mins=snap15(h*60+m); defaults.fromMin=mins; if(defaults.toMin<=mins) defaults.toMin=clamp(mins+15,0,2880); fromBtn.textContent=HHMM_24(defaults.fromMin); setPickerValue(toPk, defaults.toMin%1440); };
+  toPk.onchange  =()=>{ const [h,m]=toPk.value.split(':').map(Number); let mins=snap15(h*60+m); if(mins<=defaults.fromMin && defaults.toDow===defaults.fromDow) mins=clamp(defaults.fromMin+15,0,1440); defaults.toMin=(defaults.toDow===defaults.fromDow? mins : 1440+mins); toBtn.textContent=HHMM_24(defaults.toMin%1440); };
 
   modal.querySelector('#statsBtn').onclick=async()=>{ await openStatsModal(defaults.activityKey? getActivityByKey(defaults.activityKey).label : '—'); };
-  modal.querySelector('#exitBtn').onclick=()=>{ confirmExit(()=> closeModal()); };
 
+  modal.querySelector('#exitBtn').onclick=()=>{ confirmExit(()=> closeModal()); };
   modal.querySelector('#saveBtn').onclick=async()=>{
     if(!defaults.activityKey){ alert('Please assign an activity.'); return; }
     if(!(defaults.toMin>defaults.fromMin)){ alert('End time must be after start time.'); return; }
     const note = modal.querySelector('#noteInput').value.trim();
     const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label;
 
-    // Build unified record (single item)
-    // Determine absolute start from current visible week + fromDay
-    const fromDayIdx = SHORT_DOW.indexOf(defaults.fromDow);
-    const toDayIdx   = SHORT_DOW.indexOf(defaults.toDow);
-    // anchor to visible week
-    const startAbs = getVisibleWeekStamp() + fromDayIdx*DAY_MS + defaults.fromMin*60000;
-    let duration = defaults.toMin - defaults.fromMin + ((toDayIdx===fromDayIdx)?0: (toDayIdx>fromDayIdx? (toDayIdx-fromDayIdx)*1440 : ((7 - (fromDayIdx - toDayIdx))*1440)););
-    // Cap to 24h
-    duration = Math.max(15, Math.min(1440, duration));
+    if(editingExisting){
+      if(existingSeg.groupId){
+        const all = await getBlocksAll();
+        const group = all.filter(b=> b.groupId===existingSeg.groupId);
+        const first = group.sort((a,b)=> (a.weekSt===b.weekSt? a.dayIdx-b.dayIdx : a.weekSt-b.weekSt))[0];
 
-    const record = {
-      id: isEditing ? existing.id : ('u'+Date.now()),
-      startTs: startAbs,
-      durationMin: duration,
-      activityKey: defaults.activityKey,
-      activityName: actName,
-      colorHex: defaults.colorHex,
-      note,
-      recurrence: defaults.recurrence,
-      flexibility: defaults.flexibility,
-      notifications: defaults.notify,
-      privacy: defaults.privacy
-    };
+        const spanLen = defaults.toMin - defaults.fromMin;
+        const firstEnd   = Math.min(1440, defaults.fromMin + Math.min(spanLen, 1440-defaults.fromMin));
+        const needsSecond= defaults.toMin>1440;
 
-    await putU(record);
-    await drawBlocks();
-    clearUnifiedSelector();
-    focusUnified(record);
+        const busyFirst  = await dayBusyIntervals(first.weekSt, first.dayIdx, existingSeg.groupId);
+        const clamp1   = clampToFreeWindow(defaults.fromMin, firstEnd, busyFirst);
+        const updated1 = {
+          ...first,
+          activityKey: defaults.activityKey,
+          activityName: actName,
+          colorHex: defaults.colorHex,
+          startMin: clamp1.start,
+          endMin: Math.max(clamp1.start+15, clamp1.end),
+          note,
+          recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'),
+          flexibility: defaults.flexibility,
+          notifications: defaults.notify,
+          privacy: defaults.privacy,
+          groupId: existingSeg.groupId
+        };
+        await putBlock(updated1);
+
+        const other = group.find(g=> !(g.weekSt===first.weekSt && g.dayIdx===first.dayIdx));
+        if(needsSecond){
+          const secondDayIdx = (first.dayIdx===6)? 0 : first.dayIdx+1;
+          const secondWeekSt = (first.dayIdx===6)? first.weekSt + 7*DAY_MS : first.weekSt;
+          const leftover = defaults.toMin - 1440;
+          const busySecond = await dayBusyIntervals(secondWeekSt, secondDayIdx, existingSeg.groupId);
+          const clamp2 = clampToFreeWindow(0, leftover, busySecond);
+          const seg2 = other || { id:'b'+(Date.now()+2) };
+          const updated2 = {
+            ...seg2,
+            weekSt: secondWeekSt, dayIdx: secondDayIdx,
+            startMin: clamp2.start, endMin: Math.max(clamp2.start+15, clamp2.end),
+            activityKey: defaults.activityKey,
+            activityName: actName,
+            colorHex: defaults.colorHex,
+            note,
+            recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'),
+            flexibility: defaults.flexibility,
+            notifications: defaults.notify,
+            privacy: defaults.privacy,
+            groupId: existingSeg.groupId
+          };
+          await putBlock(updated2);
+        }else if(other){
+          await delBlock(other.id);
+        }
+
+        await drawBlocks(); selectBlockUnified(updated1);
+      }else{
+        const updated = {
+          ...existingSeg,
+          activityKey: defaults.activityKey,
+          activityName: actName,
+          colorHex: defaults.colorHex,
+          startMin: defaults.fromMin%1440,
+          endMin: Math.min(1440, defaults.toMin),
+          note,
+          recurrence: (defaults.recurrence==='reoccurring'?'weekly':defaults.recurrence==='week'?'none':'monthly'),
+          flexibility: defaults.flexibility,
+          notifications: defaults.notify,
+          privacy: defaults.privacy
+        };
+        const busy = await dayBusyIntervals(updated.weekSt, updated.dayIdx, updated.id);
+        const clamped = clampToFreeWindow(updated.startMin, updated.endMin, busy);
+        updated.startMin = clamped.start; updated.endMin = clamped.end;
+        await putBlock(updated); await drawBlocks(); selectBlockUnified(updated);
+      }
+    }else{
+      await finalizeBlock({
+        actKey: defaults.activityKey, actName, colorHex: defaults.colorHex,
+        from: defaults.fromMin, to: defaults.toMin,
+        recurVal: defaults.recurrence, flexVal: defaults.flexibility,
+        notifVal: defaults.notify, privVal: defaults.privacy, note
+      });
+    }
     closeModal();
   };
 
   modal.querySelector('#deleteBtn').onclick=async()=>{
-    if(!isEditing){ confirmExit(()=> closeModal()); return; }
-    const ok = await modalConfirm('Delete this block?');
+    if(!editingExisting){ confirmExit(()=> closeModal()); return; }
+    const ok = await modalConfirm('Are you sure you want to delete this entire block?');
     if(ok){
-      await delU(existing.id);
-      await drawBlocks(); clearFocus(); closeModal();
+      if(existingSeg.groupId){
+        const all = await getBlocksAll();
+        const group = all.filter(b=> b.groupId===existingSeg.groupId);
+        for(const g of group){ await delBlock(g.id); }
+      }else{
+        await delBlock(existingSeg.id);
+      }
+      await drawBlocks(); clearBlockFocus(); closeModal();
     }
   };
 }
@@ -1324,25 +1370,85 @@ function hookMenu(root, selSel, menuSel, onPick){
   trigger.addEventListener('click', ()=>{ const open = menu.classList.toggle('open'); trigger.setAttribute('aria-expanded', open?'true':'false'); });
   menu.querySelectorAll('.menu-item').forEach(mi=> mi.addEventListener('click', ()=>{ onPick(mi.dataset.val, mi.textContent.trim()); menu.classList.remove('open'); trigger.setAttribute('aria-expanded','false'); }));
 }
-function modalConfirm(text){
-  return new Promise((resolve)=>{
-    const veil=document.createElement('div'); veil.className='veil';
-    const modal=document.createElement('div'); modal.className='modal';
-    const swallow = (ev)=>{ ev.stopPropagation(); ev.preventDefault(); };
-    ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','click','wheel']
-      .forEach(evt=> veil.addEventListener(evt, swallow, {passive:false}));
-    modal.innerHTML=`<div class="head">${text}</div>
-      <div class="settings-wrap" style="padding:16px"></div>
-      <div class="foot"><button class="btn" data-a="no">Cancel</button><button class="btn ok" data-a="yes">OK</button></div>`;
-    document.body.appendChild(veil); document.body.appendChild(modal);
-    const close=(val)=>{ veil.remove(); modal.remove(); resolve(val); };
-    modal.addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; b.dataset.a==='yes'? close(true):close(false); });
-    veil.addEventListener('click', ()=>close(false));
-  });
+function confirmExit(done){
+  modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); });
 }
-function confirmExit(done){ modalConfirm('Exit without saving?').then(ok=>{ if(ok) done(); }); }
 
-/* Stats placeholder */
+/* finalize new block (unified when chain has child) */
+async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
+  if(!chain || !chain.parent) return;
+  const parent = chain.parent;
+
+  const busyP = await dayBusyIntervals(parent.weekSt, parent.dayIdx, null);
+  const clampedP = clampToFreeWindow(from%1440, Math.min(1440,to), busyP);
+  let pStart = clampedP.start, pEnd = clampedP.end;
+
+  if(chain.child){
+    const child = chain.child;
+    const busyC = await dayBusyIntervals(child.weekSt, child.dayIdx, null);
+    const clampedC = clampToFreeWindow(child.startMin, Math.min(1440, child.endMin), busyC);
+    if(clampedC.end - clampedC.start >= 15){
+      const groupId = 'g'+Date.now();
+      const base = {
+        id: 'b'+Date.now(),
+        weekSt: parent.weekSt,
+        dayIdx: parent.dayIdx,
+        startMin: pStart,
+        endMin: pEnd,
+        activityKey: actKey,
+        activityName: actName,
+        colorHex,
+        note: note || '',
+        recurrence: (recurVal==='reoccurring' ? 'weekly' : (recurVal==='week' ? 'none' : 'monthly')),
+        flexibility: flexVal,
+        notifications: notifVal,
+        privacy: privVal,
+        groupId
+      };
+      await putBlock(base);
+      const cBlock = { ...base, id:'b'+(Date.now()+1), weekSt: child.weekSt, dayIdx: child.dayIdx, startMin: clampedC.start, endMin: clampedC.end };
+      await putBlock(cBlock);
+    }else{
+      const base = {
+        id: 'b'+Date.now(),
+        weekSt: parent.weekSt,
+        dayIdx: parent.dayIdx,
+        startMin: pStart,
+        endMin: pEnd,
+        activityKey: actKey,
+        activityName: actName,
+        colorHex,
+        note: note || '',
+        recurrence: (recurVal==='reoccurring' ? 'weekly' : (recurVal==='week' ? 'none' : 'monthly')),
+        flexibility: flexVal,
+        notifications: notifVal,
+        privacy: privVal
+      };
+      await putBlock(base);
+    }
+  }else{
+    const base = {
+      id: 'b'+Date.now(),
+      weekSt: parent.weekSt,
+      dayIdx: parent.dayIdx,
+      startMin: pStart,
+      endMin: pEnd,
+      activityKey: actKey,
+      activityName: actName,
+      colorHex,
+      note: note || '',
+      recurrence: (recurVal==='reoccurring' ? 'weekly' : (recurVal==='week' ? 'none' : 'monthly')),
+      flexibility: flexVal,
+      notifications: notifVal,
+      privacy: privVal
+    };
+    await putBlock(base);
+  }
+
+  chain = null; await saveChain(null); await drawBlocks(); clearBlockFocus(); clearSelector();
+}
+
+/* Stats (minimal) */
 async function openStatsModal(activityName){
   const veil=document.createElement('div'); veil.className='veil';
   const modal=document.createElement('div'); modal.className='modal';
@@ -1362,11 +1468,11 @@ async function openStatsModal(activityName){
   veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); _modalOpen=false; });
 }
 
-/* Screensaver */
+/* Screensaver (no active view) */
 function showScreensaver(){
   screenEl.innerHTML = `
     <div class="screensaver">
-      <div class="wm">Chrono r81 — Week-only (Unified 24h blocks)</div>
+      <div class="wm">Chrono r80 — Week-only build</div>
     </div>
   `;
 }
@@ -1377,7 +1483,6 @@ async function init(){
     const snap = await storageGet('state');
     if(snap){ activeView = snap.activeView ?? null; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); if(activeView){ const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }
   }catch{}
-  await migrateLegacy();
   render();
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); } });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
@@ -1385,6 +1490,7 @@ async function init(){
 function render(){
   if(activeView==='week'){ buildWeekView(); }
   else if(activeView==='day' || activeView==='month' || activeView==='todo'){
+    // Intentionally blank pages for this pass
     screenEl.innerHTML=`<div class="wrap"><div class="head"><div></div><div class="title">${activeView[0].toUpperCase()+activeView.slice(1)} (disabled)</div><div></div></div><div class="grid-area" style="display:grid;place-items:center;color:#667a90"><div>Not available in this build</div></div></div>`;
   }else{
     showScreensaver();
@@ -1402,7 +1508,7 @@ init();
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker.register('./service-worker.js')
       .then(reg => console.log('SW registered', reg.scope))
       .catch(err => console.error('SW registration failed', err));
   });
