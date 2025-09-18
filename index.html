@@ -21,7 +21,7 @@
     --hour-col:64px; --dow-h:32px; --label-size:12px;
 
     --marquee-border:5px;
-    --marquee-shadow:0 0 12px 6px var(--turq-glow); /* selector tool only */
+    --marquee-shadow:0 0 12px 6px var(--turq-glow);
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
@@ -60,7 +60,7 @@
     position:relative; overflow:hidden;
   }
 
-  /* Global overlay for stamps/handles/focus, never clipped */
+  /* Unclipped overlay root (stamps/handles/focus) */
   #overlay{ position:fixed; inset:0; pointer-events:none; z-index:9999; }
 
   /* Controls */
@@ -122,12 +122,12 @@
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Selector rectangle/focus stays inside grid (clipped) */
+  /* In-grid selection/focus outline (clipped) */
   .selHost{ position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:2; }
   .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-shadow); }
   .focusRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:none; }
 
-  /* Stamps: rendered on #overlay so they can overflow window */
+  /* Overlay stamps/handles (never clipped) */
   .stamp{
     position:absolute;
     background:var(--pressed-navy); color:var(--icon-active);
@@ -137,8 +137,6 @@
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
     height:var(--stamp-h); display:grid; place-items:center;
   }
-
-  /* Handles rendered on #overlay (highest z), draggable */
   .handle{ position:absolute; width:100%; pointer-events:auto; cursor:ns-resize; z-index:10002; touch-action:none; display:grid; place-items:center; }
   .chev-chip{
     width:100%; height:100%; border-radius:14px;
@@ -219,7 +217,7 @@
         </svg>
       </button>
 
-      <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+      <button class="neu-btn is-pressed" aria-label="Week view" aria-pressed="true" data-view="week" title="Week">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="4.5" width="18" height="15" rx="3"/>
           <line x1="3" y1="8" x2="21" y2="8"/>
@@ -257,18 +255,13 @@
   <div id="overlay" aria-hidden="true"></div>
 
 <script>
-/* Chrono r80.2 — Week-only + overlay stamps/handles
-   - Preserve DB schema/version to keep data.
-   - Selector stamps/chevrons rendered on fixed #overlay (never clipped).
-   - Spillover acts as one entity; edits at global start/end.
-   - 24h cap enforced; no overlap with existing blocks.
-*/
+/* Chrono r80.hotfix — Week-only + reliable selector init */
 
 const screenEl = document.getElementById('screen');
 const overlayEl = document.getElementById('overlay');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = null;
+let activeView = 'week';              // force default visible week
 let visibleWeekFirst = weekStart(new Date());
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -294,8 +287,8 @@ new ResizeObserver(()=> {
   if(activeView==='week'){ repaintWeek(true); drawBlocks(); if(chain) drawSelector(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); }
 }).observe(screenEl);
 
-/* storage — keep same DB name/version to preserve data */
-const DB_NAME='chronoDB', DB_VERSION=32; // unchanged
+/* storage */
+const DB_NAME='chronoDB', DB_VERSION=32;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -307,7 +300,6 @@ function idbOpen(){
       const db = req.result;
       if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
       if(!db.objectStoreNames.contains('blocks')) db.createObjectStore('blocks',{keyPath:'id'});
-      // NOTE: no destructive migrations to preserve existing data
     };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror   = ()=>reject(req.error);
@@ -385,7 +377,7 @@ const ACTIVITY_LIST = [
 function getActivityByKey(k){ return ACTIVITY_LIST.find(a=>a.key===k) || ACTIVITY_LIST[0]; }
 function defaultFlexForActivity(key){ return (key==='work'||key==='commute'||key==='school'||key==='childcare')?'firm':'flexible'; }
 
-/* selection chain (kept same key to preserve UX) */
+/* selection chain */
 const CHAIN_KEY='selChain_v14';
 async function saveChain(c){ await storageSet(CHAIN_KEY, c||undefined); }
 async function loadChain(){ return (await storageGet(CHAIN_KEY)) || null; }
@@ -395,7 +387,7 @@ let chain = null;
 let dragKind=null, dragTarget='parent';
 let dragStartY=0, baseStart=0, baseEnd=0;
 let dragPixels=0, wasDrag=false;
-let desiredEdgeIntent=null; // 'prev' | 'next' | null
+let desiredEdgeIntent=null;
 let weekGeom=null;
 let selectedBlock=null;
 let selectedGroup=null;
@@ -431,11 +423,7 @@ function buildWeekView(){
 
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
-        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
-          <div class="blocksHost" id="blocksHost"></div>
-          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="selHost" id="selHost"></div>
-        </div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid" tabindex="0"></div>
         <div class="hours" id="weekHours"></div>
       </div>
     </div>
@@ -445,19 +433,49 @@ function buildWeekView(){
   document.getElementById('nextWeekBtn').onclick = async ()=>{ if(_modalOpen) return; visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); await drawBlocks(); clearSelector(); };
 
   repaintWeek();
+  drawBlocks();
 
   const grid = document.getElementById('weekGrid');
-  grid.addEventListener('click', onWeekGridTap, {passive:true}); // restore tap-to-select
+
+  // robust selector start: pointerdown + click fallback
+  const startFromEvent = (clientX, clientY)=>{
+    if(_modalOpen || !weekGeom) return;
+    const rect = weekGeom.rect;
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+    if(relY < 0 || relY > weekGeom.totalH || relX < 0 || relX > weekGeom.totalW) return;
+
+    let dayIdx=0;
+    for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+    const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * MIN_PER_DAY;
+    let startMin = snap15(Math.floor(minuteFloat/60)*60);
+    let endMin   = clamp(startMin + 60, 0, MIN_PER_DAY);
+
+    dayBusyIntervals(getVisibleWeekStamp(), dayIdx, null).then(busy=>{
+      const fit = largestFreeStartingAt(startMin, busy, 15);
+      if(!fit){ clearSelector(); return; }
+      endMin = Math.min(fit.start + 60, fit.end);
+      if(endMin - fit.start < 15){ clearSelector(); return; }
+
+      chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null, dir: null };
+      saveChain(chain).catch(()=>{});
+      clearBlockFocus();
+      drawSelector();
+      showSelectorButtons();
+    });
+  };
+
+  grid.addEventListener('pointerdown', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
+  grid.addEventListener('click', (e)=>{ startFromEvent(e.clientX, e.clientY); }, {passive:true});
 
   new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); if(selectedGroup) focusGroup(selectedGroup); else if(selectedBlock) focusBlock(selectedBlock); if(chain) drawSelector(); positionSelectorButtons(); }).observe(grid);
   window.addEventListener('scroll', ()=>{ if(activeView==='week' && (chain||selectedBlock||selectedGroup)) positionSelectorButtons(); }, {passive:true});
-
-  drawBlocks();
-  if(chain) { drawSelector(); showSelectorButtons(); }
 }
 
-function computeGeometry(gridEl, cols){
+function computeGeometry(){
+  const gridEl=document.getElementById('weekGrid');
   const r=gridEl.getBoundingClientRect();
+  const cols=7;
   const totalW=Math.max(0, Math.round(r.width));
   const totalH=Math.max(0, Math.round(r.height));
   const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
@@ -472,9 +490,12 @@ function computeGeometry(gridEl, cols){
   }
   weekGeom={totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
 }
-function buildMask(geom, cols){
-  const svg=document.getElementById('maskSVG'); svg.innerHTML='';
-  const { totalW, totalH, colX, rowY } = geom; if(totalW<=0 || totalH<=0) return;
+function buildMask(){
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.classList.add('mask');
+  const grid = document.getElementById('weekGrid');
+  grid.appendChild(svg);
+  const { totalW, totalH, colX, rowY } = weekGeom; if(totalW<=0 || totalH<=0) return;
   svg.setAttribute('width', totalW); svg.setAttribute('height', totalH);
   svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`); svg.setAttribute('preserveAspectRatio','none');
   const NS='http://www.w3.org/2000/svg';
@@ -489,7 +510,7 @@ function buildMask(geom, cols){
   sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239'));
   defs.appendChild(sym); svg.appendChild(defs);
   for(let rI=0;rI<24;rI++){
-    for(let cI=0;cI<cols;cI++){
+    for(let cI=0;cI<7;cI++){
       const use=document.createElementNS(NS,'use');
       use.setAttribute('href','#tile900x300'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
       use.setAttribute('width',colX[cI+1]-colX[cI]); use.setAttribute('height',rowY[rI+1]-rowY[rI]);
@@ -499,22 +520,21 @@ function buildMask(geom, cols){
 }
 function repaintWeek(){
   const first=visibleWeekFirst, last=addDays(first,6);
-  document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
   for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
-  const gridEl=document.getElementById('weekGrid');
-  computeGeometry(gridEl,7);
+  computeGeometry();
   for(let i=0;i<24;i++){
     const s=document.createElement('div'); s.className='hour-stamp';
     s.textContent = hourToAMPM(i);
     s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
     gh.appendChild(s);
   }
-  buildMask(weekGeom,7);
+  document.getElementById('weekTitle').textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
+  buildMask();
 }
 
-/* ---------- Interval helpers for no-overlap rules ---------- */
+/* ---------- Interval helpers ---------- */
 function sortByStart(a,b){ return a.startMin - b.startMin; }
 function sameWeekDay(seg, weekSt, dayIdx){ return seg.weekSt===weekSt && seg.dayIdx===dayIdx; }
 
@@ -535,15 +555,11 @@ async function dayBusyIntervals(weekSt, dayIdx, excludeGroupIdOrId=null){
 function clampToFreeWindow(start, end, busy){
   let s = clamp(start, 0, MIN_PER_DAY-15);
   let e = clamp(end, s+15, MIN_PER_DAY);
-
   for(const b of busy){
     if(s>=b.startMin && e<=b.endMin){ s = b.endMin; e = Math.max(s+15, e); }
     if(s < b.endMin && s >= b.startMin && e > b.endMin){ s = b.endMin; }
     if(e > b.startMin && e <= b.endMin && s < b.startMin){ e = b.startMin; }
-    if(s < b.startMin && e > b.endMin){
-      if(b.startMin - s >= 15){ e = b.startMin; }
-      else { s = b.endMin; }
-    }
+    if(s < b.startMin && e > b.endMin){ if(b.startMin - s >= 15){ e = b.startMin; } else { s = b.endMin; } }
     s = clamp(s, 0, MIN_PER_DAY-15);
     e = clamp(e, s+15, MIN_PER_DAY);
   }
@@ -561,7 +577,7 @@ function largestFreeStartingAt(atMin, busy, minLen=15){
   return null;
 }
 
-/* visible week instances */
+/* instances */
 async function getInstancesForWeek(allBlocks){
   const wst = getVisibleWeekStamp();
   const instances = [];
@@ -569,9 +585,7 @@ async function getInstancesForWeek(allBlocks){
     if(b.recurrence==='none'){ if(b.weekSt===wst) instances.push(b); }
     else if(b.recurrence==='weekly'){ if(wst>=b.weekSt) instances.push({...b, weekSt:wst}); }
     else if(b.recurrence==='monthly'){ if(b.weekSt===wst) instances.push(b); }
-    else { // legacy entries without recurrence -> treat as weekly
-      instances.push({...b, weekSt:wst, recurrence:'weekly'});
-    }
+    else { instances.push({...b, weekSt:wst, recurrence:'weekly'}); }
   }
   return instances;
 }
@@ -588,8 +602,16 @@ function boundsFromSeg(seg){
   return {offsetLeft:colLeft, colWidth, topY, botY, height};
 }
 async function drawBlocks(){
-  const host=document.getElementById('blocksHost'); if(!host || !weekGeom) return;
-  host.innerHTML='';
+  const grid=document.getElementById('weekGrid');
+  // prepare layers
+  let blocksHost=document.getElementById('blocksHost');
+  let selHost=document.getElementById('selHost');
+  let maskSVG=document.querySelector('#weekGrid .mask');
+  if(!blocksHost){ blocksHost=document.createElement('div'); blocksHost.id='blocksHost'; blocksHost.className='blocksHost'; grid.appendChild(blocksHost); }
+  if(!maskSVG){ buildMask(); }
+  if(!selHost){ selHost=document.createElement('div'); selHost.id='selHost'; selHost.className='selHost'; grid.appendChild(selHost); }
+
+  blocksHost.innerHTML='';
   const blocks = await getBlocksAll();
   const inst = await getInstancesForWeek(blocks);
   for(const seg of inst){
@@ -604,46 +626,15 @@ async function drawBlocks(){
     el.style.height = `${b.height}px`;
     el.style.background = seg.colorHex || getActivityByKey(seg.activityKey)?.color || COLORS[8];
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); clearSelector(); selectBlockUnified(seg); });
-    host.appendChild(el);
+    blocksHost.appendChild(el);
   }
-  document.getElementById('weekGrid').onclick = onWeekGridTap;
 }
 
-/* overlays util */
+/* overlay utils */
 function clearSelHost(){ document.getElementById('selHost')?.replaceChildren(); }
 function clearOverlay(){ overlayEl.replaceChildren(); }
 
-/* ---------- SELECTOR TOOL (overlay chevrons/stamps + hard walls + correct spill logic) ---------- */
-async function onWeekGridTap(e){
-  if(_modalOpen) return;
-  const blockEl = e.target.closest('.blockRect');
-  if(blockEl) return;
-  if(!weekGeom) return;
-
-  const rect = weekGeom.rect;
-  const relX = e.clientX - rect.left;
-  const relY = e.clientY - rect.top;
-  let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
-  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * MIN_PER_DAY;
-  let startMin = snap15(Math.floor(minuteFloat/60)*60);
-  let endMin   = clamp(startMin + 60, 0, MIN_PER_DAY);
-
-  const busy = await dayBusyIntervals(getVisibleWeekStamp(), dayIdx, null);
-  const fit = largestFreeStartingAt(startMin, busy, 15);
-  if(!fit){ clearSelector(); return; }
-  endMin = Math.min(fit.start + 60, fit.end);
-  if(endMin - fit.start < 15){ clearSelector(); return; }
-
-  chain = { id: Date.now(), parent: { weekSt:getVisibleWeekStamp(), dayIdx, startMin:fit.start, endMin }, child: null, dir: null };
-  saveChain(chain).catch(()=>{});
-  clearBlockFocus();
-  drawSelector();
-  showSelectorButtons();
-}
-
-function segOnThisWeek(seg){ return seg && seg.weekSt === getVisibleWeekStamp(); }
-
+/* selector */
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
   const w = Math.max(24, colW - padX*2);
@@ -664,14 +655,14 @@ function drawSelector(){
   host.innerHTML=''; clearOverlay();
   if(!chain){ return; }
 
-  const parentHere = segOnThisWeek(chain.parent);
-  const childHere  = segOnThisWeek(chain.child);
+  const parentHere = chain.parent && chain.parent.weekSt === getVisibleWeekStamp();
+  const childHere  = chain.child  && chain.child.weekSt  === getVisibleWeekStamp();
   if(!parentHere && !childHere) return;
 
   const renderEntry = (seg, which, showTop, showBottom)=>{
     const b=boundsFromSeg(seg);
 
-    // In-grid rectangle (clipped by chart)
+    // in-grid rect
     const rectEl=document.createElement('div');
     rectEl.className='marqueeRect';
     rectEl.dataset.name=which;
@@ -681,7 +672,7 @@ function drawSelector(){
     rectEl.style.height = `${b.height}px`;
     host.appendChild(rectEl);
 
-    // Overlay elements (stamps/handles) positioned in viewport coords
+    // overlay
     const rowH = weekGeom.rowH[0] || 48;
     const hH = rowH * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult'))||1.6);
     const hGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||10;
@@ -696,7 +687,7 @@ function drawSelector(){
     if(showTop){
       const topStamp=document.createElement('div'); topStamp.className='stamp';
       topStamp.textContent = HHMM_24(seg.startMin);
-      topStamp.style.left = (leftPx + (colW/2) - 0)+'px';
+      topStamp.style.left = (leftPx + (colW/2))+'px';
       topStamp.style.top  = (topPx - (sGap + sH))+'px';
       overlayEl.appendChild(topStamp);
 
@@ -712,7 +703,7 @@ function drawSelector(){
     if(showBottom){
       const botStamp=document.createElement('div'); botStamp.className='stamp';
       botStamp.textContent = HHMM_24(seg.endMin);
-      botStamp.style.left = (leftPx + (colW/2) - 0)+'px';
+      botStamp.style.left = (leftPx + (colW/2))+'px';
       botStamp.style.top  = (topPx + b.height + sGap)+'px';
       overlayEl.appendChild(botStamp);
 
@@ -775,15 +766,12 @@ function clearSelector(){
   clearSelHost(); clearOverlay(); removeSelectorButtons();
 }
 
-function otherSeg(which){ return which==='parent' ? chain.child : chain.parent; }
-
+/* drag logic */
 async function clampSelectorAgainstBlocks(seg){
   const busy = await dayBusyIntervals(seg.weekSt, seg.dayIdx, null);
   const len = seg.endMin - seg.startMin;
   const clamped = clampToFreeWindow(seg.startMin, seg.endMin, busy);
-  // Keep minimum 15 minutes
   if(clamped.end - clamped.start < 15){
-    // try slide down inside nearest free window
     const fit = largestFreeStartingAt(seg.startMin, busy, 15);
     if(fit){ seg.startMin = fit.start; seg.endMin = Math.max(fit.start+15, Math.min(fit.start+len, fit.end)); }
     else { seg.startMin = clamped.start; seg.endMin = clamped.start+15; }
@@ -811,7 +799,6 @@ function startDrag(ev, kind, which){
     const movedMin = (weekGeom.totalH? (dyPx / weekGeom.totalH) * MIN_PER_DAY : 0);
     const snappedDelta = snap15(movedMin);
 
-    // desired edge intent based on raw delta (before clamping)
     let desiredStart = baseStart, desiredEnd = baseEnd;
     if(dragKind==='top'){ desiredStart = baseStart + snappedDelta; }
     else { desiredEnd = baseEnd + snappedDelta; }
@@ -819,7 +806,6 @@ function startDrag(ev, kind, which){
     if(dragKind==='top' && desiredStart < 0) desiredEdgeIntent='prev';
     if(dragKind==='bottom' && desiredEnd > MIN_PER_DAY) desiredEdgeIntent='next';
 
-    // Apply movement within the active segment only (prevents parent jitter)
     if(dragKind==='top'){ seg.startMin = clamp(baseStart + snappedDelta, 0, seg.endMin - 15); }
     else { seg.endMin = clamp(baseEnd + snappedDelta, seg.startMin + 15, MIN_PER_DAY); }
     await clampSelectorAgainstBlocks(seg);
@@ -834,12 +820,9 @@ function startDrag(ev, kind, which){
       if(dragKind==='top'){ seg.startMin = seg.endMin - 15; }
       else { seg.endMin = seg.startMin + 15; }
     }
-
-    // Prompt spill ONLY when intended edge crosses a day boundary
     if(!_modalOpen && wasDrag && !chain.child && desiredEdgeIntent){
       await spilloverConfirm(desiredEdgeIntent);
     }
-
     await saveChain(chain).catch(()=>{});
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     window.removeEventListener('pointermove', move, true);
@@ -851,6 +834,7 @@ function startDrag(ev, kind, which){
   window.addEventListener('pointerup', up, true);
 }
 
+/* spillover */
 async function spilloverConfirm(direction){
   if(_modalOpen) return;
   _modalOpen=true;
@@ -884,12 +868,10 @@ async function confirmSpill(direction){
   chain.dir = direction;
 
   if(direction==='next'){
-    // parent to end of day (respect busy)
     const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
     const parentClamp = clampToFreeWindow(p.startMin, MIN_PER_DAY, parentBusy);
     p.endMin = parentClamp.end;
 
-    // child next day at earliest free slot with length equal to remaining within 24h cap
     if(p.dayIdx < 6){ childDay  = p.dayIdx + 1; childWeek = p.weekSt; }
     else { childDay  = 0; childWeek = p.weekSt + 7*DAY_MS; }
 
@@ -902,12 +884,10 @@ async function confirmSpill(direction){
     chain.child = { weekSt: childWeek, dayIdx: childDay, startMin: clamp2.start, endMin: Math.max(clamp2.start+15, clamp2.end) };
     if(p.dayIdx === 6){ visibleWeekFirst = stampToDate(childWeek); }
   }else{
-    // parent from start of day (respect busy)
     const parentBusy = await dayBusyIntervals(p.weekSt, p.dayIdx, null);
     const parentClamp = clampToFreeWindow(0, p.endMin, parentBusy);
     p.startMin = parentClamp.start;
 
-    // child previous day at last free slot sized to remaining cap
     if(p.dayIdx > 0){ childDay  = p.dayIdx - 1; childWeek = p.weekSt; }
     else { childDay  = 6; childWeek = p.weekSt - 7*DAY_MS; }
 
@@ -927,7 +907,7 @@ async function confirmSpill(direction){
   repaintWeek(true); drawSelector();
 }
 
-/* ---------- EXISTING BLOCK SELECTION (Unified for spillover) ---------- */
+/* blocks selection */
 async function selectBlockUnified(seg){
   clearSelHost(); clearOverlay();
   selectedGroup=null; selectedBlock=null;
@@ -946,7 +926,11 @@ async function selectBlockUnified(seg){
 }
 function drawBlockFocus(seg){
   clearSelHost(); clearOverlay();
-  const host=document.getElementById('selHost'); if(!host || !weekGeom) return;
+  const host=document.getElementById('selHost'); if(!host || !weekGeom){
+    // ensure hosts exist if something wiped them
+    drawBlocks();
+    return;
+  }
   const b=boundsFromSeg(seg);
   const rectEl=document.createElement('div'); rectEl.className='focusRect';
   rectEl.style.left   = `${weekGeom.colX[seg.dayIdx]}px`;
@@ -1082,7 +1066,7 @@ async function endBlockDrag(commit){
   }
 }
 
-/* copy existing block — unified */
+/* copy existing block */
 async function copyBlockUnified(){
   const ids = currentSelectionAllIds();
   if(!ids.length) return;
@@ -1096,7 +1080,7 @@ async function copyBlockUnified(){
   await drawBlocks();
 }
 
-/* settings modal */
+/* settings */
 function openSettingsForSelection(){
   if(selectedGroup && selectedGroup.length){ openSettingsModal(selectedGroup[0]); }
   else if(selectedBlock){ openSettingsModal(selectedBlock); }
@@ -1218,7 +1202,6 @@ function openSettingsModal(existingSeg){
   const closeModal = ()=>{ veil.remove(); modal.remove(); _modalOpen=false; };
   veil.addEventListener('click', ()=>{ confirmExit(()=> closeModal()); });
 
-  // activity list
   const listEl = modal.querySelector('#assignList');
   ACTIVITY_LIST.forEach(a=>{
     const row = document.createElement('div'); row.className='menu-item'; row.dataset.key=a.key;
@@ -1272,7 +1255,7 @@ function openSettingsModal(existingSeg){
     const note = modal.querySelector('#noteInput').value.trim();
     const actName = modal.querySelector('#actName').textContent || getActivityByKey(defaults.activityKey).label;
 
-    if(editingExisting){
+    if(existingSeg){
       if(existingSeg.groupId){
         const all = await getBlocksAll();
         const group = all.filter(b=> b.groupId===existingSeg.groupId);
@@ -1359,7 +1342,7 @@ function openSettingsModal(existingSeg){
   };
 
   modal.querySelector('#deleteBtn').onclick=async()=>{
-    if(!editingExisting){ confirmExit(()=> closeModal()); return; }
+    if(!existingSeg){ confirmExit(()=> closeModal()); return; }
     const ok = await modalConfirm('Are you sure you want to delete this entire block?');
     if(ok){
       if(existingSeg.groupId){
@@ -1384,7 +1367,7 @@ function confirmExit(done){
   modalConfirm('Are you sure you want to exit without saving?').then(ok=>{ if(ok) done(); });
 }
 
-/* finalize new block (unified when chain has child) */
+/* finalize new block */
 async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, flexVal, notifVal, privVal, note}){
   if(!chain || !chain.parent) return;
   const parent = chain.parent;
@@ -1458,7 +1441,7 @@ async function finalizeBlock({actKey, actName, colorHex, from, to, recurVal, fle
   chain = null; await saveChain(null); await drawBlocks(); clearBlockFocus(); clearSelector();
 }
 
-/* Stats (minimal) */
+/* Stats (stub) */
 async function openStatsModal(activityName){
   const veil=document.createElement('div'); veil.className='veil';
   const modal=document.createElement('div'); modal.className='modal';
@@ -1478,11 +1461,11 @@ async function openStatsModal(activityName){
   veil.addEventListener('click', ()=>{ veil.remove(); modal.remove(); _modalOpen=false; });
 }
 
-/* Screensaver (no active view) */
+/* Screensaver */
 function showScreensaver(){
   screenEl.innerHTML = `
     <div class="screensaver">
-      <div class="wm">Chrono r80.2 — Week-only build</div>
+      <div class="wm">Chrono r80.hotfix — Week-only</div>
     </div>
   `;
 }
@@ -1499,7 +1482,12 @@ function render(){
 async function init(){
   try{
     const snap = await storageGet('state');
-    if(snap){ activeView = snap.activeView ?? null; if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst); if(activeView){ const btn = document.querySelector(`.neu-btn[data-view="${activeView}"]`); btn?.classList.add('is-pressed'); btn?.setAttribute('aria-pressed','true'); } }
+    if(snap){
+      activeView = snap.activeView || 'week';   // ensure week default
+      if(typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
+    }
+    // visually sync button state
+    buttons.forEach(x=>{ x.classList.toggle('is-pressed', x.dataset.view===activeView); x.setAttribute('aria-pressed', x.dataset.view===activeView ? 'true':'false'); });
   }catch{}
   chain = await loadChain();
   render();
