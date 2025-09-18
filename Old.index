@@ -1,72 +1,113 @@
+<!-- r82 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Chrono</title>
-
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#000000">
-
+<meta name="theme-color" content="#000000" />
 <style>
   :root{
-    --r-lg:12px; --r-pill:999px;
-    --border:#bdbdbd; --grid-line:#e1e1e1;
-    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
+    --bg:#e3eaf2; --ink:#42586d;
+    --icon-inactive:#42586d; --icon-active:#4ff7ff;
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
 
-    --hour-col:56px;
-    --dow-h:32px;
-    --label-size:12px;
-    --btn:60px;
+    --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
+    --gap:24px; --radius:12px;
 
-    --panelW:520px;
-    --slot-gap:8px;
-    --icon-btn:36px;
-    --row-min-h:36px;
+    --border:#c6cfda; --grid-line:#cfd9e5;
+    --chart-bg:#d1dce8; --mask-surface: var(--bg);
+
+    --hour-col:64px; --dow-h:32px; --label-size:12px;
+
+    --marquee-border:5px;
+    --marquee-glow:0 0 12px 6px var(--turq-glow);
+
+    --handle-stroke:#5e7286;
+    --chev-stroke-w:2.2;
+    --handle-gap:12px;                /* ↑ spacing tune so chevrons never hit stamps */
+    --handle-height-mult:1.75;
+
+    --stamp-h:26px;
   }
 
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
-    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
+  html,body{
+    height:100%; margin:0; background:var(--bg); color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    overflow:hidden; -webkit-tap-highlight-color: transparent;
+  }
   *{box-sizing:border-box}
 
   .app{
     width:clamp(320px, 96vw, 520px);
     height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
-    margin: max(16px, env(safe-area-inset-top)) auto;
-    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
+    margin:max(16px, env(safe-area-inset-top)) auto;
+    display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
   }
 
   #screen{
-    border:1px solid var(--border);
-    border-radius:var(--r-lg);
-    background:#fff;
-    position:relative; overflow:hidden; min-height:420px;
+    flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    position:relative; overflow:hidden; display:grid; place-items:center;
+    color:#7a8ba2; font-weight:900; letter-spacing:.06em;
   }
 
-  .controls{ display:flex; justify-content:space-between; align-items:center; }
-  .btn{
-    width:var(--btn); height:var(--btn); border-radius:50%;
-    border:1px solid var(--border); background:#fff; color:#000;
-    display:grid; place-items:center; cursor:pointer; padding:0;
+  /* Controls */
+  .controls{ display:flex; gap:var(--gap); padding-bottom:2px; }
+  .neu-btn{
+    --btn-d: calc((100% - (3 * var(--gap))) / 4);
+    flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
+    border-radius:50%; border:none; outline:none; cursor:pointer;
+    background:var(--bg); display:grid; place-items:center;
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
   }
-  .btn[aria-pressed="true"]{ background:#e6e6e6; }
+  .neu-btn svg{
+    width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
+    fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-btn.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
+      var(--pressed-navy);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+  .neu-btn.is-pressed svg{
+    stroke:var(--icon-active);
+    filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
+  }
+  .neu-btn:active{ transform:scale(.985); }
 
-  .icon{ width:60%; height:60% }
-  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
+  .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg);
+    border:none; cursor:pointer; box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    display:grid; place-items:center; }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+  .neu-btn--sm.is-pressed{ background:var(--pressed-navy); }
+  .neu-btn--sm.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); }
 
+  /* Layout inside week screen */
   .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
-  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
   .grid-area{ position:relative; overflow:hidden }
-  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
-  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:2 }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
   .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
-  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
-
-  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) }
 
   .grid{
     position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
@@ -74,35 +115,91 @@
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
   }
-  .blocks{ position:absolute; inset:0; z-index:1 }
-  .blk{ position:absolute; border:1px solid var(--border) }
-  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
-  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
 
-  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
-  .chev:disabled{ opacity:.5; cursor:not-allowed }
+  /* Mask pattern (for the “cut” look) */
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Month */
-  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
-  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
-  .month-dow span{ text-align:center }
-  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
-  .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
-  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
-  .mcell.muted{ color:#9c9c9c }
+  /* Selection */
+  .selHost{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+  .marqueeRect{
+    position:absolute; box-sizing:border-box; background:transparent;
+    border:var(--marquee-border) solid #fff; border-radius:12px;
+    box-shadow: var(--marquee-glow);
+  }
 
-  /* Day “screensaver” watermark */
-  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+  /* Always-on-top overlay (handles + stamps pinned to viewport) */
+  .overlayRoot{ position:fixed; inset:0; z-index:4; pointer-events:none; }
+  .ov-group{ position:absolute; pointer-events:none; }
+
+  .stamp{
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
+    pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
+    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    z-index:3; /* stamps must sit ABOVE chevrons/highlights */
+  }
+
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; display:grid; place-items:center; }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px;
+    background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    display:grid; place-items:center;
+    z-index:2; /* beneath stamps */
+  }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+
+  /* Floating buttons */
+  .selBtns{ position:fixed; z-index:6; display:grid; gap:8px; pointer-events:auto; }
+  .selBtnHidden{ display:none !important; }
+
+  /* Present-day lens */
+  .present-lens{
+    position:absolute; box-sizing:border-box;
+    border:var(--marquee-border) solid #fff;
+    border-radius:12px;
+    box-shadow:var(--marquee-glow); /* turquoise glow outside only */
+    z-index:2; pointer-events:none;
+  }
+
+  /* Modal (settings stub) */
+  .veil{ position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:10; }
+  .modal{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(92vw, 360px); background:var(--bg); color:var(--ink);
+    border-radius:12px; box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo),
+       0 16px 40px rgba(0,0,0,.28);
+    z-index:11; display:grid; grid-template-rows:auto 1fr auto; max-height:88vh; overflow:hidden;
+  }
+  .modal .head{ padding:12px 14px; font-weight:800; }
+  .modal .body{ padding:14px; display:grid; gap:10px; }
+  .modal .foot{ padding:10px 14px; display:flex; justify-content:flex-end; gap:10px; }
+  .btn{ border:none; background:var(--bg); border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer;
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+  }
+  .btn.warn{ color:#a33; }
 </style>
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area"></section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r82</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
-      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="4"/>
+      <!-- Day -->
+      <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="5.5"/>
           <line x1="12" y1="2"  x2="12" y2="5"/>
           <line x1="12" y1="19" x2="12" y2="22"/>
           <line x1="2"  y1="12" x2="5"  y2="12"/>
@@ -114,33 +211,36 @@
         </svg>
       </button>
 
-      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y2="8"/>
-          <line x1="6" y1="10" x2="6" y2="18"/>
-          <line x1="8" y1="10" x2="8" y2="18"/>
-          <line x1="10" y1="10" x2="10" y2="18"/>
-          <line x1="12" y1="10" x2="12" y2="18"/>
-          <line x1="14" y1="10" x2="14" y2="18"/>
-          <line x1="16" y1="10" x2="16" y2="18"/>
-          <line x1="18" y1="10" x2="18" y2="18"/>
+      <!-- Week (active) -->
+      <button class="neu-btn is-pressed" aria-label="Week view" aria-pressed="true" data-view="week" title="Week">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18.5"/>
+          <line x1="9" y1="10" x2="9" y2="18.5"/>
+          <line x1="12" y1="10" x2="12" y2="18.5"/>
+          <line x1="15" y1="10" x2="15" y2="18.5"/>
+          <line x1="18" y1="10" x2="18" y2="18.5"/>
         </svg>
       </button>
 
-      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
-          <line x1="4" y1="8" x2="20" y2="8"/>
-          <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
-          <circle cx="7"  cy="14" r="0.7"/><circle cx="11" cy="14" r="0.7"/><circle cx="15" cy="14" r="0.7"/><circle cx="19" cy="14" r="0.7"/>
-          <circle cx="7"  cy="17" r="0.7"/><circle cx="11" cy="17" r="0.7"/><circle cx="15" cy="17" r="0.7"/><circle cx="19" cy="17" r="0.7"/>
+      <!-- Month (blank) -->
+      <button class="neu-btn" aria-label="Month view (blank)" aria-pressed="false" data-view="month" title="Month">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <g>
+            <circle cx="7" cy="11" r="0.8"/><circle cx="11" cy="11" r="0.8"/><circle cx="15" cy="11" r="0.8"/>
+            <circle cx="7" cy="14" r="0.8"/><circle cx="11" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/>
+            <circle cx="7" cy="17" r="0.8"/><circle cx="11" cy="17" r="0.8"/><circle cx="15" cy="17" r="0.8"/>
+          </g>
         </svg>
       </button>
 
-      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="5" width="16" height="14" rx="2"/>
+      <!-- To-Do (blank) -->
+      <button class="neu-btn" aria-label="To-Do (blank)" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="3"/>
           <line x1="4" y1="8" x2="20" y2="8"/>
           <polyline points="7,14 10,17 17,10"/>
         </svg>
@@ -149,170 +249,163 @@
   </main>
 
 <script>
-console.info('Chrono build r21');
+/* Chrono r82 — cosmetic fixes + present-day lens
+   Base: r81 (single-block “snake” selector, 15-min snap, 24h max),
+   week view active; day/month/todo blank; overlayed handles & stamps;
+   persistence via IndexedDB; settings modal stub; watermark on idle. */
 
-/* ---------- Core / State ---------- */
 const screenEl = document.getElementById('screen');
-const buttons = [...document.querySelectorAll('.btn')];
+const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = null;               // starts blank
-let activeDayISO = toISO(new Date());
-let visibleWeekFirst = weekStart(new Date());
+let activeView = 'week';
+let visibleWeekFirst = weekStart(new Date());      // start of visible week
+const DAY_MS = 86400000;
 
-const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
-function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function snap15(n){ return 15 * Math.round((+n||0)/15); }
+function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
+function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
+function getNow(){ return new Date(); }
+function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
-/* ---------- Width sync ---------- */
-new ResizeObserver(()=> {
-  const w = screenEl.getBoundingClientRect().width;
-  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
-}).observe(screenEl);
-
-/* ---------- Lightweight Storage (IndexedDB + fallback) ---------- */
-const DB_NAME = 'chronoDB';
-const DB_VERSION = 7;
-let dbPromise = null;
-let STORAGE_MODE = 'idb';
-
-function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
+/* ---------- storage (IndexedDB fallback to localStorage) ---------- */
+const DB_NAME='chronoDB', DB_VERSION=40;
+let dbPromise=null, STORAGE_MODE='idb';
+function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
-  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject)=>{
+  if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = ()=>{
       const db = req.result;
-      if (!db.objectStoreNames.contains('kv')){
-        db.createObjectStore('kv', { keyPath: 'k' });
-      }
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
     };
     req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
+    req.onerror   = ()=>reject(req.error);
   });
-  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
+  return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
 }
-async function storageSet(key, value){
-  if (STORAGE_MODE==='ls'){
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readwrite');
-    tx.objectStore('kv').put({k:key, v:value});
-    tx.oncomplete = ()=>resolve(true);
-    tx.onerror = ()=>reject(tx.error);
+async function storageSet(k,v){
+  if(STORAGE_MODE==='ls'){ if(v===undefined||v===null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readwrite');
+    const store=tx.objectStore('kv');
+    if(v===undefined||v===null) store.delete(k); else store.put({k,v});
+    tx.oncomplete=()=>res(true); tx.onerror = ()=>rej(tx.error);
   });
 }
-async function storageGet(key){
-  if (STORAGE_MODE==='ls'){
-    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
-  }
-  const db = await idbOpen();
-  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
-  return new Promise((resolve, reject)=>{
-    const tx = db.transaction('kv','readonly');
-    const req = tx.objectStore('kv').get(key);
-    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
-    req.onerror = ()=>reject(req.error);
+async function storageGet(k){
+  if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readonly');
+    const req=tx.objectStore('kv').get(k);
+    req.onsuccess=()=>res(req.result? req.result.v:undefined);
+    req.onerror=()=>rej(req.error);
   });
 }
 
-function snapshotState(){ return { activeView, activeDayISO }; }
-function hydrateState(snap){
-  try{
-    if(!snap || typeof snap!=='object') return;
-    if (typeof snap.activeView === 'string' || snap.activeView===null) activeView = snap.activeView;
-    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
-  }catch(e){ console.warn('Hydrate failed:', e); }
-}
-async function saveAll(){
-  const snap = snapshotState();
-  await storageSet('state', snap);
-}
-let saveTimer=null;
-function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
+const STATE_KEY='state_r81';
+const SEL_KEY  ='snake_r81';
 
-/* ---------- Controls ---------- */
+/* ---------- snake selection model ---------- */
+/* Represent as absolute minutes from start of visible week (0..10079) and duration (<= 1440) */
+let snake = null; // { weekSt:number, startAbs:number, dur:number }  dur in [15..1440], snap 15
+
+/* ---------- UI wiring ---------- */
 document.querySelector('.controls').addEventListener('click', e=>{
-  const b=e.target.closest('.btn'); if(!b) return;
+  const b=e.target.closest('.neu-btn'); if(!b) return;
   const v=b.dataset.view;
+
+  const wasPressed = b.classList.contains('is-pressed');
+  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+  if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
+
   if(activeView===v){
-    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+    showWallpaper();
+    destroySelButtons(); destroyOverlay();
   }else{
-    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
+    activeView=v; render();
   }
   saveSoon(200);
 });
 
-/* ---------- Week View (UI only; no tap-to-edit, no task stack) ---------- */
+/* ---------- week view scaffolding ---------- */
+let weekGeom=null;
+let overlayRoot=null;
+let presentLensEl=null;
+
 function buildWeekView(){
   screenEl.innerHTML = `
     <div class="wrap">
       <div class="head">
-        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+        </button>
         <div class="title" id="weekTitle"></div>
-        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
+        <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+        </button>
       </div>
 
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
-        <div class="grid" id="weekGrid">
-          <div class="blocks" id="blocksLayer"></div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="now" id="nowMagnify" aria-hidden="true"></div>
+          <div class="selHost" id="selHost"></div>
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
     </div>
   `;
-  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
-  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
+
+  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); if(snake) snake.weekSt=getVisibleWeekStamp(); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(200); };
+
+  document.getElementById('weekGrid').addEventListener('click', onWeekGridTap, {passive:true});
+  ensureOverlay();
 
   repaintWeek();
-  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
+  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(document.getElementById('weekGrid'));
+
+  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); } }, 32);
+  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('orientationchange', sync, {passive:true});
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
+
+  // present-day lens timer: tick each minute to keep to 15-min grid in real time
+  if(window.__lensTimer){ clearInterval(window.__lensTimer); }
+  window.__lensTimer = setInterval(()=>{ if(activeView==='week') updatePresentLens(); }, 60*1000);
 }
 
-function repaintWeek(){
+function repaintWeek(skipDraw=false){
   const first=visibleWeekFirst, last=addDays(first,6);
-  const m=new Intl.DateTimeFormat(undefined,{month:'short'});
-  const title = (first.getFullYear()===last.getFullYear())
-    ? (first.getMonth()===last.getMonth()
-        ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
-        : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
-    : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  document.getElementById('weekTitle').textContent = title;
+  document.getElementById('weekTitle').textContent =
+    `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
 
   const pills=document.getElementById('dowPills'); pills.innerHTML='';
-  for(let i=0;i<7;i++){
-    const d=addDays(first,i);
-    const pill=document.createElement('div');
-    pill.className='day-pill';
-    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
-    pills.appendChild(pill);
-  }
+  for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); }
 
   const gh=document.getElementById('weekHours'); gh.innerHTML='';
-  const gridEl = document.getElementById('weekGrid');
-  const geom=computeGeometry(gridEl, 7);
+  const gridEl=document.getElementById('weekGrid');
+  weekGeom=computeGeometry(gridEl,7);
   for(let i=0;i<24;i++){
-    const el=document.createElement('div'); el.className='hour-stamp';
-    el.textContent = `${String(i).padStart(2,'0')}:00`;
-    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
-    gh.appendChild(el);
+    const s=document.createElement('div'); s.className='hour-stamp';
+    s.textContent = hourToAMPM(i);
+    s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
+    gh.appendChild(s);
   }
 
-  // Blocks intentionally omitted (no items). Preserve mask & magnifier.
-  buildMask(geom, 7);
-  paintNowMagnifier(geom);
+  buildMask(weekGeom,7);
+  if(!skipDraw) drawSnake();
 }
 
 function computeGeometry(gridEl, cols){
@@ -321,15 +414,18 @@ function computeGeometry(gridEl, cols){
   const totalH=Math.max(0, Math.round(r.height));
   const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
   const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+
   const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
   const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+
   const slotY=[0];
   for(let hr=0;hr<24;hr++){
-    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
+    const h=rowH[hr];
+    const base=Math.floor(h/4); let rem=h-base*4;
     const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
     for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
   }
-  return {totalW,totalH,colW,colX,rowH,rowY,slotY};
+  return {totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
 }
 
 function buildMask(geom, cols){
@@ -348,14 +444,14 @@ function buildMask(geom, cols){
   sym.setAttribute('viewBox','0 0 900 300');
   sym.setAttribute('preserveAspectRatio','none');
 
-  const surface='rgba(255,255,255,0.55)';
-  const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
-  const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
+  const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2';
+  const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
+  const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
 
-  sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
-  sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
-  sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
-  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
+  sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24));
+  sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300));
+  sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
+  sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239'));
 
   defs.appendChild(sym); svg.appendChild(defs);
 
@@ -371,101 +467,415 @@ function buildMask(geom, cols){
   }
 }
 
-function paintNowMagnifier(geom){
-  const nowEl=document.getElementById('nowMagnify');
-  const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
-  if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){
-    nowEl.style.display='none'; return;
-  }
-  const {colX,rowY} = geom;
-  const dow=today.getDay(); const mins=today.getHours()*60 + today.getMinutes();
-  const hour=Math.floor(mins/60);
-  const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
-  const extra=Math.min(10, Math.floor(hourH*0.25));
-  const top=Math.max(0, hourTop - Math.floor(extra/2));
-  const height=Math.max(2, hourH + extra);
-  nowEl.style.left=colX[dow]+'px';
-  nowEl.style.top=top+'px';
-  nowEl.style.width=(colX[dow+1]-colX[dow] - (dow===6?1:0))+'px';
-  nowEl.style.height=height+'px';
-  nowEl.style.display='block';
+/* ---------- Overlay root to avoid clipping ---------- */
+function ensureOverlay(){
+  if(overlayRoot && document.body.contains(overlayRoot)) return;
+  overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot';
+  document.body.appendChild(overlayRoot);
+}
+function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
+
+/* ---------- Wallpaper ---------- */
+function showWallpaper(){
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r82</div></div>`;
 }
 
-/* ---------- Day View (blank + version) ---------- */
-function buildDayView(){
-  screenEl.innerHTML = `
-    <div class="wrap">
-      <div class="head"><div></div><div class="title">Day</div><div></div></div>
-      <div class="grid-area" style="display:grid;place-items:center;color:#666">
-        <div class="watermark">Chrono build r21</div>
-      </div>
+/* ---------- click to create snake ---------- */
+function onWeekGridTap(e){
+  if(!weekGeom) return;
+  const rect=weekGeom.rect;
+  const relX=e.clientX - rect.left;
+  const relY=e.clientY - rect.top;
+
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  const startMin = snap15(Math.floor(minuteFloat/60)*60);
+  const startAbs = dayIdx*1440 + startMin;
+  const dur = 60; // default 1h
+
+  snake = { weekSt:getVisibleWeekStamp(), startAbs, dur };
+  saveSoon(200);
+  drawSnake();
+}
+
+/* ---------- draw the single snake (can span midnight) ---------- */
+function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
+
+function drawSnake(){
+  const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
+  ensureOverlay();
+  host.innerHTML=''; overlayRoot.innerHTML='';
+
+  if(!snake || snake.weekSt!==getVisibleWeekStamp()){ destroySelButtons(); updatePresentLens(true); return; }
+
+  const startAbs = clamp(snake.startAbs, 0, 7*1440 - 15);
+  const endAbs   = clamp(startAbs + snake.dur, startAbs + 15, Math.min(startAbs + 1440, 7*1440));
+
+  // Break into segments per day
+  let s = startAbs;
+  while(s < endAbs){
+    const dayIdx = Math.floor(s / 1440);
+    const dayStartAbs = dayIdx*1440;
+    const segStart = s;
+    const segEnd   = Math.min(endAbs, dayStartAbs + 1440);
+    drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs,
+      segStart===startAbs, segEnd===endAbs);
+    s = segEnd;
+  }
+
+  ensureSelButtons();
+  repositionSelButtons();
+  attachViewportRepositioners();
+  updatePresentLens(true);
+}
+
+function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
+  const host=document.getElementById('selHost');
+  const colLeft = weekGeom.colX[dayIdx];
+  const colRight= weekGeom.colX[dayIdx+1];
+  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  // Base marquee in-grid
+  const rectEl=document.createElement('div');
+  rectEl.className='marqueeRect';
+  rectEl.style.left   = `${colLeft}px`;
+  rectEl.style.top    = `${topY}px`;
+  rectEl.style.width  = `${colWidth}px`;
+  rectEl.style.height = `${height}px`;
+  host.appendChild(rectEl);
+
+  // Overlay group pinned to viewport
+  const group=document.createElement('div');
+  group.className='ov-group';
+  group.style.left = (weekGeom.rect.left + colLeft) + 'px';
+  group.style.top  = (weekGeom.rect.top  + topY) + 'px';
+  group.style.width= colWidth + 'px';
+  group.style.height= height + 'px';
+  overlayRoot.appendChild(group);
+
+  const handleGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12;
+  const rowH0 = weekGeom.rowH[0] || 48;
+  const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
+  const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
+
+  /* Time stamps: ABOVE chevrons (z-index via CSS). Maintain equal spacing to handles. */
+  if(isGlobalStart){
+    const topStamp=document.createElement('div'); topStamp.className='stamp';
+    topStamp.textContent = HHMM(startMin);
+    topStamp.style.left = (colWidth/2)+'px';
+    topStamp.style.top  = (- (handleGap + stampH))+'px';
+    group.appendChild(topStamp);
+
+    const topHandle=document.createElement('div'); topHandle.className='handle top';
+    topHandle.style.left='0px';
+    topHandle.style.top = (- (handleGap*2 + hH + stampH))+'px'; /* chevrons spaced equally from stamp as stamp from block */
+    topHandle.style.width=colWidth+'px'; topHandle.style.height=hH+'px';
+    topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', colWidth, rowH0)}</div>`;
+    topHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'top'), {passive:false});
+    group.appendChild(topHandle);
+  }
+
+  if(isGlobalEnd){
+    const botStamp=document.createElement('div'); botStamp.className='stamp';
+    botStamp.textContent = HHMM(endMin%1440);
+    botStamp.style.left = (colWidth/2)+'px';
+    botStamp.style.top  = (height + handleGap)+'px';
+    group.appendChild(botStamp);
+
+    const botHandle=document.createElement('div'); botHandle.className='handle bottom';
+    botHandle.style.left='0px';
+    botHandle.style.top = (height + (handleGap*2) + stampH)+'px';
+    botHandle.style.width=colWidth+'px'; botHandle.style.height=hH+'px';
+    botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', colWidth, rowH0)}</div>`;
+    botHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'bottom'), {passive:false});
+    group.appendChild(botHandle);
+  }
+}
+
+function chevronsSVG(dir, colW, rowH){
+  const padX = 8;
+  const w = Math.max(28, colW - padX*2);
+  const h = Math.max(48, Math.floor(rowH * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
+  const mid = w/2;
+  const gap = h/6;
+  const span = Math.min(w*0.42, h/4);
+
+  const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const d1 = (dir==='up'? up(gap) : dn(gap));
+  const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
+  const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
+
+  return `<div class="chev">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+      <path d="${d1}"/><path d="${d2}"/><path d="${d3}"/>
+    </svg>
+  </div>`;
+}
+
+/* ---------- drag logic (two ends only) ---------- */
+let dragSide=null; // 'top' adjusts start, 'bottom' adjusts end
+let dragStartY=0;
+let baseStartAbs=0;
+let baseDur=0;
+
+function startSnakeDrag(ev, side){
+  if(!snake) return;
+  ev.preventDefault(); ev.stopPropagation();
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  dragSide = side;
+  dragStartY = ev.clientY;
+  baseStartAbs = snake.startAbs;
+  baseDur = snake.dur;
+
+  const move=(e)=>{
+    const dyPx = e.clientY - dragStartY;
+    const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+    const snappedDelta = snap15(deltaMinRaw);
+
+    let newStart = baseStartAbs;
+    let newDur   = baseDur;
+
+    if(dragSide==='top'){ // move start; end fixed -> duration changes opposite
+      newStart = clamp(baseStartAbs + snappedDelta, 0, 7*1440 - 15);
+      const endAbs = baseStartAbs + baseDur;
+      newDur = clamp(endAbs - newStart, 15, 1440);
+      if(newDur===1440){ newStart = endAbs - 1440; }
+    }else{               // move end; start fixed -> duration changes
+      const newEnd = clamp(baseStartAbs + baseDur + snappedDelta, baseStartAbs + 15, Math.min(baseStartAbs + 1440, 7*1440));
+      newDur = clamp(newEnd - baseStartAbs, 15, 1440);
+    }
+
+    snake.startAbs = newStart;
+    snake.dur      = newDur;
+    drawSnake();
+  };
+
+  const up=(e)=>{
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    dragSide=null;
+    saveSoon(100);
+  };
+
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up, {passive:true});
+}
+
+/* ---------- floating buttons (gear / clear) ---------- */
+function ensureSelButtons(){
+  if(activeView!=='week') { destroySelButtons(); return; }
+  if(window.__selBtns && document.body.contains(window.__selBtns)){ window.__selBtns.classList.remove('selBtnHidden'); return; }
+
+  const wrap = document.createElement('div');
+  wrap.className='selBtns'; wrap.id='selBtns';
+
+  // Settings gear (explicit gear icon)
+  const gear = document.createElement('button');
+  gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+  </svg>`;
+  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
+  gear.addEventListener('click', openSettingsModal, {passive:true});
+  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
+
+  const close = document.createElement('button');
+  close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Clear selection');
+  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  close.addEventListener('click', async (ev)=>{ ev.stopPropagation(); snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); }, {passive:true});
+  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); }, {capture:true});
+
+  wrap.appendChild(gear); wrap.appendChild(close);
+  document.body.appendChild(wrap);
+  window.__selBtns = wrap;
+}
+
+function destroySelButtons(){ if(window.__selBtns){ window.__selBtns.remove(); window.__selBtns=null; } }
+function hideSelButtons(){ if(window.__selBtns) window.__selBtns.classList.add('selBtnHidden'); }
+
+/* Compute midpoint rect across full selection (for button placement) */
+function selectionMidRect(){
+  if(!snake || snake.weekSt!==getVisibleWeekStamp() || !weekGeom) return null;
+  const startAbs = clamp(snake.startAbs, 0, 7*1440 - 15);
+  const endAbs   = clamp(startAbs + snake.dur, startAbs + 15, Math.min(startAbs + 1440, 7*1440));
+  const midAbs   = startAbs + (endAbs - startAbs)/2;
+
+  const dayIdx = Math.floor(midAbs/1440);
+  const minInDay = midAbs - dayIdx*1440;
+  const yTop = minutesToY(Math.max(0, minInDay-30)); // center 1h window around mid for target
+  const yBot = minutesToY(Math.min(1440, minInDay+30));
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
+  const top = weekGeom.rect.top + yTop;
+  const height = Math.max(1, yBot - yTop);
+  return new DOMRect(left, top, width, height);
+}
+
+/* Place buttons at midpoint; avoid overlap with stamps/chevrons by choosing side with space */
+function repositionSelButtons(){
+  const pair = window.__selBtns; if(!pair){ return; }
+  const r = selectionMidRect();
+  if(!r){ hideSelButtons(); return; }
+  pair.classList.remove('selBtnHidden');
+
+  const margin=8, btnW=44, totalH=(44*2)+8;
+
+  let preferRight = (window.innerWidth - r.right) >= (r.left);
+  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
+  if(left < margin){ left = r.right + margin; }                          // flip to right if left cramped
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
+
+  let top  = r.top + (r.height/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
+  if(top < margin) top = margin;
+
+  pair.style.left = `${Math.round(left)}px`;
+  pair.style.top  = `${Math.round(top)}px`;
+}
+
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ repositionSelButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+}
+
+/* ---------- settings modal (stub; preserves flow) ---------- */
+function openSettingsModal(ev){
+  ev?.stopPropagation?.();
+  const veil = document.createElement('div'); veil.className='veil';
+  const modal = document.createElement('div'); modal.className='modal';
+  const startAbs = snake? snake.startAbs : 0;
+  const endAbs   = snake? snake.startAbs + snake.dur : 0;
+  const sStartD = Math.floor(startAbs/1440), sStartM = startAbs%1440;
+  const sEndD   = Math.floor(endAbs/1440),   sEndM   = endAbs%1440;
+
+  modal.innerHTML = `
+    <div class="head">Selection Settings</div>
+    <div class="body">
+      <div><strong>Start:</strong> <span>${SHORT_DOW[sStartD]} ${HHMM(sStartM)}</span></div>
+      <div><strong>End:</strong> <span>${SHORT_DOW[sEndD]} ${HHMM(sEndM)}</span></div>
+      <div><strong>Duration:</strong> <span>${snake? snake.dur:0} min</span></div>
+      <div style="opacity:.7"><em>UI coming later — placeholder only.</em></div>
+    </div>
+    <div class="foot">
+      <button class="btn warn" id="clearBtn">Clear</button>
+      <button class="btn" id="closeBtn">Close</button>
     </div>
   `;
+  const closeAll=()=>{ veil.remove(); modal.remove(); };
+
+  modal.querySelector('#closeBtn').onclick = closeAll;
+  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); };
+
+  veil.addEventListener('click', closeAll);
+  document.body.appendChild(veil); document.body.appendChild(modal);
 }
 
-/* ---------- Month View ---------- */
-function buildMonthView(){
-  const base = new Date(); // reset to current month on entry
-  activeDayISO = toISO(base);
-
-  const first = new Date(base.getFullYear(), base.getMonth(), 1);
-  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
-  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
-
-  screenEl.innerHTML = `
-    <div class="month-wrap">
-      <div class="head">
-        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
-        <div class="title">${label}</div>
-        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
-      </div>
-      <div class="month-dow" aria-hidden="false">
-        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-      </div>
-      <div class="month-grid" id="monthGrid"></div>
-    </div>
-  `;
-  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); saveSoon(200); };
-  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
-
-  const g=document.getElementById('monthGrid'); g.innerHTML='';
-  const firstWeekday = first.getDay();
-  const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
-  for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
-  for(let day=1; day<=last.getDate(); day++){
-    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
-    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
-    if(iso===toISO(new Date())) tile.classList.add('today');
-    g.appendChild(tile);
+/* ---------- throttle ---------- */
+function throttle(fn, ms){
+  let t=0, lastArgs=null;
+  return function(...args){
+    lastArgs=args;
+    if(!t){ t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms); }
   }
-  const used = firstWeekday + last.getDate();
-  const rem = (Math.ceil(used/7)*7) - used;
-  for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
 }
 
-/* ---------- Init & render ---------- */
+/* ---------- save / load ---------- */
+function snapshotState(){ return { activeView, visibleWeekFirst:+visibleWeekFirst }; }
+
+async function saveAll(){
+  await storageSet(STATE_KEY, snapshotState());
+  await storageSet(SEL_KEY, snake);
+}
+let saveTimer=null;
+function saveSoon(ms=300){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
+
+/* ---------- Present-day lens ---------- */
+function updatePresentLens(forceRecreate=false){
+  if(activeView!=='week' || !weekGeom) return;
+  const host = document.getElementById('selHost'); if(!host) return;
+
+  const now = getNow();
+  const visStart = weekStart(visibleWeekFirst);
+  const todayStart = weekStart(now);
+  const diffDays = Math.round((todayStart - visStart)/DAY_MS);
+  if(diffDays < 0 || diffDays > 6){
+    // current day not visible
+    presentLensEl?.remove(); presentLensEl=null;
+    return;
+  }
+
+  // Compute current 1h slot aligned to 15-min grid, anchored at current minute
+  const mins = now.getHours()*60 + now.getMinutes();
+  const snappedStart = snap15(mins);
+  const startMin = snappedStart;
+  const endMin = Math.min(1440, startMin + 60);
+
+  const colLeft = weekGeom.colX[diffDays];
+  const colRight= weekGeom.colX[diffDays+1];
+  const colWidth= (colRight - colLeft) - (diffDays===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  if(!presentLensEl || forceRecreate){
+    presentLensEl?.remove();
+    presentLensEl = document.createElement('div');
+    presentLensEl.className='present-lens';
+    host.appendChild(presentLensEl);
+  }
+
+  presentLensEl.style.left   = `${colLeft}px`;
+  presentLensEl.style.top    = `${topY}px`;
+  presentLensEl.style.width  = `${colWidth}px`;
+  presentLensEl.style.height = `${height}px`;
+}
+
+/* ---------- init / render ---------- */
 async function init(){
-  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
-  visibleWeekFirst = weekStart(new Date());
-  activeDayISO = toISO(new Date());
+  try{
+    const snap = await storageGet(STATE_KEY);
+    if(snap && typeof snap==='object'){
+      if('activeView' in snap) activeView = snap.activeView || 'week';
+      if('visibleWeekFirst' in snap && typeof snap.visibleWeekFirst==='number') visibleWeekFirst = new Date(snap.visibleWeekFirst);
+    }
+    const savedSel = await storageGet(SEL_KEY);
+    if(savedSel && typeof savedSel==='object'){ snake = savedSel; }
+  }catch{}
   render();
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(()=>{}); });
   window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
 }
+
 function render(){
   if(activeView==='week'){
-    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
     buildWeekView();
-  } else if(activeView==='day'){
-    activeDayISO = toISO(new Date());          // sync to today
-    buildDayView();
-  } else if(activeView==='month'){
-    activeDayISO = toISO(new Date());          // reset to current month on entry
-    buildMonthView();
+  } else if(activeView==='day' || activeView==='month' || activeView==='todo'){
+    screenEl.textContent=''; screenEl.innerHTML='';
+    screenEl.style.display='grid'; screenEl.style.placeItems='center';
+    screenEl.textContent=''; // blank screens by request
+    destroySelButtons(); destroyOverlay();
   } else {
-    screenEl.innerHTML='';
+    showWallpaper();
+    destroySelButtons(); destroyOverlay();
   }
 }
+
 init();
 </script>
 
@@ -482,3 +892,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+<!-- r82 EOF -->
