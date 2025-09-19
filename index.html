@@ -1,4 +1,4 @@
-<!-- r84 START -->
+<!-- r85 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#000000" />
 <style>
   :root{
-    --bg:#e3eaf2; --ink:#42586d;                /* pale bluish gray text everywhere */
+    --bg:#e3eaf2; --ink:#42586d; /* pale bluish gray for all text */
     --icon-inactive:#42586d; --icon-active:#4ff7ff;
     --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
 
@@ -116,8 +116,8 @@
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink) }
 
-  .grid-area{ position:relative; overflow:visible } /* r84: allow glow bleed */
-  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:2 }
+  .grid-area{ position:relative; overflow:visible } /* allow glow bleed */
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:3 }
   .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 }
 
   .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
@@ -129,7 +129,7 @@
     background:var(--chart-bg);
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
-    overflow:visible; /* r84: allow glow bleed over right/bottom edges */
+    overflow:visible; /* glow bleed over right/bottom edges */
   }
 
   /* Mask pattern (for the “cut” look) */
@@ -155,7 +155,6 @@
     pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
     box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
     z-index:3;
-    color:var(--icon-active);
   }
 
   .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; display:grid; place-items:center; }
@@ -176,6 +175,7 @@
   /* Floating buttons */
   .selBtns{ position:fixed; z-index:6; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
+  .neu-btn--sm.ack .chev path{ stroke:var(--icon-active); } /* safety */
 
   /* Present lens (1h, current device time, no handles/buttons) */
   .present-lens{
@@ -212,7 +212,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r84</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r85</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -268,20 +268,24 @@
   </main>
 
 <script>
-/* Chrono r84 — implements r83 baseline + r84 fixes:
-   - Present lens anchors to local device time/day; only renders on current week/day.
+/* Chrono r85 — full build
+   - Present lens: device local time; shows only in current visible week and today's column; updates every minute (15-min snap).
    - Nav arrows pulse 0.5s: navy bg + turquoise arrows + inverted shadows.
    - Selector buttons (gear/X) pulse 0.5s similarly.
-   - Glow around present lens & selector is not clipped at right/bottom edges.
+   - Glow around present lens & selector is not clipped (overflow visible).
    - Text color unified to pale bluish gray (var(--ink)).
-   - Spillover: show same single selection across adjacent week views (no duplicates), obey 24h cap. */
+   - Selection is single source of truth (anchorWeekStamp + startAbs + dur).
+     Projects cleanly into any week; spillover across weeks OK; 24h cap; edits from either week affect same selection.
+   - Week view resets to present week when entering from other views or on reload; does not auto-reset during drag or simple prev/next nav.
+*/
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
 let activeView = 'week';
-let visibleWeekFirst = weekStart(new Date());          // always current week by default
+let visibleWeekFirst = weekStart(new Date());
 const DAY_MS = 86400000;
+const WEEK_MIN = 7*1440;
 
 const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -294,7 +298,7 @@ function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM
 function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
-function getWeekStamp(d){ return +weekStart(d); }
+function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 
 /* ---------- storage (IndexedDB fallback to localStorage) ---------- */
 const DB_NAME='chronoDB', DB_VERSION=40;
@@ -335,11 +339,12 @@ async function storageGet(k){
   });
 }
 
-const STATE_KEY='state_r81'; // keep keys for compatibility
+const STATE_KEY='state_r81'; // keep compatible
 const SEL_KEY  ='snake_r81';
 
-/* ---------- snake selection model ---------- */
-/* { weekSt:number, startAbs:number, dur:number } startAbs: minutes from base week's start; dur in [15..1440] */
+/* ---------- single selection model ---------- */
+/* Selection source of truth:
+   snake = { weekSt:number(ms at local week start), startAbs:number (mins, can be <0 or >10080 during drag), dur:number [15..1440] } */
 let snake = null;
 
 /* ---------- UI wiring ---------- */
@@ -356,8 +361,9 @@ document.querySelector('.controls').addEventListener('click', e=>{
     showWallpaper();
     destroySelButtons(); destroyOverlay();
   }else{
+    const switchingToWeek = (v==='week' && activeView!=='week');
     activeView=v;
-    if(activeView==='week'){ visibleWeekFirst = weekStart(new Date()); } // r84: always reset to present week on entering
+    if(switchingToWeek){ visibleWeekFirst = weekStart(new Date()); } // reset to present week when entering week view
     render();
   }
   saveSoon(120);
@@ -412,7 +418,7 @@ function buildWeekView(){
   window.__lensTimer = setInterval(()=>{ if(activeView==='week') updatePresentLens(); }, 60*1000);
 }
 
-/* r84: nav buttons acknowledgement pulse — 0.5s, with glow + inverted shadows */
+/* nav buttons acknowledgement pulse — 0.5s, with glow + inverted shadows */
 function ackPulse(btn){
   btn.classList.add('ack');
   setTimeout(()=>btn.classList.remove('ack'), 500);
@@ -509,7 +515,7 @@ function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* ---------- Wallpaper ---------- */
 function showWallpaper(){
-  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r84</div></div>`;
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r85</div></div>`;
 }
 
 /* ---------- click to create snake ---------- */
@@ -519,6 +525,7 @@ function onWeekGridTap(e){
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
 
+  // which day column?
   let dayIdx=0;
   for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
@@ -532,41 +539,30 @@ function onWeekGridTap(e){
   drawSnake();
 }
 
-/* ---------- helper: compute overlap segment(s) for visible week ---------- */
-function getSegmentsForVisibleWeek(sel, visibleSt){
-  const weekLen = 7*1440;
-  const baseSt = sel.weekSt;
-  const deltaWeeks = Math.round((visibleSt - baseSt) / (7*DAY_MS));
-  // Translate selection into visible week coordinates if overlapping
-  // Selection lives in [0,weekLen) relative to base; may spill below 0 or above weekLen.
-  const selStart = sel.startAbs;
-  const selEnd   = sel.startAbs + sel.dur; // dur <= 1440
+/* ---------- selection projection per visible week ---------- */
+function segmentsForWeek(sel, visibleWeekStamp){
+  const weekLen = WEEK_MIN;
+  const selStartAbs = sel.startAbs;
+  const selEndAbs = sel.startAbs + sel.dur; // may be outside [0..weekLen] during drag
 
-  const segments = [];
-  if(deltaWeeks===0){
-    // Base week: clamp to [0, weekLen]
-    const s = clamp(selStart, 0, weekLen);
-    const e = clamp(selEnd,   0, weekLen);
-    if(e > s) segments.push([s,e]);
-  }else if(deltaWeeks===1){
-    // Next week view: only show overflow beyond weekLen
-    if(selEnd > weekLen){
-      const s = 0;
-      const e = clamp(selEnd - weekLen, 0, weekLen);
-      if(e > s) segments.push([s,e]);
-    }
-  }else if(deltaWeeks===-1){
-    // Previous week view: only show overflow below 0
-    if(selStart < 0){
-      const s = clamp(weekLen + selStart, 0, weekLen);
-      const e = weekLen;
-      if(e > s) segments.push([s,e]);
-    }
+  // Compute overlap with base week (sel.weekSt) and visible week (visibleWeekStamp)
+  const baseWeekStamp = sel.weekSt;
+
+  // Helper to compute intersection with an arbitrary week W
+  function overlapInWeek(weekStamp){
+    const offsetMin = Math.floor((weekStamp - baseWeekStamp) / DAY_MS) * 1440; // floor weeks by days to avoid rounding drift
+    const start = selStartAbs - offsetMin;
+    const end   = selEndAbs   - offsetMin;
+    const s = clamp(start, 0, weekLen);
+    const e = clamp(end,   0, weekLen);
+    return (e > s) ? [s,e] : null;
   }
-  return segments;
+
+  const ov = overlapInWeek(visibleWeekStamp);
+  return ov ? [ov] : [];
 }
 
-/* ---------- draw the snake (single selection, may span two week charts) ---------- */
+/* ---------- draw selection ---------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 
 function drawSnake(){
@@ -577,11 +573,10 @@ function drawSnake(){
   if(!snake){ destroySelButtons(); updatePresentLens(true); return; }
 
   const visSt = getVisibleWeekStamp();
-  const segs = getSegmentsForVisibleWeek(snake, visSt);
+  const segs = segmentsForWeek(snake, visSt);
   if(segs.length===0){ destroySelButtons(); updatePresentLens(true); return; }
 
-  for(let segIdx=0; segIdx<segs.length; segIdx++){
-    const [segStartAbs, segEndAbs] = segs[segIdx];
+  for(const [segStartAbs, segEndAbs] of segs){
     let s = segStartAbs;
     while(s < segEndAbs){
       const dayIdx = Math.floor(s / 1440);
@@ -618,7 +613,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   rectEl.style.height = `${height}px`;
   host.appendChild(rectEl);
 
-  // Overlay group pinned to viewport
+  // Overlay group pinned to viewport (for handles & stamps above everything)
   const group=document.createElement('div');
   group.className='ov-group';
   group.style.left = (weekGeom.rect.left + colLeft) + 'px';
@@ -632,7 +627,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
   const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
 
-  // Stamps above chevrons; spacing symmetric, stamps above handles visually (z-index)
+  // Stamps above chevrons; spacing symmetric
   if(isGlobalStart){
     const topStamp=document.createElement('div'); topStamp.className='stamp';
     topStamp.textContent = HHMM(startMin);
@@ -709,37 +704,20 @@ function startSnakeDrag(ev, side){
     let newStart = baseStartAbs;
     let newDur   = baseDur;
 
-    if(dragSide==='top'){ // move start; end fixed -> duration changes opposite
+    if(dragSide==='top'){ // adjust start; end fixed
       newStart = baseStartAbs + snappedDelta;
       const endAbs = baseStartAbs + baseDur;
       newDur = clamp(endAbs - newStart, 15, 1440);
-
-      // Spill to previous week
-      if(newStart < 0){
-        visibleWeekFirst = addDays(visibleWeekFirst, -7);
-        newStart += 7*1440;
-        baseStartAbs = newStart;
-        dragStartY = e.clientY;
-        snake.weekSt = getVisibleWeekStamp();
-        repaintWeek(true);
-      }
-    }else{               // move end; start fixed -> duration changes
-      let newEnd = baseStartAbs + baseDur + snappedDelta;
-
-      // Spill to next week
-      if(newEnd > 7*1440){
-        visibleWeekFirst = addDays(visibleWeekFirst, 7);
-        newEnd -= 7*1440;
-        baseStartAbs = baseStartAbs - 7*1440;
-        dragStartY = e.clientY;
-        snake.weekSt = getVisibleWeekStamp();
-        repaintWeek(true);
-      }
+    }else{                // adjust end; start fixed
+      const newEnd = baseStartAbs + baseDur + snappedDelta;
       newDur = clamp(newEnd - baseStartAbs, 15, 1440);
     }
 
-    snake.startAbs = clamp(newStart, -1440, 8*1440); // keep wide bounds for spill math
-    snake.dur      = clamp(newDur, 15, 1440);       // single selection cap 24h
+    // Keep start in a reasonable band during drag to avoid giant values,
+    // but do NOT normalize weekSt while dragging (projection handles visibility).
+    snake.startAbs = clamp(newStart, -WEEK_MIN, 2*WEEK_MIN);
+    snake.dur      = newDur;
+
     drawSnake();
   };
 
@@ -748,9 +726,12 @@ function startSnakeDrag(ev, side){
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
     dragSide=null; dragging=false;
-    // Clamp startAbs into [0..week) relative to its base week to persist cleanly
-    while(snake.startAbs < 0){ snake.startAbs += 7*1440; snake.weekSt -= 7*DAY_MS; }
-    while(snake.startAbs >= 7*1440){ snake.startAbs -= 7*1440; snake.weekSt += 7*DAY_MS; }
+
+    // Normalize selection to canonical range relative to anchor week:
+    // shift startAbs into [0..WEEK_MIN) by moving anchor week stamp in 7-day steps
+    while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; }
+    while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; }
+
     saveSoon(80);
   };
 
@@ -766,7 +747,7 @@ function ensureSelButtons(){
   const wrap = document.createElement('div');
   wrap.className='selBtns'; wrap.id='selBtns';
 
-  // Settings gear (explicit gear icon)
+  // Settings gear
   const gear = document.createElement('button');
   gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -799,7 +780,7 @@ function hideSelButtons(){ if(window.__selBtns) window.__selBtns.classList.add('
 function selectionMidRect(){
   if(!snake || !weekGeom) return null;
   const visSt = getVisibleWeekStamp();
-  const segs = getSegmentsForVisibleWeek(snake, visSt);
+  const segs = segmentsForWeek(snake, visSt);
   if(segs.length===0) return null;
   const [segStartAbs, segEndAbs] = segs[0];
   const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
@@ -856,8 +837,8 @@ function openSettingsModal(ev){
 
   const startAbs = snake? snake.startAbs : 0;
   const endAbs   = snake? snake.startAbs + snake.dur : 0;
-  const sStartD = Math.floor(startAbs/1440), sStartM = startAbs%1440;
-  const sEndD   = Math.floor(endAbs/1440),   sEndM   = endAbs%1440;
+  const sStartD = Math.floor(((startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN/1440), sStartM = ((startAbs%1440)+1440)%1440;
+  const sEndD   = Math.floor((((endAbs)%WEEK_MIN)+WEEK_MIN)%WEEK_MIN/1440),   sEndM   = ((endAbs%1440)+1440)%1440;
 
   modal.innerHTML = `
     <div class="head">Selection Settings</div>
@@ -905,11 +886,12 @@ function updatePresentLens(forceRecreate=false){
   if(activeView!=='week' || !weekGeom) return;
   const host = document.getElementById('selHost'); if(!host) return;
 
-  const now = getNow();
+  const now = getNow();                   // device local time
   const visStart = weekStart(visibleWeekFirst);
-  const todayStart = weekStart(now);
-  // r84: strict anchoring to device week/day — show lens only if same week
-  const diffDays = Math.floor((todayStart - visStart)/DAY_MS);
+
+  const today00 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.floor((today00 - visStart) / DAY_MS);
+
   if(diffDays < 0 || diffDays > 6){
     presentLensEl?.remove(); presentLensEl=null; return;
   }
@@ -918,9 +900,9 @@ function updatePresentLens(forceRecreate=false){
   const startMin = snap15(mins);
   const endMin = Math.min(1440, startMin + 60);
 
-  const colLeft = weekGeom.colX[diffDays];
-  const colRight= weekGeom.colX[diffDays+1];
-  const colWidth= (colRight - colLeft) - (diffDays===6?1:0);
+  const colLeft  = weekGeom.colX[diffDays];
+  const colRight = weekGeom.colX[diffDays+1];
+  const colWidth = (colRight - colLeft) - (diffDays===6?1:0);
   const topY  = minutesToY(startMin);
   const botY  = minutesToY(endMin);
   const height= Math.max(1, botY - topY);
@@ -940,7 +922,7 @@ function updatePresentLens(forceRecreate=false){
 /* ---------- init / render ---------- */
 async function init(){
   try{
-    visibleWeekFirst = weekStart(new Date()); // r84: default to present week on load
+    visibleWeekFirst = weekStart(new Date()); // default to present week on load
     const snap = await storageGet(STATE_KEY);
     if(snap && typeof snap==='object'){
       if('activeView' in snap) activeView = snap.activeView || 'week';
@@ -955,7 +937,6 @@ async function init(){
 
 function render(){
   if(activeView==='week'){
-    if(!dragging) visibleWeekFirst = weekStart(new Date()); // r84: reset to present on entering
     buildWeekView();
   } else if(activeView==='day' || activeView==='month' || activeView==='todo'){
     screenEl.textContent=''; screenEl.innerHTML='';
@@ -984,5 +965,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r84 EOF -->
-
+<!-- r85 EOF -->
