@@ -1,4 +1,4 @@
-<!-- r87 START -->
+<!-- r88 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,9 +9,9 @@
 <meta name="theme-color" content="#000000" />
 <style>
   :root{
-    --bg:#e3eaf2; --ink:#7a8ba2;            /* lighter pale blue text (kept) */
+    --bg:#e3eaf2; --ink:#7a8ba2;                 /* lighter pale blue text */
     --icon-inactive:#7a8ba2; --icon-active:#4ff7ff;
-    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.75);
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.32); /* softer color */
 
     --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
     --gap:24px; --radius:12px;
@@ -22,11 +22,11 @@
     --hour-col:64px; --dow-h:32px; --label-size:12px;
 
     --marquee-border:5px;
-    --marquee-glow:0 0 12px 6px var(--turq-glow);
+    --marquee-glow:0 0 9px 4px var(--turq-glow); /* gentler spread */
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:12px;              /* unified spacing unit */
+    --handle-gap:12px;               /* unified spacing unit */
     --handle-height-mult:1.75;
 
     --stamp-h:26px;
@@ -56,7 +56,7 @@
     color:var(--ink); font-weight:900; letter-spacing:.06em;
   }
 
-  /* Controls (bottom) */
+  /* Bottom controls */
   .controls{ display:flex; gap:var(--gap); padding-bottom:2px; color:var(--ink); }
   .neu-btn{
     --btn-d: calc((100% - (3 * var(--gap))) / 4);
@@ -97,7 +97,6 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     transition: box-shadow .2s ease, background .2s ease, transform .06s ease, filter .2s ease, color .06s ease;
   }
-  /* Ensure SVGs inherit currentColor to avoid gray flash */
   .neu-btn--sm svg *{ stroke:currentColor; }
   .neu-btn--sm svg{ width:22px; height:22px; stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round;
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
@@ -152,8 +151,7 @@
   /* Pure glow mirror (not clipped by chart) */
   .glow-ghost{
     position:absolute; border-radius:12px; pointer-events:none;
-    /* Only the glow; no border */
-    box-shadow: var(--marquee-glow);
+    box-shadow: var(--marquee-glow); /* no border; glow only */
   }
 
   .stamp{
@@ -162,7 +160,7 @@
     border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
     font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
     pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
-    box-shadow: 0 0 2px rgba(79,247,255,.35), 0 0 10px rgba(79,247,255,.35);
+    box-shadow: 0 0 2px rgba(79,247,255,.28), 0 0 10px rgba(79,247,255,.28);
     z-index:3;
   }
 
@@ -198,7 +196,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r87</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r88</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -254,13 +252,13 @@
   </main>
 
 <script>
-/* Chrono r87 — full build
-   Fixes vs r86:
-   - #1 Gear icon enforced for selector settings (all states).
-   - #2 Nav arrow pulse seamless at 250ms; no gray flash (icons inherit currentColor).
-   - #4 Glow overflow guaranteed via overlay "glow-ghost" mirrors (selection + present lens).
-   - #5 Chevron handle ↔ timestamp spacing perfectly symmetric (accounts for border + rounding).
-   Everything else preserved.
+/* Chrono r88 — full build
+   New vs r87:
+   - Softer turquoise glow (selector + present lens), still overflows edges.
+   - Spillover across weeks shows exactly TWO handles total (global start=top, global end=bottom).
+   - Auto-jump jitter fixed: jump once per drag, 30min hysteresis, normalize only on pointerup.
+   - Prevent “X then instant re-create” tap-through; debounce grid after clear/drag.
+   - Drag performance: pointermove gated by RAF; no repaintWeek calls during drag; lens paused while dragging.
 */
 
 const screenEl = document.getElementById('screen');
@@ -329,6 +327,11 @@ const SEL_KEY  ='snake_r81';
 /* snake = { weekSt:number(ms @ local week start), startAbs:number (mins), dur:number [15..1440] } */
 let snake = null;
 
+/* ---------- tap debounce / ignore ---------- */
+let ignoreTapUntil = 0;
+let dragging = false;
+let rafPending = false;
+
 /* ---------- UI wiring ---------- */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
@@ -353,7 +356,6 @@ document.querySelector('.controls').addEventListener('click', e=>{
 
 /* ---------- week view scaffolding ---------- */
 let weekGeom=null, overlayRoot=null, presentLensEl=null, presentLensGhost=null;
-let dragging=false;
 
 function buildWeekView(){
   screenEl.innerHTML = `
@@ -385,11 +387,12 @@ function buildWeekView(){
   prevBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); ackPulse(prevBtn); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(120); };
   nextBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); ackPulse(nextBtn); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(120); };
 
-  document.getElementById('weekGrid').addEventListener('click', onWeekGridTap, {passive:true});
+  const gridEl = document.getElementById('weekGrid');
+  gridEl.addEventListener('click', onWeekGridTap, {passive:true});
   ensureOverlay();
 
   repaintWeek();
-  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(document.getElementById('weekGrid'));
+  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(gridEl);
 
   const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); } }, 32);
   window.addEventListener('scroll', sync, {passive:true});
@@ -397,12 +400,11 @@ function buildWeekView(){
   if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
 
   if(window.__lensTimer){ clearInterval(window.__lensTimer); }
-  window.__lensTimer = setInterval(()=>{ if(activeView==='week') updatePresentLens(); }, 60*1000);
+  window.__lensTimer = setInterval(()=>{ if(activeView==='week' && !dragging) updatePresentLens(); }, 60*1000);
 }
 
 /* nav buttons acknowledgement pulse — 0.25s, RAF to avoid flash */
 function ackPulse(btn){
-  // ensure icons use currentColor (CSS) and switch color + bg same frame
   requestAnimationFrame(()=>{ 
     btn.classList.add('ack');
     setTimeout(()=>btn.classList.remove('ack'), 250);
@@ -500,12 +502,22 @@ function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* ---------- Wallpaper ---------- */
 function showWallpaper(){
-  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r87</div></div>`;
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r88</div></div>`;
 }
 
 /* ---------- click to create snake ---------- */
 function onWeekGridTap(e){
+  const now = Date.now();
   if(!weekGeom) return;
+  if(dragging) return;
+  if(now < ignoreTapUntil) return;
+
+  // Ignore taps originating from UI controls/overlay
+  const path = e.composedPath ? e.composedPath() : [];
+  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('ov-group')))){
+    return;
+  }
+
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
   const relY=e.clientY - rect.top;
@@ -528,7 +540,6 @@ function segmentsForWeek(sel, visibleWeekStamp){
   const weekLen = WEEK_MIN;
   const selStartAbs = sel.startAbs;
   const selEndAbs = sel.startAbs + sel.dur;
-
   const baseWeekStamp = sel.weekSt;
 
   function overlapInWeek(weekStamp){
@@ -539,7 +550,6 @@ function segmentsForWeek(sel, visibleWeekStamp){
     const e = clamp(end,   0, weekLen);
     return (e > s) ? [s,e] : null;
   }
-
   const ov = overlapInWeek(visibleWeekStamp);
   return ov ? [ov] : [];
 }
@@ -558,6 +568,12 @@ function drawSnake(){
   const segs = segmentsForWeek(snake, visSt);
   if(segs.length===0){ destroySelButtons(); updatePresentLens(true); return; }
 
+  // Compute global endpoints once
+  const globalStartMs = snake.weekSt + snake.startAbs*60000;
+  const globalEndMs   = snake.weekSt + (snake.startAbs + snake.dur)*60000;
+  const startLocalMin = (globalStartMs - visSt) / 60000;   // may be outside [0..WEEK_MIN)
+  const endLocalMin   = (globalEndMs   - visSt) / 60000;
+
   for(const [segStartAbs, segEndAbs] of segs){
     let s = segStartAbs;
     while(s < segEndAbs){
@@ -565,8 +581,12 @@ function drawSnake(){
       const dayStartAbs = dayIdx*1440;
       const segStart = s;
       const segEnd   = Math.min(segEndAbs, dayStartAbs + 1440);
-      drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs,
-        segStart===segStartAbs, segEnd===segEndAbs);
+
+      // Handle logic: exactly two in total across weeks
+      const showTopHere    = (startLocalMin >= segStart && startLocalMin < segEnd);
+      const showBottomHere = (endLocalMin   >  segStart && endLocalMin  <= segEnd);
+
+      drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs, showTopHere, showBottomHere);
       s = segEnd;
     }
   }
@@ -577,7 +597,7 @@ function drawSnake(){
   updatePresentLens(true);
 }
 
-function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
+function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   const host=document.getElementById('selHost');
   const colLeft = weekGeom.colX[dayIdx];
   const colRight= weekGeom.colX[dayIdx+1];
@@ -586,7 +606,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   const botY  = minutesToY(endMin);
   const height= Math.max(1, botY - topY);
 
-  // In-grid marquee (may be near edges; glow also mirrored as ghost)
+  // In-grid marquee (glow mirrored as ghost to avoid clipping)
   const rectEl=document.createElement('div');
   rectEl.className='marqueeRect';
   rectEl.style.left   = `${colLeft}px`;
@@ -604,7 +624,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   group.style.height= height + 'px';
   overlayRoot.appendChild(group);
 
-  // -------- Glow ghost (prevents any clipping on right/bottom edges)
+  // Glow ghost
   const ghost=document.createElement('div');
   ghost.className='glow-ghost';
   ghost.style.left = (weekGeom.rect.left + colLeft) + 'px';
@@ -619,11 +639,9 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
   const rowH0 = weekGeom.rowH[0] || 48;
   const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
   const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
-
-  // Effective offset from marquee edge includes border to make top=bottom
   const off = gap + borderW;
 
-  if(isGlobalStart){
+  if(showTop){
     const topStamp=document.createElement('div'); topStamp.className='stamp';
     topStamp.textContent = HHMM(startMin);
     topStamp.style.left = (colWidth/2)+'px';
@@ -639,7 +657,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, isGlobalStart, isGlobalEnd){
     group.appendChild(topHandle);
   }
 
-  if(isGlobalEnd){
+  if(showBottom){
     const botStamp=document.createElement('div'); botStamp.className='stamp';
     botStamp.textContent = HHMM(endMin%1440);
     botStamp.style.left = (colWidth/2)+'px';
@@ -677,8 +695,8 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* ---------- drag logic with cross-week auto-jump ---------- */
-let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0;
+/* ---------- drag logic with cross-week auto-jump (debounced) ---------- */
+let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0, hasJumpedThisDrag=false;
 
 function startSnakeDrag(ev, side){
   if(!snake) return;
@@ -687,14 +705,19 @@ function startSnakeDrag(ev, side){
 
   dragSide = side;
   dragging=true;
+  hasJumpedThisDrag=false;
   dragStartY = ev.clientY;
   baseStartAbs = snake.startAbs;
   baseDur = snake.dur;
 
+  const boundarySlack = 30; // minutes hysteresis
+  const gridHeight = weekGeom.totalH || 1;
+
   const move=(e)=>{
     const dyPx = e.clientY - dragStartY;
-    const deltaMinRaw = (weekGeom.totalH? (dyPx / weekGeom.totalH) * 1440 : 0);
+    const deltaMinRaw = (dyPx / gridHeight) * 1440;
     const snappedDelta = snap15(deltaMinRaw);
+    if(snappedDelta === 0) return;
 
     let newStart = baseStartAbs;
     let newDur   = baseDur;
@@ -708,34 +731,41 @@ function startSnakeDrag(ev, side){
       newDur = clamp(newEnd - baseStartAbs, 15, 1440);
     }
 
-    // Auto-jump view on week spillover while dragging:
     const wouldStart = newStart;
     const wouldEnd   = baseStartAbs + newDur;
 
-    if(dragSide==='top' && wouldStart < 0){
-      visibleWeekFirst = addDays(visibleWeekFirst, -7);
-      newStart += WEEK_MIN;
-      snake.weekSt -= 7*DAY_MS;
-      dragStartY = e.clientY;
-      baseStartAbs = newStart;
-      baseDur = newDur;
-      ackNavPulseImmediate('prev');
-    }
-    if(dragSide==='bottom' && wouldEnd > WEEK_MIN){
-      visibleWeekFirst = addDays(visibleWeekFirst, +7);
-      newStart -= WEEK_MIN;
-      snake.weekSt += 7*DAY_MS;
-      dragStartY = e.clientY;
-      baseStartAbs = newStart;
-      baseDur = newDur;
-      ackNavPulseImmediate('next');
+    // Auto-jump once per drag with hysteresis; normalize on pointerup only
+    if(!hasJumpedThisDrag){
+      if(dragSide==='top' && wouldStart < -boundarySlack){
+        visibleWeekFirst = addDays(visibleWeekFirst, -7);
+        newStart += WEEK_MIN;
+        snake.weekSt -= 7*DAY_MS;
+        hasJumpedThisDrag=true;
+        ackNavPulseImmediate('prev');
+        // Re-baseline to avoid cumulative deltas
+        dragStartY = e.clientY;
+        baseStartAbs = newStart;
+        baseDur = newDur;
+      }
+      if(dragSide==='bottom' && wouldEnd > WEEK_MIN + boundarySlack){
+        visibleWeekFirst = addDays(visibleWeekFirst, +7);
+        newStart -= WEEK_MIN;
+        snake.weekSt += 7*DAY_MS;
+        hasJumpedThisDrag=true;
+        ackNavPulseImmediate('next');
+        dragStartY = e.clientY;
+        baseStartAbs = newStart;
+        baseDur = newDur;
+      }
     }
 
-    snake.startAbs = clamp(newStart, -WEEK_MIN, 2*WEEK_MIN);
+    snake.startAbs = newStart;
     snake.dur      = newDur;
 
-    repaintWeek(true);
-    drawSnake();
+    if(!rafPending){
+      rafPending = true;
+      requestAnimationFrame(()=>{ rafPending=false; drawSnake(); });
+    }
   };
 
   const up=(e)=>{
@@ -744,9 +774,12 @@ function startSnakeDrag(ev, side){
     window.removeEventListener('pointerup', up);
     dragSide=null; dragging=false;
 
+    // Normalize into [0..WEEK_MIN) ONCE after drag ends
     while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; }
     while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; }
 
+    ignoreTapUntil = Date.now() + 150;  // prevent tap-through creating a new selection
+    drawSnake();
     saveSoon(80);
   };
 
@@ -772,17 +805,16 @@ function ensureSelButtons(){
   const wrap = document.createElement('div');
   wrap.className='selBtns'; wrap.id='selBtns';
 
-  /* Settings gear (explicit gear in all states) */
+  /* Settings gear */
   const gear = document.createElement('button');
   gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="12" cy="12" r="3.5" />
     <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
   </svg>`;
-  // Ensure inheritance
   gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
-  gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); pulseSm(gear); openSettingsModal(ev); }, {passive:true});
-  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); pulseSm(gear); }, {capture:true});
+  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
+  gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); openSettingsModal(ev); }, {passive:false});
 
   const close = document.createElement('button');
   close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Clear selection');
@@ -790,8 +822,12 @@ function ensureSelButtons(){
   close.querySelector('path').setAttribute('stroke','currentColor');
   close.querySelector('path').setAttribute('stroke-width','1.6');
   close.querySelector('path').setAttribute('stroke-linecap','round');
-  close.addEventListener('click', async (ev)=>{ ev.stopPropagation(); pulseSm(close); snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); }, {passive:true});
-  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); pulseSm(close); }, {capture:true});
+  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(close); }, {capture:true});
+  close.addEventListener('click', async (ev)=>{
+    ev.stopPropagation(); ev.preventDefault(); pulseSm(close);
+    snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons();
+    ignoreTapUntil = Date.now() + 180; // avoid tap-through on grid
+  }, {passive:false});
 
   wrap.appendChild(gear); wrap.appendChild(close);
   document.body.appendChild(wrap);
@@ -887,7 +923,7 @@ function openSettingsModal(ev){
   const closeAll=()=>{ veil.remove(); modal.remove(); };
 
   modal.querySelector('#closeBtn').onclick = closeAll;
-  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); };
+  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); ignoreTapUntil=Date.now()+180; };
 
   veil.addEventListener('click', closeAll);
   document.body.appendChild(veil); document.body.appendChild(modal);
@@ -915,6 +951,8 @@ function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ s
 /* ---------- Present-day lens ---------- */
 function updatePresentLens(forceRecreate=false){
   if(activeView!=='week' || !weekGeom) return;
+  if(dragging) return; // pause while dragging
+
   const host = document.getElementById('selHost'); if(!host) return;
 
   const now = getNow();
@@ -1011,4 +1049,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r87 EOF -->
+<!-- r88 EOF -->
