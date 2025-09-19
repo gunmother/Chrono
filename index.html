@@ -1,4 +1,4 @@
-<!-- r88 START -->
+<!-- r89 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,9 +9,9 @@
 <meta name="theme-color" content="#000000" />
 <style>
   :root{
-    --bg:#e3eaf2; --ink:#7a8ba2;                 /* lighter pale blue text */
+    --bg:#e3eaf2; --ink:#7a8ba2;                 /* pale blue text */
     --icon-inactive:#7a8ba2; --icon-active:#4ff7ff;
-    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.32); /* softer color */
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.32); /* soft color */
 
     --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
     --gap:24px; --radius:12px;
@@ -22,11 +22,11 @@
     --hour-col:64px; --dow-h:32px; --label-size:12px;
 
     --marquee-border:5px;
-    --marquee-glow:0 0 9px 4px var(--turq-glow); /* gentler spread */
+    --marquee-glow:0 0 9px 4px var(--turq-glow); /* gentle spread */
 
     --handle-stroke:#5e7286;
     --chev-stroke-w:2.2;
-    --handle-gap:12px;               /* unified spacing unit */
+    --handle-gap:12px;               /* unified spacing */
     --handle-height-mult:1.75;
 
     --stamp-h:26px;
@@ -118,7 +118,7 @@
   .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
   .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink) }
 
-  .grid-area{ position:relative; overflow:visible } /* allow glow bleed beyond chart */
+  .grid-area{ position:relative; overflow:visible } /* allow glow bleed */
   .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:3 }
   .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 }
 
@@ -131,28 +131,32 @@
     background:var(--chart-bg);
     border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
     z-index:0;
-    overflow:visible; /* glow bleed over right/bottom edges */
+    overflow:visible; /* let glow overflow right/bottom edges */
   }
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  /* Selection host (in-grid box) */
-  .selHost{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+  /* Separate hosts so selection updates don't nuke the present-lens */
+  .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:2; }   /* present lens box */
+  .selHost{  position:absolute; inset:0; pointer-events:none; z-index:2; }   /* selection box */
+
   .marqueeRect{
     position:absolute; box-sizing:border-box; background:transparent;
     border:var(--marquee-border) solid #fff; border-radius:12px;
     box-shadow: var(--marquee-glow);
   }
 
-  /* Overlay root (handles/stamps pinned to viewport + glow ghosts) */
+  /* Overlay root (handles/stamps + glow ghosts) */
   .overlayRoot{ position:fixed; inset:0; z-index:4; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
+  .ov-group[data-role="sel-ov"]{ pointer-events:none; }
 
   /* Pure glow mirror (not clipped by chart) */
   .glow-ghost{
     position:absolute; border-radius:12px; pointer-events:none;
-    box-shadow: var(--marquee-glow); /* no border; glow only */
+    box-shadow: var(--marquee-glow); /* glow only */
   }
+  .glow-ghost[data-role="sel-ghost"]{ pointer-events:none; }
 
   .stamp{
     position:absolute; left:50%; transform:translateX(-50%);
@@ -173,6 +177,7 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     display:grid; place-items:center;
     z-index:2;
+    transition: background .2s ease, box-shadow .2s ease;
   }
   .chev path{
     fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
@@ -196,7 +201,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r88</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r89</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -252,13 +257,16 @@
   </main>
 
 <script>
-/* Chrono r88 — full build
-   New vs r87:
-   - Softer turquoise glow (selector + present lens), still overflows edges.
-   - Spillover across weeks shows exactly TWO handles total (global start=top, global end=bottom).
-   - Auto-jump jitter fixed: jump once per drag, 30min hysteresis, normalize only on pointerup.
-   - Prevent “X then instant re-create” tap-through; debounce grid after clear/drag.
-   - Drag performance: pointermove gated by RAF; no repaintWeek calls during drag; lens paused while dragging.
+/* Chrono r89 — full build
+   Key changes vs r88:
+   - Removed ALL auto week-jumps during drag (manual nav only).
+   - Header date never desyncs: drag never mutates visibleWeekFirst.
+   - Spillover across weeks: exactly TWO handles total (start=top, end=bottom),
+     hidden on weeks where that edge lies outside.
+   - Present lens uses separate host; never cleared by selection redraw; day=now.getDay() mapping.
+   - After closing with X, tap reliably creates a new selection (single short debounce).
+   - Selection draw removes only its own overlay nodes; lens ghost persists.
+   - Drag performance maintained (RAF-throttled updates).
 */
 
 const screenEl = document.getElementById('screen');
@@ -281,7 +289,7 @@ function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(
 function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
-/* ---------- storage (IndexedDB fallback to localStorage) ---------- */
+/* ---------- storage ---------- */
 const DB_NAME='chronoDB', DB_VERSION=40;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
@@ -324,10 +332,9 @@ const STATE_KEY='state_r81'; // keep compat
 const SEL_KEY  ='snake_r81';
 
 /* ---------- single selection model ---------- */
-/* snake = { weekSt:number(ms @ local week start), startAbs:number (mins), dur:number [15..1440] } */
 let snake = null;
 
-/* ---------- tap debounce / ignore ---------- */
+/* ---------- tap debounce / flags ---------- */
 let ignoreTapUntil = 0;
 let dragging = false;
 let rafPending = false;
@@ -374,7 +381,8 @@ function buildWeekView(){
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
-          <div class="selHost" id="selHost"></div>
+          <div class="lensHost" id="lensHost"></div>   <!-- present lens lives here -->
+          <div class="selHost"  id="selHost"></div>    <!-- selection lives here -->
         </div>
         <div class="hours" id="weekHours"></div>
       </div>
@@ -403,7 +411,7 @@ function buildWeekView(){
   window.__lensTimer = setInterval(()=>{ if(activeView==='week' && !dragging) updatePresentLens(); }, 60*1000);
 }
 
-/* nav buttons acknowledgement pulse — 0.25s, RAF to avoid flash */
+/* nav buttons acknowledgement pulse — 0.25s */
 function ackPulse(btn){
   requestAnimationFrame(()=>{ 
     btn.classList.add('ack');
@@ -502,17 +510,16 @@ function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* ---------- Wallpaper ---------- */
 function showWallpaper(){
-  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r88</div></div>`;
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r89</div></div>`;
 }
 
-/* ---------- click to create snake ---------- */
+/* ---------- tap to create snake ---------- */
 function onWeekGridTap(e){
   const now = Date.now();
   if(!weekGeom) return;
   if(dragging) return;
   if(now < ignoreTapUntil) return;
 
-  // Ignore taps originating from UI controls/overlay
   const path = e.composedPath ? e.composedPath() : [];
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('ov-group')))){
     return;
@@ -533,34 +540,37 @@ function onWeekGridTap(e){
   snake = { weekSt:getVisibleWeekStamp(), startAbs, dur };
   saveSoon(120);
   drawSnake();
+  updatePresentLens(); // ensure lens remains visible
 }
 
-/* ---------- selection projection per visible week ---------- */
+/* ---------- selection projection per visible week (pure week-index math) ---------- */
 function segmentsForWeek(sel, visibleWeekStamp){
   const weekLen = WEEK_MIN;
-  const selStartAbs = sel.startAbs;
-  const selEndAbs = sel.startAbs + sel.dur;
-  const baseWeekStamp = sel.weekSt;
+  const weekDiff = Math.round((visibleWeekStamp - sel.weekSt) / (7*DAY_MS));
+  const offsetMin = weekDiff * weekLen;
 
-  function overlapInWeek(weekStamp){
-    const offsetMin = Math.floor((weekStamp - baseWeekStamp) / DAY_MS) * 1440;
-    const start = selStartAbs - offsetMin;
-    const end   = selEndAbs   - offsetMin;
-    const s = clamp(start, 0, weekLen);
-    const e = clamp(end,   0, weekLen);
-    return (e > s) ? [s,e] : null;
-  }
-  const ov = overlapInWeek(visibleWeekStamp);
-  return ov ? [ov] : [];
+  const start = sel.startAbs - offsetMin;
+  const end   = start + sel.dur;
+  const s = clamp(start, 0, weekLen);
+  const e = clamp(end,   0, weekLen);
+  return (e > s) ? [[s,e]] : [];
 }
 
 /* ---------- draw selection ---------- */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 
+function clearSelectionOverlays(){
+  if(!overlayRoot) return;
+  overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove());
+}
+
 function drawSnake(){
   const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   ensureOverlay();
-  host.innerHTML=''; overlayRoot.innerHTML='';
+
+  // Clear only selection visuals (keep lens + its ghost intact)
+  host.innerHTML='';
+  clearSelectionOverlays();
 
   if(!snake){ destroySelButtons(); updatePresentLens(true); return; }
 
@@ -568,11 +578,9 @@ function drawSnake(){
   const segs = segmentsForWeek(snake, visSt);
   if(segs.length===0){ destroySelButtons(); updatePresentLens(true); return; }
 
-  // Compute global endpoints once
-  const globalStartMs = snake.weekSt + snake.startAbs*60000;
-  const globalEndMs   = snake.weekSt + (snake.startAbs + snake.dur)*60000;
-  const startLocalMin = (globalStartMs - visSt) / 60000;   // may be outside [0..WEEK_MIN)
-  const endLocalMin   = (globalEndMs   - visSt) / 60000;
+  // Global endpoints (in minutes relative to visible week)
+  const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
+  const endLocalMin   = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000;
 
   for(const [segStartAbs, segEndAbs] of segs){
     let s = segStartAbs;
@@ -582,7 +590,7 @@ function drawSnake(){
       const segStart = s;
       const segEnd   = Math.min(segEndAbs, dayStartAbs + 1440);
 
-      // Handle logic: exactly two in total across weeks
+      // Handle visibility per-week: only show if the true edge falls within this segment
       const showTopHere    = (startLocalMin >= segStart && startLocalMin < segEnd);
       const showBottomHere = (endLocalMin   >  segStart && endLocalMin  <= segEnd);
 
@@ -606,7 +614,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   const botY  = minutesToY(endMin);
   const height= Math.max(1, botY - topY);
 
-  // In-grid marquee (glow mirrored as ghost to avoid clipping)
+  // In-grid marquee
   const rectEl=document.createElement('div');
   rectEl.className='marqueeRect';
   rectEl.style.left   = `${colLeft}px`;
@@ -615,25 +623,27 @@ function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   rectEl.style.height = `${height}px`;
   host.appendChild(rectEl);
 
-  // Overlay group pinned to viewport
+  // Overlay group (tagged so we can clear only selection overlays)
   const group=document.createElement('div');
   group.className='ov-group';
+  group.dataset.role='sel-ov';
   group.style.left = (weekGeom.rect.left + colLeft) + 'px';
   group.style.top  = (weekGeom.rect.top  + topY) + 'px';
   group.style.width= colWidth + 'px';
   group.style.height= height + 'px';
   overlayRoot.appendChild(group);
 
-  // Glow ghost
+  // Glow ghost (tagged as selection ghost)
   const ghost=document.createElement('div');
   ghost.className='glow-ghost';
+  ghost.dataset.role='sel-ghost';
   ghost.style.left = (weekGeom.rect.left + colLeft) + 'px';
   ghost.style.top  = (weekGeom.rect.top  + topY) + 'px';
   ghost.style.width= colWidth + 'px';
-  ghost.style.height= height + 'px';
+  ghost.style.height = height + 'px';
   overlayRoot.appendChild(ghost);
 
-  // Spacing math — perfectly symmetric, accounts for border + rounding
+  // Spacing — symmetric for top/bottom vs stamp
   const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12;
   const borderW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--marquee-border'))||5;
   const rowH0 = weekGeom.rowH[0] || 48;
@@ -695,8 +705,8 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* ---------- drag logic with cross-week auto-jump (debounced) ---------- */
-let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0, hasJumpedThisDrag=false;
+/* ---------- drag logic (no week auto-jumps) ---------- */
+let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0;
 
 function startSnakeDrag(ev, side){
   if(!snake) return;
@@ -705,12 +715,10 @@ function startSnakeDrag(ev, side){
 
   dragSide = side;
   dragging=true;
-  hasJumpedThisDrag=false;
   dragStartY = ev.clientY;
   baseStartAbs = snake.startAbs;
   baseDur = snake.dur;
 
-  const boundarySlack = 30; // minutes hysteresis
   const gridHeight = weekGeom.totalH || 1;
 
   const move=(e)=>{
@@ -731,34 +739,7 @@ function startSnakeDrag(ev, side){
       newDur = clamp(newEnd - baseStartAbs, 15, 1440);
     }
 
-    const wouldStart = newStart;
-    const wouldEnd   = baseStartAbs + newDur;
-
-    // Auto-jump once per drag with hysteresis; normalize on pointerup only
-    if(!hasJumpedThisDrag){
-      if(dragSide==='top' && wouldStart < -boundarySlack){
-        visibleWeekFirst = addDays(visibleWeekFirst, -7);
-        newStart += WEEK_MIN;
-        snake.weekSt -= 7*DAY_MS;
-        hasJumpedThisDrag=true;
-        ackNavPulseImmediate('prev');
-        // Re-baseline to avoid cumulative deltas
-        dragStartY = e.clientY;
-        baseStartAbs = newStart;
-        baseDur = newDur;
-      }
-      if(dragSide==='bottom' && wouldEnd > WEEK_MIN + boundarySlack){
-        visibleWeekFirst = addDays(visibleWeekFirst, +7);
-        newStart -= WEEK_MIN;
-        snake.weekSt += 7*DAY_MS;
-        hasJumpedThisDrag=true;
-        ackNavPulseImmediate('next');
-        dragStartY = e.clientY;
-        baseStartAbs = newStart;
-        baseDur = newDur;
-      }
-    }
-
+    // DO NOT change visibleWeekFirst here; user must navigate manually
     snake.startAbs = newStart;
     snake.dur      = newDur;
 
@@ -774,27 +755,17 @@ function startSnakeDrag(ev, side){
     window.removeEventListener('pointerup', up);
     dragSide=null; dragging=false;
 
-    // Normalize into [0..WEEK_MIN) ONCE after drag ends
+    // Normalize startAbs into [0..WEEK_MIN) once after drag
     while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; }
     while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; }
 
-    ignoreTapUntil = Date.now() + 150;  // prevent tap-through creating a new selection
+    ignoreTapUntil = Date.now() + 150;  // prevent tap-through creating new selection
     drawSnake();
     saveSoon(80);
   };
 
   window.addEventListener('pointermove', move, {passive:false});
   window.addEventListener('pointerup', up, {passive:true});
-}
-
-/* Visual nudge when auto-jumping during drag */
-function ackNavPulseImmediate(which){
-  const btn = document.getElementById(which==='prev'?'prevWeekBtn':'nextWeekBtn');
-  if(!btn) return;
-  requestAnimationFrame(()=>{ 
-    btn.classList.add('ack');
-    setTimeout(()=>btn.classList.remove('ack'), 250);
-  });
 }
 
 /* ---------- floating buttons (gear / clear) with 0.25s pulse ---------- */
@@ -816,6 +787,7 @@ function ensureSelButtons(){
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
   gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); openSettingsModal(ev); }, {passive:false});
 
+  /* Close (X) */
   const close = document.createElement('button');
   close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Clear selection');
   close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none"/></svg>`;
@@ -826,7 +798,7 @@ function ensureSelButtons(){
   close.addEventListener('click', async (ev)=>{
     ev.stopPropagation(); ev.preventDefault(); pulseSm(close);
     snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons();
-    ignoreTapUntil = Date.now() + 180; // avoid tap-through on grid
+    ignoreTapUntil = Date.now() + 150; // single, short debounce only
   }, {passive:false});
 
   wrap.appendChild(gear); wrap.appendChild(close);
@@ -923,7 +895,7 @@ function openSettingsModal(ev){
   const closeAll=()=>{ veil.remove(); modal.remove(); };
 
   modal.querySelector('#closeBtn').onclick = closeAll;
-  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); ignoreTapUntil=Date.now()+180; };
+  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); ignoreTapUntil=Date.now()+150; };
 
   veil.addEventListener('click', closeAll);
   document.body.appendChild(veil); document.body.appendChild(modal);
@@ -948,33 +920,32 @@ async function saveAll(){
 let saveTimer=null;
 function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
-/* ---------- Present-day lens ---------- */
+/* ---------- Present-day lens (separate host; never cleared by selection) ---------- */
 function updatePresentLens(forceRecreate=false){
   if(activeView!=='week' || !weekGeom) return;
   if(dragging) return; // pause while dragging
 
-  const host = document.getElementById('selHost'); if(!host) return;
+  const lensHost = document.getElementById('lensHost'); if(!lensHost) return;
 
   const now = getNow();
   const visStart = weekStart(visibleWeekFirst);
+  const todayStart = weekStart(now);
 
-  const today00 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffDays = Math.floor((today00 - visStart) / DAY_MS);
-
-  // Only appear if today is in visible week
-  if(diffDays < 0 || diffDays > 6){
+  const sameWeek = (+todayStart) === (+visStart);
+  if(!sameWeek){
     presentLensEl?.remove(); presentLensEl=null;
     presentLensGhost?.remove(); presentLensGhost=null;
     return;
   }
 
+  const dayIdx = now.getDay();
   const mins = now.getHours()*60 + now.getMinutes();
   const startMin = snap15(mins);
   const endMin = Math.min(1440, startMin + 60);
 
-  const colLeft  = weekGeom.colX[diffDays];
-  const colRight = weekGeom.colX[diffDays+1];
-  const colWidth = (colRight - colLeft) - (diffDays===6?1:0);
+  const colLeft  = weekGeom.colX[dayIdx];
+  const colRight = weekGeom.colX[dayIdx+1];
+  const colWidth = (colRight - colLeft) - (dayIdx===6?1:0);
   const topY  = minutesToY(startMin);
   const botY  = minutesToY(endMin);
   const height= Math.max(1, botY - topY);
@@ -983,15 +954,15 @@ function updatePresentLens(forceRecreate=false){
     presentLensEl?.remove();
     presentLensEl = document.createElement('div');
     presentLensEl.className='present-lens';
-    host.appendChild(presentLensEl);
+    lensHost.appendChild(presentLensEl);
   }
   presentLensEl.style.left   = `${colLeft}px`;
   presentLensEl.style.top    = `${topY}px`;
   presentLensEl.style.width  = `${colWidth}px`;
   presentLensEl.style.height = `${height}px`;
 
-  // Mirror glow as ghost to avoid any clipping at edges
-  if(!presentLensGhost || forceRecreate){
+  // Mirror glow as ghost to avoid clipping at edges (do NOT delete on selection redraw)
+  if(!presentLensGhost || forceRecreate || !overlayRoot.contains(presentLensGhost)){
     presentLensGhost?.remove();
     presentLensGhost = document.createElement('div');
     presentLensGhost.className='glow-ghost';
@@ -1049,4 +1020,5 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r88 EOF -->
+<!-- r89 EOF -->
+
