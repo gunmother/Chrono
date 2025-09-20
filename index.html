@@ -1,4 +1,4 @@
-<!-- W-95 START -->
+<!-- W-95 (hotfix) START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,27 +30,27 @@
     --handle-height-mult:1.75;
     --stamp-h:26px;
 
-    /* === Activity palette (mapped to the 4x4 grid you provided) === */
-    /* Row 1 (very light tints) */
-    --swatch-1:#f7d9d8;  /* very light pink */
-    --swatch-2:#d9eef4;  /* very light blue */
-    --swatch-3:#c7e2dc;  /* very light teal/green */
-    --swatch-4:#f6e48f;  /* light yellow */
-    /* Row 2 (mid tints) */
-    --swatch-5:#eb7d7b;  /* pink-red */
-    --swatch-6:#4aa0d6;  /* aqua/mid blue */
-    --swatch-7:#4ea282;  /* soft green/teal */
-    --swatch-8:#e9b627;  /* golden yellow */
-    /* Row 3 (strong) */
-    --swatch-9:#db3b3b;  /* strong red */
-    --swatch-10:#1e6fb2; /* blue */
-    --swatch-11:#1c7a44; /* forest green */
-    --swatch-12:#d49c14; /* warm gold */
-    /* Row 4 (dark) */
-    --swatch-13:#7f1d2d; /* dark maroon red */
-    --swatch-14:#103a5b; /* deep blue */
-    --swatch-15:#0f3c32; /* deep teal/green */
-    --swatch-16:#bf7716; /* burnt orange */
+    /* 4x4 palette (exact swatches you provided) */
+    /* Row 1 */
+    --swatch-1:#f7d9d8;
+    --swatch-2:#d9eef4;
+    --swatch-3:#c7e2dc;
+    --swatch-4:#f6e48f;
+    /* Row 2 */
+    --swatch-5:#eb7d7b;
+    --swatch-6:#4aa0d6;
+    --swatch-7:#4ea282;
+    --swatch-8:#e9b627;
+    /* Row 3 */
+    --swatch-9:#db3b3b;
+    --swatch-10:#1e6fb2;
+    --swatch-11:#1c7a44;
+    --swatch-12:#d49c14;
+    /* Row 4 */
+    --swatch-13:#7f1d2d;
+    --swatch-14:#103a5b;
+    --swatch-15:#0f3c32;
+    --swatch-16:#bf7716;
 
     /* Category → color mapping */
     --c-work:       var(--swatch-9);
@@ -64,7 +64,7 @@
     --c-selfcare:   var(--swatch-7);
     --c-exercise:   var(--swatch-15);
     --c-family:     var(--swatch-2);
-    --c-hobbies:    var(--swatch-7); /* teal family; distinct from exercise via shade */
+    --c-hobbies:    var(--swatch-7);
     --c-projects:   var(--swatch-6);
     --c-rnr:        var(--swatch-10);
     --c-freetime:   var(--swatch-12);
@@ -219,7 +219,7 @@
   .screensaver{ width:100%; height:100%; display:grid; place-items:center; }
   .wm{ font-weight:900; letter-spacing:.06em; opacity:.9; }
 
-  /* === Settings Sheet === */
+  /* Settings Sheet */
   .sheet-veil{ position:fixed; inset:0; background:rgba(0,0,0,.12); backdrop-filter:saturate(120%) blur(2px); z-index:20; }
   .sheet{
     position:fixed; inset:auto 0 0 0; height:min(88vh, 680px); border-radius:16px 16px 0 0;
@@ -253,7 +253,7 @@
   .btn-warn{ color:#d83a3a; }
   .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); }
 
-  /* Block rectangles */
+  /* Blocks */
   .blk{
     position:absolute; border-radius:10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
     cursor:pointer;
@@ -322,8 +322,9 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-95 — adds: Settings sheet, categories, block creation/persistence, block select/menus, inline renaming with toast, and gear button behavior. */
-/* === Core from r94 remains intact (present lens cadence, selector lifecycle). === */
+/* Chrono W-95 — additions + hotfix
+   NOTE: Fixed a script-stop issue caused by duplicate 'present lens' declarations in the prior pass.
+   Navigation and all interactions now initialize correctly. */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -346,7 +347,7 @@ function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=41; // bump for W-95
+const DB_NAME='chronoDB', DB_VERSION=41;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -354,10 +355,7 @@ function idbOpen(){
   if(dbPromise) return dbPromise;
   dbPromise = new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = ()=>{ 
-      const db = req.result; 
-      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); 
-    };
+    req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror   = ()=>reject(req.error);
   });
@@ -381,12 +379,12 @@ async function storageGet(k){
     req.onerror=()=>rej(req.error);
   });
 }
-const STATE_KEY='state_r81'; // compat
+const STATE_KEY='state_r81';
 const SEL_KEY  ='snake_r81';
 const BLK_KEY  ='blocks_w95';
 const CAT_KEY  ='categories_w95';
 
-/* selection model */
+/* selection */
 let snake = null;
 
 /* blocks */
@@ -419,8 +417,8 @@ let rafPending = false;
 let weekGeom=null, overlayRoot=null;
 let presentLensEl=null, presentLensGhost=null;
 let lensIntervalId=null, lensAlignTimeout=null;
-let lensSessionId=null; // session guard
-let dragBlockUntil=0;   // short window after drag end to avoid tap-through
+let lensSessionId=null;
+let dragBlockUntil=0;
 
 /* controls */
 document.querySelector('.controls').addEventListener('click', e=>{
@@ -486,12 +484,12 @@ function buildWeekView(){
   prevBtn.onclick = ()=>{
     ackPulse(prevBtn);
     endDrag('nav');
-    stopLensTimer(true);      // hard clear before repaint to avoid flash
+    stopLensTimer(true);
     visibleWeekFirst=addDays(visibleWeekFirst,-7);
     repaintWeek();
     drawBlocks();
     drawSnake();
-    startLensTimer();         // re-evaluate lens with new week
+    startLensTimer();
     saveSoon(120);
   };
   nextBtn.onclick = ()=>{
@@ -512,14 +510,12 @@ function buildWeekView(){
   ensureOverlay();
   repaintWeek();
 
-  // viewport sync
   const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); } }, 32);
   new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); }).observe(gridEl);
   window.addEventListener('scroll', sync, {passive:true});
   window.addEventListener('orientationchange', sync, {passive:true});
   if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
 
-  // start 5-min cadence with session guard
   startLensTimer();
 }
 
@@ -528,9 +524,7 @@ function ackPulse(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); se
 function repaintWeek(skipDraw=false){
   const first=weekStart(visibleWeekFirst), last=addDays(first,6);
   const titleEl = document.getElementById('weekTitle');
-  if(titleEl){
-    titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`;
-  }
+  if(titleEl){ titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`; }
 
   const pills=document.getElementById('dowPills'); if(pills){ pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); } }
 
@@ -549,7 +543,7 @@ function repaintWeek(skipDraw=false){
   buildMask(weekGeom,7);
   if(!skipDraw){ drawBlocks(); drawSnake(); }
 
-  updatePresentLens(true); // immediate check post-paint
+  updatePresentLens(true);
 }
 
 function computeGeometry(gridEl, cols){
@@ -612,13 +606,12 @@ function buildMask(geom, cols){
   }
 }
 
-/* --- Selector: always create on tap; robust drag lifecycle --- */
+/* --- selector creation --- */
 function onWeekGridTap(e){
   const now = Date.now();
   if(!weekGeom) return;
-  if(now < dragBlockUntil) return; // small guard after drag to avoid tap-through
+  if(now < dragBlockUntil) return;
 
-  // ignore if starting on handles, buttons, or a block
   const path = e.composedPath ? e.composedPath() : [];
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
 
@@ -630,16 +623,16 @@ function onWeekGridTap(e){
   for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  const startMin = Math.floor(minuteFloat/60)*60; // hour-aligned by design
+  const startMin = Math.floor(minuteFloat/60)*60; // hour aligned
   const startAbs = dayIdx*1440 + startMin;
 
   snake = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
   saveSoon(120);
   drawSnake();
-  destroyActionButtons(); // new selection: show its buttons after draw
+  destroyActionButtons();
 }
 
-/* Helper: convert selection/block into segments for current visible week */
+/* shared helpers */
 function segmentsForWeek(obj, visibleWeekStamp){
   const weekLen = WEEK_MIN;
   const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS));
@@ -676,11 +669,6 @@ function drawBlocks(){
   }
 }
 
-function colorForCat(catKey){
-  const c = categories.find(c=>c.key===catKey);
-  return c? getComputedStyle(document.documentElement).getPropertyValue(c.color.startsWith('var(')? c.color.slice(4,-1): c.color) || c.color : '#bbb';
-}
-
 let selectedBlockId=null;
 function drawBlockSegment(blk, dayIdx, startMin, endMin){
   const host=document.getElementById('blockHost');
@@ -705,7 +693,6 @@ function drawBlockSegment(blk, dayIdx, startMin, endMin){
   }, {passive:true});
   host.appendChild(rectEl);
 
-  // If this segment belongs to selected block, paint outline overlay
   if(selectedBlockId===blk.id){
     outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height);
   }
@@ -735,33 +722,32 @@ function clearBlockOutline(){
   overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
 }
 
-/* ============ ACTION BUTTONS (context-aware) ============ */
-function ensureActionButtons(context){ // context: 'selector' | 'block'
+/* ============ ACTION BUTTONS ============ */
+function ensureActionButtons(context){
   if(activeView!=='week') { destroyActionButtons(); return; }
   if(window.__actionBtns && document.body.contains(window.__actionBtns)){ 
     window.__actionBtns.dataset.ctx = context;
     window.__actionBtns.classList.remove('selBtnHidden'); 
+    repositionActionButtons();
     return; 
   }
 
   const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
 
-  // SETTINGS gear (new, replace tiny sun notion)
   const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
-  gear.innerHTML = gearSVG(); // gear icon
+  gear.innerHTML = gearSVG();
   gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
   gear.addEventListener('click', (ev)=>{
     ev.stopPropagation(); ev.preventDefault();
     openSettingsSheet();
   }, {passive:false});
 
-  // CLOSE X
   const close = document.createElement('button'); close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Close');
   close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(close); }, {capture:true});
   close.addEventListener('click', (ev)=>{
     ev.stopPropagation(); ev.preventDefault();
-    if(selectedBlockId){ // deselect block
+    if(selectedBlockId){
       selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
     }else{
       endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
@@ -771,9 +757,10 @@ function ensureActionButtons(context){ // context: 'selector' | 'block'
   wrap.appendChild(gear); wrap.appendChild(close);
   document.body.appendChild(wrap);
   window.__actionBtns = wrap;
+  repositionActionButtons();
+  attachViewportRepositioners();
 }
 function gearSVG(){
-  // single-gear icon in the style provided
   return `<svg viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
     <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
@@ -784,7 +771,7 @@ function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.re
 function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
 
 function selectionMidRect(){
-  if(selectedBlockId){ // center on selected block
+  if(selectedBlockId){
     const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
     const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null;
     const [s,e]=segs[0]; const mid=s+(e-s)/2;
@@ -890,7 +877,6 @@ function startSnakeDrag(ev, side){
   window.addEventListener('pointercancel', cancel, {passive:true});
   ev.currentTarget.addEventListener('lostpointercapture', lost, {once:true});
 
-  // stash listeners for cleanup
   startSnakeDrag._listeners = { move, up, cancel, target: ev.currentTarget };
 }
 
@@ -906,17 +892,16 @@ function endDrag(reason, ev){
   startSnakeDrag._listeners = null;
 
   dragging=false; dragSide=null;
-  // normalize selection to week after any drag
   if(snake){
     while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; }
     while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; }
   }
-  dragBlockUntil = Date.now() + 120; // small guard to prevent tap-through
+  dragBlockUntil = Date.now() + 120;
   drawSnake();
   saveSoon(80);
 }
 
-/* selection segment painter */
+/* selection painter */
 function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); }
 function drawSnake(){
   const host=document.getElementById('selHost'); if(!host) { destroyActionButtons(); return; }
@@ -952,7 +937,6 @@ function drawSnake(){
 
   ensureActionButtons('selector');
   repositionActionButtons();
-  attachViewportRepositioners();
 }
 
 function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
@@ -1080,7 +1064,6 @@ function openSettingsSheet(fromBlockId=null){
 
   document.body.appendChild(veil); document.body.appendChild(sheet);
 
-  // init current cat
   let initialCatKey = categories[0].key;
   if(sheetCtx.mode==='block'){
     const blk=blocks.find(b=>b.id===sheetCtx.blkId); if(blk) initialCatKey=blk.catKey;
@@ -1088,10 +1071,8 @@ function openSettingsSheet(fromBlockId=null){
   sheetCtx.catKey = initialCatKey;
   updateCurrentCatPill();
 
-  // Build list with totals + pencil editing
   renderDropdownList();
 
-  // handlers
   sheet.querySelector('#toggleList').onclick = ()=>{
     const area=document.getElementById('dropdownArea'); area.style.display = (area.style.display==='none')?'block':'none';
   };
@@ -1099,10 +1080,7 @@ function openSettingsSheet(fromBlockId=null){
   sheet.querySelector('#btnSave').onclick = ()=>{ onSheetSave(); };
   sheet.querySelector('#btnDelete').onclick = ()=>{ onSheetDelete(); };
 
-  // Prevent clicks inside sheet from closing
   sheet.addEventListener('click', e=>e.stopPropagation());
-
-  // preload body with hint
   document.getElementById('sheetBody').innerHTML = `<div style="opacity:.8; font-weight:700;">Choose or rename an activity above, then Save.</div>`;
 
   function updateCurrentCatPill(){
@@ -1139,7 +1117,6 @@ function openSettingsSheet(fromBlockId=null){
   }
 
   function beginInlineEdit(row, cat, nameNode, amtNode, penBtn){
-    // Replace nameNode+pen with input + check + x
     const parent = nameNode.parentElement;
     const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
     parent.replaceChild(input, nameNode);
@@ -1159,7 +1136,6 @@ function openSettingsSheet(fromBlockId=null){
       }
       cat.name=newName;
       persistCategories();
-      // reflect everywhere
       renderDropdownList();
       updateCurrentCatPill();
     };
@@ -1184,7 +1160,6 @@ function onSheetSave(){
 
   if(sheetCtx.mode==='selection'){
     if(!snake) { closeSheet(); return; }
-    // convert selection to block
     const blk={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:snake.weekSt, startAbs:snake.startAbs, dur:snake.dur, catKey };
     blocks.push(blk);
     persistBlocks();
@@ -1193,7 +1168,6 @@ function onSheetSave(){
     selectedBlockId=null; clearBlockOutline();
     drawBlocks();
   }else{
-    // update block category
     const blk=blocks.find(b=>b.id===sheetCtx.blkId);
     if(blk){ blk.catKey=catKey; persistBlocks(); drawBlocks(); }
   }
@@ -1203,11 +1177,9 @@ function onSheetSave(){
 function onSheetDelete(){
   if(!sheetCtx) return;
   if(sheetCtx.mode==='selection'){
-    // clear selection settings (no block exists yet)
     snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons(); closeSheet();
     return;
   }
-  // confirm & delete block
   if(confirm('Delete this block?')){
     const idx=blocks.findIndex(b=>b.id===sheetCtx.blkId);
     if(idx>=0){ blocks.splice(idx,1); persistBlocks(); selectedBlockId=null; clearBlockOutline(); destroyActionButtons(); drawBlocks(); }
@@ -1215,7 +1187,7 @@ function onSheetDelete(){
   }
 }
 
-/* Totals (visible week) */
+/* Totals */
 function computeWeekTotals(visSt){
   const totals={};
   for(const blk of blocks){
@@ -1236,7 +1208,7 @@ function selectBlock(id, rect){
   repositionActionButtons();
 }
 
-/* Floating buttons helpers */
+/* small helpers */
 function pulseSm(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
 
 /* throttle */
@@ -1258,15 +1230,9 @@ let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTime
 async function persistBlocks(){ await storageSet(BLK_KEY, blocks); }
 async function loadBlocks(){ const v=await storageGet(BLK_KEY); if(Array.isArray(v)) blocks=v; }
 async function persistCategories(){ await storageSet(CAT_KEY, categories); }
-async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ 
-  // keep colors from current mapping; only names are user-editable
-  for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } }
- }}
+async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } } } }
 
-/* ---------------- PRESENT LENS (from r94, unchanged) ---------------- */
-let presentLensEl=null, presentLensGhost=null;
-let lensIntervalId=null, lensAlignTimeout=null;
-let lensSessionId=null;
+/* ---------------- PRESENT LENS (original behavior) ---------------- */
 function hardClearPresentLens(){
   const lensHost = document.getElementById('lensHost');
   if(lensHost) lensHost.innerHTML='';
@@ -1280,15 +1246,13 @@ function stopLensTimer(hardClear=false){
   if(hardClear) hardClearPresentLens();
 }
 function startLensTimer(){
-  stopLensTimer(true); // reset, hard clear
+  stopLensTimer(true);
   if(activeView!=='week') return;
 
   lensSessionId = Symbol('lens-session');
 
-  // immediate evaluation
   updatePresentLens(true, lensSessionId);
 
-  // align to next 5-min boundary, then setInterval(5min)
   const now = new Date();
   const ms = now.getSeconds()*1000 + now.getMilliseconds();
   const mins = now.getMinutes();
@@ -1302,8 +1266,6 @@ function startLensTimer(){
 
 function updatePresentLens(forceRecreate=false, sessionToken=null){
   if(activeView!=='week' || !weekGeom) return;
-
-  // session guard: ignore if token mismatches current session
   if(sessionToken && sessionToken !== lensSessionId) return;
 
   const lensHost = document.getElementById('lensHost'); if(!lensHost) return;
@@ -1313,15 +1275,12 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   const visibleEnd   = visibleStart + 7*DAY_MS;
   const nowMs = +now;
 
-  // Gate: only show when "now" lies within visible week
   if(!(nowMs >= visibleStart && nowMs < visibleEnd)){
     hardClearPresentLens();
     return;
   }
 
-  // current day column
   const dayIdx = now.getDay();
-  // align start to nearest 15-min slot (down)
   const minsNow = now.getHours()*60 + now.getMinutes();
   const startMin = Math.floor(minsNow/15)*15;
   const endMin = Math.min(1440, startMin + 60);
@@ -1334,7 +1293,7 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   const height= Math.max(1, botY - topY);
 
   if(!presentLensEl || forceRecreate){
-    lensHost.innerHTML = ''; // exactly one lens in host
+    lensHost.innerHTML = '';
     presentLensEl = document.createElement('div');
     presentLensEl.className='present-lens';
     lensHost.appendChild(presentLensEl);
@@ -1344,7 +1303,6 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   presentLensEl.style.width  = `${colWidth}px`;
   presentLensEl.style.height = `${height}px`;
 
-  // mirror glow as ghost, with distinct role
   if(!presentLensGhost || !overlayRoot?.contains(presentLensGhost)){
     presentLensGhost?.remove();
     presentLensGhost = document.createElement('div');
@@ -1359,7 +1317,7 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   presentLensGhost.style.height = height + 'px';
 }
 
-/* === Toast === */
+/* Toast */
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toast._timer);
@@ -1378,7 +1336,7 @@ async function init(){
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState==='hidden'){
       saveAll().catch(()=>{});
-      stopLensTimer(false);       // pause timers in bg
+      stopLensTimer(false);
     }else{
       if(activeView==='week'){ startLensTimer(); }
     }
@@ -1403,7 +1361,7 @@ function render(){
   }
 }
 
-/* Helpers for inline SVGs */
+/* SVG helpers */
 function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
 function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
 function crossSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`; }
@@ -1424,4 +1382,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- W-95 EOF -->
+<!-- W-95 (hotfix) EOF -->
