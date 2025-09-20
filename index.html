@@ -1,4 +1,4 @@
-<!-- r89 START -->
+<!-- r90 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,7 +101,6 @@
   .neu-btn--sm svg{ width:22px; height:22px; stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round;
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
-  /* 0.25s acknowledgement pulse: navy bg, turquoise icon, flipped shadows */
   .neu-btn--sm.ack{
     background:var(--pressed-navy);
     color:var(--icon-active);
@@ -201,7 +200,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r89</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r90</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <!-- Day -->
@@ -257,16 +256,11 @@
   </main>
 
 <script>
-/* Chrono r89 — full build
-   Key changes vs r88:
-   - Removed ALL auto week-jumps during drag (manual nav only).
-   - Header date never desyncs: drag never mutates visibleWeekFirst.
-   - Spillover across weeks: exactly TWO handles total (start=top, end=bottom),
-     hidden on weeks where that edge lies outside.
-   - Present lens uses separate host; never cleared by selection redraw; day=now.getDay() mapping.
-   - After closing with X, tap reliably creates a new selection (single short debounce).
-   - Selection draw removes only its own overlay nodes; lens ghost persists.
-   - Drag performance maintained (RAF-throttled updates).
+/* Chrono r90 — full build
+   Fixes vs r89:
+   - Present lens renders ONLY on current week (hard enforcement & cleanup).
+   - After closing with X, tapping grid reliably creates a new selector (robust guards).
+   Everything else preserved.
 */
 
 const screenEl = document.getElementById('screen');
@@ -336,6 +330,7 @@ let snake = null;
 
 /* ---------- tap debounce / flags ---------- */
 let ignoreTapUntil = 0;
+let selectionClearedAt = 0;   // r90: explicit short guard after X
 let dragging = false;
 let rafPending = false;
 
@@ -510,7 +505,7 @@ function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* ---------- Wallpaper ---------- */
 function showWallpaper(){
-  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r89</div></div>`;
+  screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r90</div></div>`;
 }
 
 /* ---------- tap to create snake ---------- */
@@ -518,10 +513,14 @@ function onWeekGridTap(e){
   const now = Date.now();
   if(!weekGeom) return;
   if(dragging) return;
-  if(now < ignoreTapUntil) return;
 
+  /* r90: robust, minimal guards */
+  if(now < ignoreTapUntil) return;
+  if(now - selectionClearedAt < 200) return;  // brief guard just after X
+
+  // Only ignore taps that start directly on a live handle or the button pair.
   const path = e.composedPath ? e.composedPath() : [];
-  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('ov-group')))){
+  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle')))){
     return;
   }
 
@@ -540,10 +539,10 @@ function onWeekGridTap(e){
   snake = { weekSt:getVisibleWeekStamp(), startAbs, dur };
   saveSoon(120);
   drawSnake();
-  updatePresentLens(); // ensure lens remains visible
+  updatePresentLens(); // ensure lens remains visible if current week
 }
 
-/* ---------- selection projection per visible week (pure week-index math) ---------- */
+/* ---------- selection projection per visible week ---------- */
 function segmentsForWeek(sel, visibleWeekStamp){
   const weekLen = WEEK_MIN;
   const weekDiff = Math.round((visibleWeekStamp - sel.weekSt) / (7*DAY_MS));
@@ -639,7 +638,7 @@ function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   ghost.dataset.role='sel-ghost';
   ghost.style.left = (weekGeom.rect.left + colLeft) + 'px';
   ghost.style.top  = (weekGeom.rect.top  + topY) + 'px';
-  ghost.style.width= colWidth + 'px';
+  ghost.style.width  = colWidth + 'px';
   ghost.style.height = height + 'px';
   overlayRoot.appendChild(ghost);
 
@@ -768,7 +767,7 @@ function startSnakeDrag(ev, side){
   window.addEventListener('pointerup', up, {passive:true});
 }
 
-/* ---------- floating buttons (gear / clear) with 0.25s pulse ---------- */
+/* ---------- floating buttons (gear / clear) ---------- */
 function ensureSelButtons(){
   if(activeView!=='week') { destroySelButtons(); return; }
   if(window.__selBtns && document.body.contains(window.__selBtns)){ window.__selBtns.classList.remove('selBtnHidden'); return; }
@@ -798,7 +797,9 @@ function ensureSelButtons(){
   close.addEventListener('click', async (ev)=>{
     ev.stopPropagation(); ev.preventDefault(); pulseSm(close);
     snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons();
-    ignoreTapUntil = Date.now() + 150; // single, short debounce only
+    const now = Date.now();
+    selectionClearedAt = now;                  // r90: mark close moment
+    ignoreTapUntil = now + 150;                // brief, finite debounce
   }, {passive:false});
 
   wrap.appendChild(gear); wrap.appendChild(close);
@@ -895,7 +896,7 @@ function openSettingsModal(ev){
   const closeAll=()=>{ veil.remove(); modal.remove(); };
 
   modal.querySelector('#closeBtn').onclick = closeAll;
-  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); ignoreTapUntil=Date.now()+150; };
+  modal.querySelector('#clearBtn').onclick = async ()=>{ snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll(); const now=Date.now(); selectionClearedAt=now; ignoreTapUntil=now+150; };
 
   veil.addEventListener('click', closeAll);
   document.body.appendChild(veil); document.body.appendChild(modal);
@@ -920,7 +921,7 @@ async function saveAll(){
 let saveTimer=null;
 function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
-/* ---------- Present-day lens (separate host; never cleared by selection) ---------- */
+/* ---------- Present-day lens (separate host; shows ONLY on current week) ---------- */
 function updatePresentLens(forceRecreate=false){
   if(activeView!=='week' || !weekGeom) return;
   if(dragging) return; // pause while dragging
@@ -928,13 +929,17 @@ function updatePresentLens(forceRecreate=false){
   const lensHost = document.getElementById('lensHost'); if(!lensHost) return;
 
   const now = getNow();
-  const visStart = weekStart(visibleWeekFirst);
-  const todayStart = weekStart(now);
+  const visStart = +weekStart(visibleWeekFirst);
+  const todayStart = +weekStart(now);
 
-  const sameWeek = (+todayStart) === (+visStart);
+  const sameWeek = (todayStart === visStart);
+
   if(!sameWeek){
-    presentLensEl?.remove(); presentLensEl=null;
-    presentLensGhost?.remove(); presentLensGhost=null;
+    // Hard cleanup: remove DOM nodes AND clear host
+    lensHost.innerHTML = '';
+    presentLensEl = null;
+    if(presentLensGhost && overlayRoot?.contains(presentLensGhost)){ presentLensGhost.remove(); }
+    presentLensGhost = null;
     return;
   }
 
@@ -951,7 +956,7 @@ function updatePresentLens(forceRecreate=false){
   const height= Math.max(1, botY - topY);
 
   if(!presentLensEl || forceRecreate){
-    presentLensEl?.remove();
+    lensHost.innerHTML = ''; // ensure only one node exists
     presentLensEl = document.createElement('div');
     presentLensEl.className='present-lens';
     lensHost.appendChild(presentLensEl);
@@ -961,7 +966,7 @@ function updatePresentLens(forceRecreate=false){
   presentLensEl.style.width  = `${colWidth}px`;
   presentLensEl.style.height = `${height}px`;
 
-  // Mirror glow as ghost to avoid clipping at edges (do NOT delete on selection redraw)
+  // Mirror glow as ghost to avoid clipping at edges
   if(!presentLensGhost || forceRecreate || !overlayRoot.contains(presentLensGhost)){
     presentLensGhost?.remove();
     presentLensGhost = document.createElement('div');
@@ -1020,5 +1025,5 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r89 EOF -->
+<!-- r90 EOF -->
 
