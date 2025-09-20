@@ -1,4 +1,4 @@
-<!-- W-96 START -->
+<!-- W-97 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -155,7 +155,7 @@
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
   .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:3; }
-  /* Blocks now live under the mask but above chart background */
+  /* Blocks live under the mask but above background */
   .blockHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
   .selHost{  position:absolute; inset:0; pointer-events:none; z-index:4; }
 
@@ -253,7 +253,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-96</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-97</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
@@ -307,7 +307,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-96 — fixes per your notes */
+/* Chrono W-97 — ensure action buttons always attach to the current selection */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -433,7 +433,7 @@ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot))
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* screensaver */
-function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-96</div></div>`; }
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-97</div></div>`; }
 
 /* --- Week View --- */
 function buildWeekView(){
@@ -592,12 +592,10 @@ function buildMask(geom, cols){
 
 /* --- Utility for overlap checks (minutes in visible week [0,10080)) --- */
 function normalizeWeekAbs(weekSt, startAbs){
-  // offset into visible week [0..10080)
   const diffWeeks = Math.round((getVisibleWeekStamp() - weekSt)/(7*DAY_MS));
   return ((startAbs - diffWeeks*WEEK_MIN) % WEEK_MIN + WEEK_MIN) % WEEK_MIN;
 }
 function eachSegmentsInWeek(obj, cb){
-  // splits selection/block across day boundaries inside [0,10080)
   const segs = segmentsForWeek(obj, getVisibleWeekStamp());
   for(const [absS, absE] of segs){
     let s=absS;
@@ -609,35 +607,28 @@ function eachSegmentsInWeek(obj, cb){
     }
   }
 }
-function anyOverlapWithBlocks(candidate){ // {weekSt, startAbs, dur}
+function anyOverlapWithBlocks(candidate){
   let hit=false;
   const cStart=normalizeWeekAbs(candidate.weekSt, candidate.startAbs);
   const cEnd  =(cStart + candidate.dur);
-  // iterate existing blocks visible this week
   for(const b of blocks){
     const proxy={weekSt:b.weekSt, startAbs:b.startAbs, dur:b.dur};
     eachSegmentsInWeek(proxy,(bs,be)=>{
       if(hit) return;
-      const s=bs, e=be;
-      if(Math.max(cStart,s) < Math.min(cEnd,e)) hit=true;
+      if(Math.max(cStart,bs) < Math.min(cEnd,be)) hit=true;
     });
     if(hit) break;
   }
   return hit;
 }
-function nearestEdgesAround(startAbs, dur, side){ // returns {minStart,maxEnd} limiting rectangle around nearby blocks
-  // Compute free span that contains current selection edge.
+function nearestEdgesAround(startAbs, dur, side){
   const selStart = ((startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN;
   const selEnd   = Math.min(WEEK_MIN, selStart + dur);
-
-  // Collect edges for current weekday column only (simpler, but robust):
-  // Determine day index for the moving edge.
   const edgeAbs = (side==='top'? selStart : selEnd-1);
   const dayIdx  = Math.floor(edgeAbs/1440);
   const dayStart= dayIdx*1440, dayEnd = dayStart+1440;
 
-  // Gather blocking intervals within that day
-  const edges=[dayStart, dayEnd]; // bounds
+  const edges=[dayStart, dayEnd];
   for(const b of blocks){
     eachSegmentsInWeek(b,(bs,be)=>{
       if(bs>=dayEnd || be<=dayStart) return;
@@ -646,7 +637,6 @@ function nearestEdgesAround(startAbs, dur, side){ // returns {minStart,maxEnd} l
   }
   edges.sort((a,b)=>a-b);
 
-  // find surrounding bracket around edgeAbs
   let min=dayStart, max=dayEnd;
   for(let i=1;i<edges.length;i++){
     if(edgeAbs>=edges[i-1] && edgeAbs<=edges[i]){
@@ -665,7 +655,6 @@ function onWeekGridTap(e){
   // Mutual exclusivity: ignore if a block is selected
   if(selectedBlockId) return;
 
-  // ignore taps on action buttons or handles or blocks
   const path = e.composedPath ? e.composedPath() : [];
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
 
@@ -677,19 +666,20 @@ function onWeekGridTap(e){
   for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  const startMin = Math.floor(minuteFloat/60)*60; // hour aligned
+  const startMin = Math.floor(minuteFloat/60)*60;
   const startAbs = dayIdx*1440 + startMin;
 
   const candidate = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
   if(anyOverlapWithBlocks(candidate)){
-    // refused to start inside an occupied region
     return;
   }
 
   snake = candidate;
   saveSoon(120);
   drawSnake();
-  destroyActionButtons();
+  // Ensure the action buttons attach immediately to the selector
+  ensureActionButtons('selector');
+  repositionActionButtons();
 }
 
 /* shared helpers */
@@ -749,8 +739,7 @@ function drawBlockSegment(blk, dayIdx, startMin, endMin){
   rectEl.dataset.id = blk.id;
   rectEl.addEventListener('click', (e)=>{
     e.stopPropagation();
-    // if selector active, ignore (mutual exclusivity)
-    if(snake) return;
+    if(snake) return; // selector active -> ignore (mutual exclusivity)
     selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height});
   }, {passive:true});
   host.appendChild(rectEl);
@@ -916,7 +905,6 @@ function startSnakeDrag(ev, side){
     let snappedDelta = Math.round(deltaMinRaw / 15) * 15;
     if(snappedDelta === 0) return;
 
-    // propose new values
     let newStart = baseStartAbs, newDur = baseDur;
 
     if(dragSide==='top'){
@@ -928,19 +916,16 @@ function startSnakeDrag(ev, side){
       newDur = clamp(newEnd - baseStartAbs, 15, 1440);
     }
 
-    // LIMIT against existing blocks (edge stop)
     const bracket = nearestEdgesAround(newStart, newDur, dragSide);
     const selStart = ((newStart%WEEK_MIN)+WEEK_MIN)%WEEK_MIN;
     const selEnd   = Math.min(WEEK_MIN, selStart + newDur);
 
     if(dragSide==='top'){
-      // cannot cross left bracket minStart
       if(selStart < bracket.minStart) {
         const diff = bracket.minStart - selStart;
         newStart += diff; newDur -= diff;
       }
     }else{
-      // cannot cross right bracket maxEnd
       if(selEnd > bracket.maxEnd){
         const diff = selEnd - bracket.maxEnd;
         newDur -= diff;
@@ -948,11 +933,9 @@ function startSnakeDrag(ev, side){
     }
     newDur = Math.max(15, Math.min(newDur, 1440));
 
-    // Final check: reject if overlaps
     const candidate={weekSt:snake.weekSt, startAbs:newStart, dur:newDur};
     if(anyOverlapWithBlocks(candidate)){
-      // tighten to nearest 15-min step that is free
-      return; // ignore this move
+      return;
     }
 
     snake.startAbs = newStart;
@@ -1009,7 +992,6 @@ function drawSnake(){
   const segs = segmentsForWeek(snake, visSt);
   if(segs.length===0){ destroyActionButtons(); return; }
 
-  // enforce no-overlap at draw-time (safety)
   if(anyOverlapWithBlocks(snake)){ return; }
 
   const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
@@ -1031,6 +1013,7 @@ function drawSnake(){
     }
   }
 
+  // Always make sure the action buttons belong to the current selector
   ensureActionButtons('selector');
   repositionActionButtons();
 }
@@ -1224,7 +1207,7 @@ function openSettingsSheet(fromBlockId=null){
 
     const commit=()=>{
       const newName=input.value.trim();
-      if(!newName){ renderDropdownList(); return; } // blank -> revert
+      if(!newName){ renderDropdownList(); return; }
       if(newName===cat.name){ renderDropdownList(); return; }
       if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
         toast('Name already exists, try again.');
@@ -1255,7 +1238,6 @@ function onSheetSave(){
     if(!snake) { closeSheet(); return; }
     const blk={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:snake.weekSt, startAbs:snake.startAbs, dur:snake.dur, catKey };
 
-    // Guard: no overlaps allowed
     if(anyOverlapWithBlocks(blk)){ toast('Cannot place over an existing block.'); return; }
 
     blocks.push(blk);
@@ -1481,4 +1463,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- W-96 EOF -->
+<!-- W-97 EOF -->
