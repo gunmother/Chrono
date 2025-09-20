@@ -1,4 +1,4 @@
-<!-- r92 START -->
+<!-- r93 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -161,8 +161,10 @@
        var(--off)         var(--off)         var(--blur) var(--lo);
     display:grid; place-items:center;
   }
-  .chev path{ fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
-    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
 
   .selBtns{ position:fixed; z-index:6; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
@@ -179,7 +181,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r92</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r93</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
@@ -231,15 +233,16 @@
   </main>
 
 <script>
-/* Chrono r92 — fixes:
-   - Default screensaver landing.
-   - Present lens: ONLY on current week/day/hour; hard cleared elsewhere.
-   - Tap anywhere on grid ALWAYS creates a fresh selector (replaces existing).
+/* Chrono r93 — fixes:
+   - Screensaver landing.
+   - Present lens independent of selector; only controlled by current week/time.
+   - Tapping grid always creates a fresh selector; no post-X lockout.
+   - Chevrons restored to stroked style (no filled triangles).
 */
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
-let activeView = null; // r92: start on screensaver
+let activeView = null; // start on screensaver
 let visibleWeekFirst = weekStart(new Date());
 
 const DAY_MS = 86400000;
@@ -352,8 +355,8 @@ function buildWeekView(){
 
   const prevBtn=document.getElementById('prevWeekBtn');
   const nextBtn=document.getElementById('nextWeekBtn');
-  prevBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); ackPulse(prevBtn); repaintWeek(); drawSnake(); hardClearLens(); updatePresentLens(true); saveSoon(120); };
-  nextBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); ackPulse(nextBtn); repaintWeek(); drawSnake(); hardClearLens(); updatePresentLens(true); saveSoon(120); };
+  prevBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); ackPulse(prevBtn); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(120); };
+  nextBtn.onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); ackPulse(nextBtn); repaintWeek(); drawSnake(); updatePresentLens(true); saveSoon(120); };
 
   const gridEl = document.getElementById('weekGrid');
   gridEl.addEventListener('click', onWeekGridTap, {passive:true});
@@ -361,16 +364,15 @@ function buildWeekView(){
   ensureOverlay();
   repaintWeek();
 
-  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); hardClearLens(); updatePresentLens(true); }).observe(gridEl);
+  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(gridEl);
 
-  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); hardClearLens(); updatePresentLens(true); } }, 32);
+  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); } }, 32);
   window.addEventListener('scroll', sync, {passive:true});
   window.addEventListener('orientationchange', sync, {passive:true});
   if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
 
-  // Refresh timer strictly for current week; paused otherwise
   if(lensTimer) clearInterval(lensTimer);
-  lensTimer = setInterval(()=>{ if(activeView==='week') updatePresentLens(); }, 60*1000);
+  lensTimer = setInterval(()=>{ if(activeView==='week' && !dragging) updatePresentLens(); }, 60*1000);
 }
 
 function ackPulse(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
@@ -462,13 +464,13 @@ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot))
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* screensaver */
-function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r92</div></div>`; }
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r93</div></div>`; }
 
 /* ALWAYS create new selector on grid tap (replace existing) */
 function onWeekGridTap(e){
   if(!weekGeom || dragging) return;
 
-  // Only ignore taps that begin on handles or the floating buttons
+  // Ignore taps that begin on handles or the floating buttons
   const path = e.composedPath ? e.composedPath() : [];
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle')))) return;
 
@@ -485,8 +487,8 @@ function onWeekGridTap(e){
 
   snake = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
   saveSoon(120);
-  drawSnake();
-  updatePresentLens(); // no effect off-week; enforced below
+  drawSnake();              // selection only
+  // No lens calls here; lens is independent
 }
 
 /* selection projection */
@@ -502,7 +504,7 @@ function segmentsForWeek(sel, visibleWeekStamp){
   return (e > s) ? [[s,e]] : [];
 }
 
-/* draw selection */
+/* draw selection (no present-lens side effects) */
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); }
 
@@ -510,15 +512,17 @@ function drawSnake(){
   const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
   ensureOverlay();
 
+  // Clear only selection visuals (keep lens + its ghost intact)
   host.innerHTML='';
   clearSelectionOverlays();
 
-  if(!snake){ destroySelButtons(); hardClearLens(); updatePresentLens(true); return; }
+  if(!snake){ destroySelButtons(); return; }
 
   const visSt = getVisibleWeekStamp();
   const segs = segmentsForWeek(snake, visSt);
-  if(segs.length===0){ destroySelButtons(); hardClearLens(); updatePresentLens(true); return; }
+  if(segs.length===0){ destroySelButtons(); return; }
 
+  // Global endpoints (in minutes relative to visible week)
   const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
   const endLocalMin   = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000;
 
@@ -541,7 +545,6 @@ function drawSnake(){
   ensureSelButtons();
   repositionSelButtons();
   attachViewportRepositioners();
-  updatePresentLens(true);
 }
 
 function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
@@ -631,9 +634,12 @@ function chevronsSVG(dir, colW, rowH){
   const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
   const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
 
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
-    <path d="${d1}"/><path d="${d2}"/><path d="${d3}"/>
-  </svg>`;
+  /* Return wrapped in .chev so CSS styles apply (stroke, glow, etc.) */
+  return `<div class="chev">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+      <path d="${d1}"/><path d="${d2}"/><path d="${d3}"/>
+    </svg>
+  </div>`;
 }
 
 /* drag */
@@ -714,7 +720,7 @@ function ensureSelButtons(){
   close.addEventListener('click', async (ev)=>{
     ev.stopPropagation(); ev.preventDefault(); pulseSm(close);
     snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons();
-    // r92: no debounce that blocks the next tap
+    // No debounce; next tap will create a new selector immediately
   }, {passive:false});
 
   wrap.appendChild(gear); wrap.appendChild(close);
@@ -828,13 +834,7 @@ function snapshotState(){ return { activeView, visibleWeekFirst:+weekStart(new D
 async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); }
 let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
-/* PRESENT LENS — strict enforcement */
-function hardClearLens(){
-  const lensHost = document.getElementById('lensHost');
-  if(lensHost){ lensHost.innerHTML=''; }
-  if(presentLensGhost && overlayRoot?.contains(presentLensGhost)){ presentLensGhost.remove(); }
-  presentLensEl=null; presentLensGhost=null;
-}
+/* PRESENT LENS — independent module */
 function updatePresentLens(forceRecreate=false){
   if(activeView!=='week' || !weekGeom) return;
   if(dragging) return;
@@ -844,11 +844,15 @@ function updatePresentLens(forceRecreate=false){
   const now = getNow();
   const sameWeek = (+weekStart(now) === +weekStart(visibleWeekFirst));
 
+  // If not current week, ensure lens nodes are removed
   if(!sameWeek){
-    hardClearLens();
+    lensHost.innerHTML = '';
+    if(presentLensGhost && overlayRoot?.contains(presentLensGhost)) presentLensGhost.remove();
+    presentLensEl=null; presentLensGhost=null;
     return;
   }
 
+  // Current week: show a 1-hour lens aligned to current time (snapped to 15)
   const dayIdx = now.getDay();
   const mins = now.getHours()*60 + now.getMinutes();
   const startMin = snap15(mins);
@@ -861,12 +865,18 @@ function updatePresentLens(forceRecreate=false){
   const botY  = minutesToY(endMin);
   const height= Math.max(1, botY - topY);
 
-  if(!presentLensEl || forceRecreate){ hardClearLens(); presentLensEl = document.createElement('div'); presentLensEl.className='present-lens'; document.getElementById('lensHost').appendChild(presentLensEl); }
+  if(!presentLensEl || forceRecreate){
+    lensHost.innerHTML = ''; // exactly one node
+    presentLensEl = document.createElement('div');
+    presentLensEl.className='present-lens';
+    lensHost.appendChild(presentLensEl);
+  }
   presentLensEl.style.left   = `${colLeft}px`;
   presentLensEl.style.top    = `${topY}px`;
   presentLensEl.style.width  = `${colWidth}px`;
   presentLensEl.style.height = `${height}px`;
 
+  // Mirror glow as ghost to avoid clipping at edges
   if(!presentLensGhost || !overlayRoot.contains(presentLensGhost)){
     presentLensGhost?.remove();
     presentLensGhost = document.createElement('div');
@@ -893,6 +903,7 @@ async function init(){
 function render(){
   if(activeView==='week'){
     buildWeekView();
+    updatePresentLens(true);  // kick once when view mounts
   } else if(activeView==='day' || activeView==='month' || activeView==='todo'){
     screenEl.textContent=''; screenEl.innerHTML='';
     screenEl.style.display='grid'; screenEl.style.placeItems='center';
@@ -918,5 +929,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r92 EOF -->
-
+<!-- r93 EOF -->
