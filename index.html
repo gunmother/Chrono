@@ -1,4 +1,4 @@
-<!-- r94 START -->
+<!-- W-95 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,6 +29,46 @@
     --handle-gap:12px;
     --handle-height-mult:1.75;
     --stamp-h:26px;
+
+    /* === Activity palette (mapped to the 4x4 grid you provided) === */
+    /* Row 1 (very light tints) */
+    --swatch-1:#f7d9d8;  /* very light pink */
+    --swatch-2:#d9eef4;  /* very light blue */
+    --swatch-3:#c7e2dc;  /* very light teal/green */
+    --swatch-4:#f6e48f;  /* light yellow */
+    /* Row 2 (mid tints) */
+    --swatch-5:#eb7d7b;  /* pink-red */
+    --swatch-6:#4aa0d6;  /* aqua/mid blue */
+    --swatch-7:#4ea282;  /* soft green/teal */
+    --swatch-8:#e9b627;  /* golden yellow */
+    /* Row 3 (strong) */
+    --swatch-9:#db3b3b;  /* strong red */
+    --swatch-10:#1e6fb2; /* blue */
+    --swatch-11:#1c7a44; /* forest green */
+    --swatch-12:#d49c14; /* warm gold */
+    /* Row 4 (dark) */
+    --swatch-13:#7f1d2d; /* dark maroon red */
+    --swatch-14:#103a5b; /* deep blue */
+    --swatch-15:#0f3c32; /* deep teal/green */
+    --swatch-16:#bf7716; /* burnt orange */
+
+    /* Category → color mapping */
+    --c-work:       var(--swatch-9);
+    --c-school:     var(--swatch-5);
+    --c-commute:    var(--swatch-12);
+    --c-chores:     var(--swatch-16);
+    --c-errands:    var(--swatch-8);
+    --c-meal:       var(--swatch-4);
+    --c-hygiene:    var(--swatch-1);
+    --c-childcare:  var(--swatch-11);
+    --c-selfcare:   var(--swatch-7);
+    --c-exercise:   var(--swatch-15);
+    --c-family:     var(--swatch-2);
+    --c-hobbies:    var(--swatch-7); /* teal family; distinct from exercise via shade */
+    --c-projects:   var(--swatch-6);
+    --c-rnr:        var(--swatch-10);
+    --c-freetime:   var(--swatch-12);
+    --c-sleep:      var(--swatch-14);
   }
 
   html,body{
@@ -131,6 +171,7 @@
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
   .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+  .blockHost{ position:absolute; inset:0; pointer-events:auto; z-index:2; }
   .selHost{  position:absolute; inset:0; pointer-events:none; z-index:2; }
 
   .marqueeRect{
@@ -139,7 +180,7 @@
     box-shadow: var(--marquee-glow);
   }
 
-  .overlayRoot{ position:fixed; inset:0; z-index:4; pointer-events:none; }
+  .overlayRoot{ position:fixed; inset:0; z-index:6; pointer-events:none; }
   .ov-group{ position:absolute; pointer-events:none; }
   .glow-ghost{ position:absolute; border-radius:12px; pointer-events:none; box-shadow: var(--marquee-glow); }
 
@@ -166,7 +207,7 @@
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
-  .selBtns{ position:fixed; z-index:6; display:grid; gap:8px; pointer-events:auto; }
+  .selBtns{ position:fixed; z-index:8; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
 
   .present-lens{
@@ -177,11 +218,57 @@
 
   .screensaver{ width:100%; height:100%; display:grid; place-items:center; }
   .wm{ font-weight:900; letter-spacing:.06em; opacity:.9; }
+
+  /* === Settings Sheet === */
+  .sheet-veil{ position:fixed; inset:0; background:rgba(0,0,0,.12); backdrop-filter:saturate(120%) blur(2px); z-index:20; }
+  .sheet{
+    position:fixed; inset:auto 0 0 0; height:min(88vh, 680px); border-radius:16px 16px 0 0;
+    background:var(--bg); z-index:21; display:grid; grid-template-rows:auto auto 1fr auto; box-shadow:0 -10px 30px rgba(0,0,0,.12);
+  }
+  .sheet-head{ display:flex; align-items:center; justify-content:center; padding:10px; font-weight:800; }
+  .sheet-sub{ padding:8px 14px; display:grid; gap:8px; }
+  .pill{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:10px; padding:8px 10px;
+    background:var(--bg); box-shadow: inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .dot{ width:14px; height:14px; border-radius:50%; flex:0 0 14px; }
+  .dropdown{ padding:8px 14px 0 14px; }
+  .dropdown-btn{ width:100%; border:none; background:transparent; color:var(--ink); text-align:left; font-weight:700; padding:8px 0; display:flex; align-items:center; gap:10px; }
+  .dropdown-list{ max-height:40vh; overflow:auto; padding:6px 2px 10px 2px; }
+  .row{
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; margin:8px 12px; border-radius:10px; background:var(--bg);
+    box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .row .name{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .amt{ opacity:.9; font-variant-numeric:tabular-nums; font-weight:800; }
+  .name-edit{ width:100%; max-width:180px; border:none; outline:none; background:#ffffffaa; border-radius:8px; padding:4px 8px; font-weight:700; }
+  .icon-btn{ border:none; background:transparent; color:var(--ink); cursor:pointer; display:grid; place-items:center; width:28px; height:28px; border-radius:8px; }
+  .icon-btn:active{ transform:scale(.96); }
+  .sheet-body{ overflow:auto; padding:8px 14px; }
+  .sheet-foot{ display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:12px 14px 14px 14px; }
+  .btn{ border:none; border-radius:12px; padding:10px 14px; background:var(--bg); color:var(--ink); font-weight:800;
+    box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .btn:active{ transform:scale(.985); }
+  .btn-warn{ color:#d83a3a; }
+  .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); }
+
+  /* Block rectangles */
+  .blk{
+    position:absolute; border-radius:10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    cursor:pointer;
+  }
+
+  /* Toast */
+  .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#1c2a36; color:#fff; font-weight:800;
+    padding:10px 14px; border-radius:12px; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,-4px); }
 </style>
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono r94</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-95</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
@@ -232,8 +319,12 @@
     </nav>
   </main>
 
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <script>
-/* Chrono r94 — present lens (5-min cadence, week-range gate, session-guard) + robust selector lifecycle */
+/* Chrono W-95 — adds: Settings sheet, categories, block creation/persistence, block select/menus, inline renaming with toast, and gear button behavior. */
+/* === Core from r94 remains intact (present lens cadence, selector lifecycle). === */
+
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
 
@@ -255,7 +346,7 @@ function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=40;
+const DB_NAME='chronoDB', DB_VERSION=41; // bump for W-95
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -263,7 +354,10 @@ function idbOpen(){
   if(dbPromise) return dbPromise;
   dbPromise = new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+    req.onupgradeneeded = ()=>{ 
+      const db = req.result; 
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); 
+    };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror   = ()=>reject(req.error);
   });
@@ -289,9 +383,34 @@ async function storageGet(k){
 }
 const STATE_KEY='state_r81'; // compat
 const SEL_KEY  ='snake_r81';
+const BLK_KEY  ='blocks_w95';
+const CAT_KEY  ='categories_w95';
 
 /* selection model */
 let snake = null;
+
+/* blocks */
+let blocks = []; // {id, weekSt, startAbs, dur, catKey}
+
+/* categories */
+let categories = [
+  {key:'work',      name:'Work',       color:'var(--c-work)'},
+  {key:'school',    name:'School',     color:'var(--c-school)'},
+  {key:'commute',   name:'Commute',    color:'var(--c-commute)'},
+  {key:'chores',    name:'Chores',     color:'var(--c-chores)'},
+  {key:'errands',   name:'Errands',    color:'var(--c-errands)'},
+  {key:'meal',      name:'Meal Time',  color:'var(--c-meal)'},
+  {key:'hygiene',   name:'Hygiene',    color:'var(--c-hygiene)'},
+  {key:'childcare', name:'Child Care', color:'var(--c-childcare)'},
+  {key:'selfcare',  name:'Self Care',  color:'var(--c-selfcare)'},
+  {key:'exercise',  name:'Exercise',   color:'var(--c-exercise)'},
+  {key:'family',    name:'Family Time',color:'var(--c-family)'},
+  {key:'hobbies',   name:'Hobbies',    color:'var(--c-hobbies)'},
+  {key:'projects',  name:'Projects',   color:'var(--c-projects)'},
+  {key:'rnr',       name:'R & R',      color:'var(--c-rnr)'},
+  {key:'freetime',  name:'Free Time',  color:'var(--c-freetime)'},
+  {key:'sleep',     name:'Sleep',      color:'var(--c-sleep)'},
+];
 
 /* flags & timers */
 let dragging = false;
@@ -315,7 +434,7 @@ document.querySelector('.controls').addEventListener('click', e=>{
   if(activeView===v){
     activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
     showScreensaver();
-    destroySelButtons(); destroyOverlay();
+    destroyActionButtons(); destroyOverlay();
     endDrag('nav');
     stopLensTimer(true);
   }else{
@@ -333,7 +452,7 @@ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot))
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* screensaver */
-function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono r94</div></div>`; }
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-95</div></div>`; }
 
 /* --- Week View --- */
 function buildWeekView(){
@@ -354,6 +473,7 @@ function buildWeekView(){
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="lensHost" id="lensHost"></div>
+          <div class="blockHost" id="blockHost"></div>
           <div class="selHost"  id="selHost"></div>
         </div>
         <div class="hours" id="weekHours"></div>
@@ -369,6 +489,7 @@ function buildWeekView(){
     stopLensTimer(true);      // hard clear before repaint to avoid flash
     visibleWeekFirst=addDays(visibleWeekFirst,-7);
     repaintWeek();
+    drawBlocks();
     drawSnake();
     startLensTimer();         // re-evaluate lens with new week
     saveSoon(120);
@@ -379,6 +500,7 @@ function buildWeekView(){
     stopLensTimer(true);
     visibleWeekFirst=addDays(visibleWeekFirst, 7);
     repaintWeek();
+    drawBlocks();
     drawSnake();
     startLensTimer();
     saveSoon(120);
@@ -391,8 +513,8 @@ function buildWeekView(){
   repaintWeek();
 
   // viewport sync
-  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); } }, 32);
-  new ResizeObserver(()=>{ repaintWeek(true); drawSnake(); repositionSelButtons(); updatePresentLens(true); }).observe(gridEl);
+  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); } }, 32);
+  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); }).observe(gridEl);
   window.addEventListener('scroll', sync, {passive:true});
   window.addEventListener('orientationchange', sync, {passive:true});
   if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
@@ -425,7 +547,7 @@ function repaintWeek(skipDraw=false){
   }
 
   buildMask(weekGeom,7);
-  if(!skipDraw) drawSnake();
+  if(!skipDraw){ drawBlocks(); drawSnake(); }
 
   updatePresentLens(true); // immediate check post-paint
 }
@@ -496,9 +618,9 @@ function onWeekGridTap(e){
   if(!weekGeom) return;
   if(now < dragBlockUntil) return; // small guard after drag to avoid tap-through
 
-  // ignore if starting on handles or floating buttons
+  // ignore if starting on handles, buttons, or a block
   const path = e.composedPath ? e.composedPath() : [];
-  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle')))) return;
+  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
 
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
@@ -514,56 +636,214 @@ function onWeekGridTap(e){
   snake = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
   saveSoon(120);
   drawSnake();
+  destroyActionButtons(); // new selection: show its buttons after draw
 }
 
-function segmentsForWeek(sel, visibleWeekStamp){
+/* Helper: convert selection/block into segments for current visible week */
+function segmentsForWeek(obj, visibleWeekStamp){
   const weekLen = WEEK_MIN;
-  const weekDiff = Math.round((visibleWeekStamp - sel.weekSt) / (7*DAY_MS));
+  const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS));
   const offsetMin = weekDiff * weekLen;
-  const start = sel.startAbs - offsetMin;
-  const end   = start + sel.dur;
+  const start = obj.startAbs - offsetMin;
+  const end   = start + obj.dur;
   const s = clamp(start, 0, weekLen);
   const e = clamp(end,   0, weekLen);
   return (e > s) ? [[s,e]] : [];
 }
 function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
-function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); }
 
-function drawSnake(){
-  const host=document.getElementById('selHost'); if(!host) { destroySelButtons(); return; }
+/* ============ BLOCKS ============ */
+function drawBlocks(){
+  const host=document.getElementById('blockHost'); if(!host) return;
+  host.innerHTML='';
   ensureOverlay();
 
-  host.innerHTML='';
-  clearSelectionOverlays();
+  const visSt=getVisibleWeekStamp();
+  for(const blk of blocks){
+    const segs = segmentsForWeek(blk, visSt);
+    for(const [segStartAbs, segEndAbs] of segs){
+      let s=segStartAbs;
+      while(s<segEndAbs){
+        const dayIdx=Math.floor(s/1440);
+        const dayStartAbs=dayIdx*1440;
+        const segStart=s;
+        const segEnd=Math.min(segEndAbs, dayStartAbs+1440);
 
-  if(!snake){ destroySelButtons(); return; }
-
-  const visSt = getVisibleWeekStamp();
-  const segs = segmentsForWeek(snake, visSt);
-  if(segs.length===0){ destroySelButtons(); return; }
-
-  const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
-  const endLocalMin   = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000;
-
-  for(const [segStartAbs, segEndAbs] of segs){
-    let s = segStartAbs;
-    while(s < segEndAbs){
-      const dayIdx = Math.floor(s / 1440);
-      const dayStartAbs = dayIdx*1440;
-      const segStart = s;
-      const segEnd   = Math.min(segEndAbs, dayStartAbs + 1440);
-
-      const showTopHere    = (startLocalMin >= segStart && startLocalMin < segEnd);
-      const showBottomHere = (endLocalMin   >  segStart && endLocalMin  <= segEnd);
-
-      drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs, showTopHere, showBottomHere);
-      s = segEnd;
+        drawBlockSegment(blk, dayIdx, segStart-dayStartAbs, segEnd-dayStartAbs);
+        s=segEnd;
+      }
     }
   }
+}
 
-  ensureSelButtons();
-  repositionSelButtons();
-  attachViewportRepositioners();
+function colorForCat(catKey){
+  const c = categories.find(c=>c.key===catKey);
+  return c? getComputedStyle(document.documentElement).getPropertyValue(c.color.startsWith('var(')? c.color.slice(4,-1): c.color) || c.color : '#bbb';
+}
+
+let selectedBlockId=null;
+function drawBlockSegment(blk, dayIdx, startMin, endMin){
+  const host=document.getElementById('blockHost');
+  const colLeft = weekGeom.colX[dayIdx];
+  const colRight= weekGeom.colX[dayIdx+1];
+  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  const rectEl=document.createElement('div');
+  rectEl.className='blk';
+  rectEl.style.left = `${colLeft}px`;
+  rectEl.style.top = `${topY}px`;
+  rectEl.style.width = `${colWidth}px`;
+  rectEl.style.height = `${height}px`;
+  rectEl.style.background = getCatColorValue(blk.catKey);
+  rectEl.dataset.id = blk.id;
+  rectEl.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height});
+  }, {passive:true});
+  host.appendChild(rectEl);
+
+  // If this segment belongs to selected block, paint outline overlay
+  if(selectedBlockId===blk.id){
+    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height);
+  }
+}
+function getCatColorValue(catKey){
+  const cat=categories.find(c=>c.key===catKey);
+  if(!cat) return '#bbb';
+  if(cat.color.startsWith('var(')) return getComputedStyle(document.documentElement).getPropertyValue(cat.color.slice(4,-1)) || '#bbb';
+  return cat.color;
+}
+function outlineRect(absLeft, absTop, w, h){
+  clearBlockOutline();
+  const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='blk-ov';
+  group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px';
+  overlayRoot.appendChild(group);
+
+  const ghost=document.createElement('div'); ghost.className='glow-ghost'; ghost.dataset.role='blk-ghost';
+  ghost.style.left = absLeft+'px'; ghost.style.top = absTop+'px'; ghost.style.width=w+'px'; ghost.style.height=h+'px';
+  overlayRoot.appendChild(ghost);
+
+  const outline=document.createElement('div'); outline.className='marqueeRect';
+  outline.style.position='absolute'; outline.style.inset='0';
+  group.appendChild(outline);
+}
+function clearBlockOutline(){
+  if(!overlayRoot) return;
+  overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
+}
+
+/* ============ ACTION BUTTONS (context-aware) ============ */
+function ensureActionButtons(context){ // context: 'selector' | 'block'
+  if(activeView!=='week') { destroyActionButtons(); return; }
+  if(window.__actionBtns && document.body.contains(window.__actionBtns)){ 
+    window.__actionBtns.dataset.ctx = context;
+    window.__actionBtns.classList.remove('selBtnHidden'); 
+    return; 
+  }
+
+  const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
+
+  // SETTINGS gear (new, replace tiny sun notion)
+  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
+  gear.innerHTML = gearSVG(); // gear icon
+  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
+  gear.addEventListener('click', (ev)=>{
+    ev.stopPropagation(); ev.preventDefault();
+    openSettingsSheet();
+  }, {passive:false});
+
+  // CLOSE X
+  const close = document.createElement('button'); close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Close');
+  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(close); }, {capture:true});
+  close.addEventListener('click', (ev)=>{
+    ev.stopPropagation(); ev.preventDefault();
+    if(selectedBlockId){ // deselect block
+      selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+    }else{
+      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
+    }
+  }, {passive:false});
+
+  wrap.appendChild(gear); wrap.appendChild(close);
+  document.body.appendChild(wrap);
+  window.__actionBtns = wrap;
+}
+function gearSVG(){
+  // single-gear icon in the style provided
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
+      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
+function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
+
+function selectionMidRect(){
+  if(selectedBlockId){ // center on selected block
+    const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
+    const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null;
+    const [s,e]=segs[0]; const mid=s+(e-s)/2;
+    const dayIdx=Math.floor(mid/1440), minInDay=mid-dayIdx*1440;
+    const yTop = minutesToY(Math.max(0, minInDay-30)), yBot = minutesToY(Math.min(1440, minInDay+30));
+    const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+    const width = weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+    const top = weekGeom.rect.top + yTop, height=Math.max(1, yBot-yTop);
+    return new DOMRect(left, top, width, height);
+  }
+  if(!snake || !weekGeom) return null;
+  const visSt = getVisibleWeekStamp();
+  const segs = segmentsForWeek(snake, visSt);
+  if(segs.length===0) return null;
+  const [segStartAbs, segEndAbs] = segs[0];
+  const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
+
+  const dayIdx = Math.floor(midAbs/1440);
+  const minInDay = midAbs - dayIdx*1440;
+  const yTop = minutesToY(Math.max(0, minInDay-30));
+  const yBot = minutesToY(Math.min(1440, minInDay+30));
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
+  const top = weekGeom.rect.top + yTop;
+  const height = Math.max(1, yBot - yTop);
+  return new DOMRect(left, top, width, height);
+}
+
+function repositionActionButtons(){
+  const pair = window.__actionBtns; if(!pair){ return; }
+  const r = selectionMidRect();
+  if(!r){ hideActionButtons(); return; }
+  pair.classList.remove('selBtnHidden');
+
+  const margin=8, btnW=44, totalH=(44*2)+8;
+
+  let preferRight = (window.innerWidth - r.right) >= r.left;
+  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
+  if(left < margin){ left = r.right + margin; }
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
+
+  let top  = r.top + (r.height/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
+  if(top < margin) top = margin;
+
+  pair.style.left = `${Math.round(left)}px`;
+  pair.style.top  = `${Math.round(top)}px`;
+}
+
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ repositionActionButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
 }
 
 /* drag */
@@ -637,6 +917,44 @@ function endDrag(reason, ev){
 }
 
 /* selection segment painter */
+function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); }
+function drawSnake(){
+  const host=document.getElementById('selHost'); if(!host) { destroyActionButtons(); return; }
+  ensureOverlay();
+
+  host.innerHTML='';
+  clearSelectionOverlays();
+
+  if(!snake){ if(!selectedBlockId) destroyActionButtons(); return; }
+
+  const visSt = getVisibleWeekStamp();
+  const segs = segmentsForWeek(snake, visSt);
+  if(segs.length===0){ destroyActionButtons(); return; }
+
+  const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
+  const endLocalMin   = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000;
+
+  for(const [segStartAbs, segEndAbs] of segs){
+    let s = segStartAbs;
+    while(s < segEndAbs){
+      const dayIdx = Math.floor(s / 1440);
+      const dayStartAbs = dayIdx*1440;
+      const segStart = s;
+      const segEnd   = Math.min(segEndAbs, dayStartAbs + 1440);
+
+      const showTopHere    = (startLocalMin >= segStart && startLocalMin < segEnd);
+      const showBottomHere = (endLocalMin   >  segStart && endLocalMin  <= segEnd);
+
+      drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs, showTopHere, showBottomHere);
+      s = segEnd;
+    }
+  }
+
+  ensureActionButtons('selector');
+  repositionActionButtons();
+  attachViewportRepositioners();
+}
+
 function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   const host=document.getElementById('selHost');
   const colLeft = weekGeom.colX[dayIdx];
@@ -731,130 +1049,195 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* Floating buttons for selection */
-function ensureSelButtons(){
-  if(activeView!=='week') { destroySelButtons(); return; }
-  if(window.__selBtns && document.body.contains(window.__selBtns)){ window.__selBtns.classList.remove('selBtnHidden'); return; }
-
-  const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='selBtns';
-
-  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
-  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="3.5" />
-    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
-  </svg>`;
-  gear.querySelectorAll('circle,path').forEach(n=>{ n.setAttribute('fill','none'); n.setAttribute('stroke','currentColor'); n.setAttribute('stroke-width','1.35'); n.setAttribute('stroke-linecap','round'); n.setAttribute('stroke-linejoin','round'); });
-  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
-  gear.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); openSettingsModal(ev); }, {passive:false});
-
-  const close = document.createElement('button'); close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Clear selection');
-  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none"/></svg>`;
-  close.querySelector('path').setAttribute('stroke','currentColor');
-  close.querySelector('path').setAttribute('stroke-width','1.6');
-  close.querySelector('path').setAttribute('stroke-linecap','round');
-  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(close); }, {capture:true});
-  close.addEventListener('click', async (ev)=>{
-    ev.stopPropagation(); ev.preventDefault(); pulseSm(close);
-    endDrag('close');
-    snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons();
-  }, {passive:false});
-
-  wrap.appendChild(gear); wrap.appendChild(close);
-  document.body.appendChild(wrap);
-  window.__selBtns = wrap;
-}
-function pulseSm(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
-function destroySelButtons(){ if(window.__selBtns){ window.__selBtns.remove(); window.__selBtns=null; } }
-function hideSelButtons(){ if(window.__selBtns) window.__selBtns.classList.add('selBtnHidden'); }
-
-function selectionMidRect(){
-  if(!snake || !weekGeom) return null;
-  const visSt = getVisibleWeekStamp();
-  const segs = segmentsForWeek(snake, visSt);
-  if(segs.length===0) return null;
-  const [segStartAbs, segEndAbs] = segs[0];
-  const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
-
-  const dayIdx = Math.floor(midAbs/1440);
-  const minInDay = midAbs - dayIdx*1440;
-  const yTop = minutesToY(Math.max(0, minInDay-30));
-  const yBot = minutesToY(Math.min(1440, minInDay+30));
-
-  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
-  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
-  const top = weekGeom.rect.top + yTop;
-  const height = Math.max(1, yBot - yTop);
-  return new DOMRect(left, top, width, height);
-}
-
-function repositionSelButtons(){
-  const pair = window.__selBtns; if(!pair){ return; }
-  const r = selectionMidRect();
-  if(!r){ hideSelButtons(); return; }
-  pair.classList.remove('selBtnHidden');
-
-  const margin=8, btnW=44, totalH=(44*2)+8;
-
-  let preferRight = (window.innerWidth - r.right) >= r.left;
-  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
-  if(left < margin){ left = r.right + margin; }
-  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
-
-  let top  = r.top + (r.height/2) - (totalH/2);
-  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
-  if(top < margin) top = margin;
-
-  pair.style.left = `${Math.round(left)}px`;
-  pair.style.top  = `${Math.round(top)}px`;
-}
-
-let _vpAttached=false;
-function attachViewportRepositioners(){
-  if(_vpAttached) return;
-  _vpAttached=true;
-  const handler = throttle(()=>{ repositionSelButtons(); }, 16);
-  window.addEventListener('scroll', handler, {passive:true});
-  window.addEventListener('resize', handler, {passive:true});
-  window.addEventListener('orientationchange', handler, {passive:true});
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
-}
-
-/* settings modal (stub) */
-function openSettingsModal(ev){
-  ev?.stopPropagation?.();
-  endDrag('modal');
-  const veil = document.createElement('div'); veil.className='veil';
-  const modal = document.createElement('div'); modal.className='modal';
-
-  const startAbs = snake? snake.startAbs : 0;
-  const endAbs   = snake? snake.startAbs + snake.dur : 0;
-  const sStartD = Math.floor(((startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN/1440), sStartM = ((startAbs%1440)+1440)%1440;
-  const sEndD   = Math.floor((((endAbs)%WEEK_MIN)+WEEK_MIN)%WEEK_MIN/1440),   sEndM   = ((endAbs%1440)+1440)%1440;
-
-  modal.innerHTML = `
-    <div class="head">Selection Settings</div>
-    <div class="body">
-      <div><strong>Start:</strong> <span>${SHORT_DOW[sStartD]} ${HHMM(sStartM)}</span></div>
-      <div><strong>End:</strong> <span>${SHORT_DOW[sEndD]} ${HHMM(sEndM)}</span></div>
-      <div><strong>Duration:</strong> <span>${snake? snake.dur:0} min</span></div>
-      <div style="opacity:.7"><em>UI coming later — placeholder only.</em></div>
+/* ============ SETTINGS SHEET ============ */
+let sheetCtx=null; // { mode:'selection'|'block', blkId|null, catKey|null }
+function openSettingsSheet(fromBlockId=null){
+  sheetCtx = selectedBlockId ? {mode:'block', blkId:selectedBlockId} : (fromBlockId? {mode:'block', blkId:fromBlockId} : {mode:'selection', blkId:null});
+  const veil=document.createElement('div'); veil.className='sheet-veil'; veil.addEventListener('click', closeSheet);
+  const sheet=document.createElement('div'); sheet.className='sheet'; sheet.innerHTML = `
+    <div class="sheet-head">Settings</div>
+    <div class="sheet-sub">
+      <div class="pill" id="currentCatPill">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="dot" id="currentDot"></span>
+          <span id="currentName" style="font-weight:800"></span>
+        </div>
+        <button class="icon-btn" id="toggleList" aria-label="Choose category">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="foot">
-      <button class="btn warn" id="clearBtn">Clear</button>
-      <button class="btn" id="closeBtn">Close</button>
+    <div class="dropdown" id="dropdownArea" style="display:none;">
+      <div class="dropdown-list" id="ddList"></div>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+    <div class="sheet-foot">
+      <button class="btn btn-warn" id="btnDelete">Delete</button>
+      <button class="btn" id="btnExit">Exit</button>
+      <button class="btn btn-primary" id="btnSave">Save</button>
     </div>
   `;
-  const closeAll=()=>{ veil.remove(); modal.remove(); };
 
-  modal.querySelector('#closeBtn').onclick = closeAll;
-  modal.querySelector('#clearBtn').onclick = async ()=>{
-    endDrag('close');
-    snake=null; await storageSet(SEL_KEY,null); drawSnake(); destroySelButtons(); closeAll();
+  document.body.appendChild(veil); document.body.appendChild(sheet);
+
+  // init current cat
+  let initialCatKey = categories[0].key;
+  if(sheetCtx.mode==='block'){
+    const blk=blocks.find(b=>b.id===sheetCtx.blkId); if(blk) initialCatKey=blk.catKey;
+  }
+  sheetCtx.catKey = initialCatKey;
+  updateCurrentCatPill();
+
+  // Build list with totals + pencil editing
+  renderDropdownList();
+
+  // handlers
+  sheet.querySelector('#toggleList').onclick = ()=>{
+    const area=document.getElementById('dropdownArea'); area.style.display = (area.style.display==='none')?'block':'none';
   };
+  sheet.querySelector('#btnExit').onclick = ()=>{ closeSheet(); };
+  sheet.querySelector('#btnSave').onclick = ()=>{ onSheetSave(); };
+  sheet.querySelector('#btnDelete').onclick = ()=>{ onSheetDelete(); };
 
-  veil.addEventListener('click', closeAll);
-  document.body.appendChild(veil); document.body.appendChild(modal);
+  // Prevent clicks inside sheet from closing
+  sheet.addEventListener('click', e=>e.stopPropagation());
+
+  // preload body with hint
+  document.getElementById('sheetBody').innerHTML = `<div style="opacity:.8; font-weight:700;">Choose or rename an activity above, then Save.</div>`;
+
+  function updateCurrentCatPill(){
+    const cat=categories.find(c=>c.key===sheetCtx.catKey);
+    const dot=document.getElementById('currentDot'); dot.style.background = getCatColorValue(cat.key);
+    document.getElementById('currentName').textContent = cat.name;
+  }
+
+  function renderDropdownList(){
+    const dd=document.getElementById('ddList'); dd.innerHTML='';
+    const totals = computeWeekTotals(getVisibleWeekStamp());
+
+    for(const cat of categories){
+      const row=document.createElement('div'); row.className='row'; row.dataset.key=cat.key;
+
+      const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='10px';
+      const dot=document.createElement('span'); dot.className='dot'; dot.style.background=getCatColorValue(cat.key);
+      const nameSpan=document.createElement('span'); nameSpan.className='name'; nameSpan.textContent=cat.name;
+      left.appendChild(dot); left.appendChild(nameSpan);
+
+      const amt=document.createElement('div'); amt.className='amt'; 
+      const minutes = totals[cat.key]||0; const h=Math.floor(minutes/60), m=minutes%60; amt.textContent=`${h}h ${m}m`;
+
+      const pen=document.createElement('button'); pen.className='icon-btn'; pen.innerHTML=pencilSVG();
+      pen.title='Rename';
+      pen.addEventListener('click', (e)=>{ e.stopPropagation(); beginInlineEdit(row, cat, nameSpan, amt, pen); });
+
+      row.appendChild(left); row.appendChild(amt); row.appendChild(pen);
+
+      row.addEventListener('click', ()=>{ sheetCtx.catKey=cat.key; updateCurrentCatPill(); document.getElementById('dropdownArea').style.display='none'; });
+
+      dd.appendChild(row);
+    }
+  }
+
+  function beginInlineEdit(row, cat, nameNode, amtNode, penBtn){
+    // Replace nameNode+pen with input + check + x
+    const parent = nameNode.parentElement;
+    const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
+    parent.replaceChild(input, nameNode);
+
+    const saveBtn=document.createElement('button'); saveBtn.className='icon-btn'; saveBtn.innerHTML=checkSVG(); saveBtn.title='Save name';
+    const cancelBtn=document.createElement('button'); cancelBtn.className='icon-btn'; cancelBtn.innerHTML=crossSVG(); cancelBtn.title='Cancel';
+    penBtn.replaceWith(saveBtn);
+    row.appendChild(cancelBtn);
+
+    const commit=()=>{
+      const newName=input.value.trim();
+      if(!newName){ toast('Name cannot be blank'); return; }
+      if(newName===cat.name){ rollback(); return; }
+      if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
+        toast('Name already exists, try again.');
+        input.focus(); return;
+      }
+      cat.name=newName;
+      persistCategories();
+      // reflect everywhere
+      renderDropdownList();
+      updateCurrentCatPill();
+    };
+    const rollback=()=>{ renderDropdownList(); };
+
+    saveBtn.onclick=(e)=>{ e.stopPropagation(); commit(); };
+    cancelBtn.onclick=(e)=>{ e.stopPropagation(); rollback(); };
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } if(e.key==='Escape'){ e.preventDefault(); rollback(); }});
+    setTimeout(()=>input.focus(),0);
+  }
 }
+
+function closeSheet(){
+  document.querySelector('.sheet-veil')?.remove();
+  document.querySelector('.sheet')?.remove();
+  sheetCtx=null;
+}
+
+function onSheetSave(){
+  if(!sheetCtx) return;
+  const catKey=sheetCtx.catKey || categories[0].key;
+
+  if(sheetCtx.mode==='selection'){
+    if(!snake) { closeSheet(); return; }
+    // convert selection to block
+    const blk={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:snake.weekSt, startAbs:snake.startAbs, dur:snake.dur, catKey };
+    blocks.push(blk);
+    persistBlocks();
+    snake=null; storageSet(SEL_KEY,null);
+    drawSnake(); destroyActionButtons();
+    selectedBlockId=null; clearBlockOutline();
+    drawBlocks();
+  }else{
+    // update block category
+    const blk=blocks.find(b=>b.id===sheetCtx.blkId);
+    if(blk){ blk.catKey=catKey; persistBlocks(); drawBlocks(); }
+  }
+  closeSheet();
+}
+
+function onSheetDelete(){
+  if(!sheetCtx) return;
+  if(sheetCtx.mode==='selection'){
+    // clear selection settings (no block exists yet)
+    snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons(); closeSheet();
+    return;
+  }
+  // confirm & delete block
+  if(confirm('Delete this block?')){
+    const idx=blocks.findIndex(b=>b.id===sheetCtx.blkId);
+    if(idx>=0){ blocks.splice(idx,1); persistBlocks(); selectedBlockId=null; clearBlockOutline(); destroyActionButtons(); drawBlocks(); }
+    closeSheet();
+  }
+}
+
+/* Totals (visible week) */
+function computeWeekTotals(visSt){
+  const totals={};
+  for(const blk of blocks){
+    const segs=segmentsForWeek(blk, visSt);
+    for(const [sa,ea] of segs){
+      const mins = Math.max(0, ea-sa);
+      totals[blk.catKey]=(totals[blk.catKey]||0)+mins;
+    }
+  }
+  return totals;
+}
+
+/* Block selection */
+function selectBlock(id, rect){
+  selectedBlockId=id;
+  outlineRect(rect.x, rect.y, rect.w, rect.h);
+  ensureActionButtons('block');
+  repositionActionButtons();
+}
+
+/* Floating buttons helpers */
+function pulseSm(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
 
 /* throttle */
 function throttle(fn, ms){
@@ -869,15 +1252,21 @@ function throttle(fn, ms){
 
 /* save/load */
 function snapshotState(){ return { activeView, visibleWeekFirst:+weekStart(new Date()) }; }
-async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); }
+async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); await persistBlocks(); await persistCategories(); }
 let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
 
-/* ---------------- PRESENT LENS ----------------
-   - Exists only when current time is within the visible week's [start, end).
-   - 60-minute frame aligned to nearest 15-min slot.
-   - Refresh cadence: every 5 minutes (aligned to next 5-min boundary).
-   - Independent of selector; uses a session guard to prevent stale updates.
------------------------------------------------- */
+async function persistBlocks(){ await storageSet(BLK_KEY, blocks); }
+async function loadBlocks(){ const v=await storageGet(BLK_KEY); if(Array.isArray(v)) blocks=v; }
+async function persistCategories(){ await storageSet(CAT_KEY, categories); }
+async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ 
+  // keep colors from current mapping; only names are user-editable
+  for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } }
+ }}
+
+/* ---------------- PRESENT LENS (from r94, unchanged) ---------------- */
+let presentLensEl=null, presentLensGhost=null;
+let lensIntervalId=null, lensAlignTimeout=null;
+let lensSessionId=null;
 function hardClearPresentLens(){
   const lensHost = document.getElementById('lensHost');
   if(lensHost) lensHost.innerHTML='';
@@ -970,12 +1359,20 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   presentLensGhost.style.height = height + 'px';
 }
 
+/* === Toast === */
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
 /* init/render */
 async function init(){
   try{
     visibleWeekFirst = weekStart(new Date());
-    const savedSel = await storageGet(SEL_KEY);
-    if(savedSel && typeof savedSel==='object'){ snake = savedSel; }
+    const savedSel = await storageGet(SEL_KEY); if(savedSel && typeof savedSel==='object'){ snake = savedSel; }
+    await loadBlocks();
+    await loadCategories();
   }catch{}
   render();
   document.addEventListener('visibilitychange', ()=>{
@@ -995,16 +1392,21 @@ function render(){
     screenEl.textContent=''; screenEl.innerHTML='';
     screenEl.style.display='grid'; screenEl.style.placeItems='center';
     screenEl.textContent='';
-    destroySelButtons(); destroyOverlay();
+    destroyActionButtons(); destroyOverlay();
     endDrag('nav');
     stopLensTimer(true);
   } else {
     showScreensaver();
-    destroySelButtons(); destroyOverlay();
+    destroyActionButtons(); destroyOverlay();
     endDrag('nav');
     stopLensTimer(true);
   }
 }
+
+/* Helpers for inline SVGs */
+function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
+function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function crossSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`; }
 
 init();
 </script>
@@ -1022,4 +1424,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- r94 EOF -->
+<!-- W-95 EOF -->
