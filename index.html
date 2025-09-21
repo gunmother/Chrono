@@ -1,4 +1,4 @@
-<!-- W-98 START -->
+<!-- W-98 START (full build) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -255,7 +255,7 @@
   .ghost.valid{ background:#00c853; }    /* green */
   .ghost.invalid{ background:#ff5252; }  /* red */
 
-  /* Toast (kept off for now) */
+  /* Toast (placeholder; not used) */
   .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#1c2a36; color:#fff; font-weight:800;
     padding:10px 14px; border-radius:12px; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
   }
@@ -318,7 +318,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-98 — block drag/copy ghost; single-active-mode; exclusivity maintained */
+/* Chrono W-98 — full build */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -341,7 +341,7 @@ function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=43;
+const DB_NAME='chronoDB', DB_VERSION=44;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -418,29 +418,34 @@ let dragBlockUntil=0;
 let ghost = null; // {mode:'drag'|'copy', srcBlockId, startAbs, dur, valid}
 let dragModeActive=false, copyModeActive=false;
 
-/* controls */
-document.querySelector('.controls').addEventListener('click', e=>{
-  const b=e.target.closest('.neu-btn'); if(!b) return;
-  const v=b.dataset.view;
+/* ===== NAV BUTTONS (robust per-button binding) ===== */
+buttons.forEach(btn=>{
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const v = btn.dataset.view;
 
-  const wasPressed = b.classList.contains('is-pressed');
-  buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
-  if(!wasPressed){ b.classList.add('is-pressed'); b.setAttribute('aria-pressed','true'); }
+    const wasPressed = btn.classList.contains('is-pressed');
+    buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
 
-  if(activeView===v){
-    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
-    showScreensaver();
-    destroyActionButtons(); destroyOverlay();
-    endDrag('nav');
-    stopLensTimer(true);
-  }else{
-    const switchingToWeek = (v==='week' && activeView!=='week');
-    activeView=v;
-    if(switchingToWeek){ visibleWeekFirst = weekStart(new Date()); }
-    endDrag('nav');
-    render();
-  }
-  saveSoon(120);
+    if(!wasPressed){ btn.classList.add('is-pressed'); btn.setAttribute('aria-pressed','true'); }
+
+    if(activeView === v){
+      activeView = null;
+      buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+      showScreensaver();
+      destroyActionButtons(); destroyOverlay();
+      endDrag('nav');
+      stopLensTimer(true);
+    } else {
+      const switchingToWeek = (v === 'week' && activeView !== 'week');
+      activeView = v;
+      if(switchingToWeek){ visibleWeekFirst = weekStart(new Date()); }
+      endDrag('nav');
+      render();
+    }
+    saveSoon(120);
+  }, {passive:false});
 });
 
 /* overlay */
@@ -604,7 +609,17 @@ function buildMask(geom, cols){
   }
 }
 
-/* --- Utility for overlap checks (minutes in visible week [0,10080)) --- */
+/* --- overlap utilities --- */
+function segmentsForWeek(obj, visibleWeekStamp){
+  const weekLen = WEEK_MIN;
+  const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS));
+  const offsetMin = weekDiff * weekLen;
+  const start = obj.startAbs - offsetMin;
+  const end   = start + obj.dur;
+  const s = clamp(start, 0, weekLen);
+  const e = clamp(end,   0, weekLen);
+  return (e > s) ? [[s,e]] : [];
+}
 function eachSegmentsInWeek(obj, cb){
   const segs = segmentsForWeek(obj, getVisibleWeekStamp());
   for(const [absS, absE] of segs){
@@ -661,12 +676,14 @@ function nearestEdgesAround(startAbs, dur, side){
 }
 
 /* --- selector creation --- */
+let selectedBlockId=null;
+
 function onWeekGridTap(e){
   const now = Date.now();
   if(!weekGeom) return;
   if(now < dragBlockUntil) return;
 
-  // Mutual exclusivity: ignore if a block is selected OR ghost active
+  // exclusivity: cannot create selector if block selected or ghost active
   if(selectedBlockId || dragModeActive || copyModeActive) return;
 
   const path = e.composedPath ? e.composedPath() : [];
@@ -685,7 +702,7 @@ function onWeekGridTap(e){
 
   const candidate = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
   if(anyOverlapWithBlocks(candidate)){
-    return;
+    return; // selector cannot overlap blocks
   }
 
   snake = candidate;
@@ -695,225 +712,9 @@ function onWeekGridTap(e){
   repositionActionButtons();
 }
 
-/* shared helpers */
-function segmentsForWeek(obj, visibleWeekStamp){
-  const weekLen = WEEK_MIN;
-  const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS));
-  const offsetMin = weekDiff * weekLen;
-  const start = obj.startAbs - offsetMin;
-  const end   = start + obj.dur;
-  const s = clamp(start, 0, weekLen);
-  const e = clamp(end,   0, weekLen);
-  return (e > s) ? [[s,e]] : [];
-}
-function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
-
-/* ============ BLOCKS ============ */
-function drawBlocks(){
-  const host=document.getElementById('blockHost'); if(!host) return;
-  host.innerHTML='';
-  ensureOverlay();
-
-  const visSt=getVisibleWeekStamp();
-  for(const blk of blocks){
-    const segs = segmentsForWeek(blk, visSt);
-    for(const [segStartAbs, segEndAbs] of segs){
-      let s=segStartAbs;
-      while(s<segEndAbs){
-        const dayIdx=Math.floor(s/1440);
-        const dayStartAbs=dayIdx*1440;
-        const segStart=s;
-        const segEnd=Math.min(segEndAbs, dayStartAbs+1440);
-
-        drawBlockSegment(blk, dayIdx, segStart-dayStartAbs, segEnd-dayStartAbs);
-        s=segEnd;
-      }
-    }
-  }
-}
-
-let selectedBlockId=null;
-function drawBlockSegment(blk, dayIdx, startMin, endMin){
-  const host=document.getElementById('blockHost');
-  const colLeft = weekGeom.colX[dayIdx];
-  const colRight= weekGeom.colX[dayIdx+1];
-  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
-  const topY  = minutesToY(startMin);
-  const botY  = minutesToY(endMin);
-  const height= Math.max(1, botY - topY);
-
-  const rectEl=document.createElement('div');
-  rectEl.className='blk';
-  rectEl.style.left = `${colLeft}px`;
-  rectEl.style.top = `${topY}px`;
-  rectEl.style.width = `${colWidth}px`;
-  rectEl.style.height = `${height}px`;
-  rectEl.style.background = getCatColorValue(blk.catKey);
-  rectEl.dataset.id = blk.id;
-  rectEl.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    if(snake || dragModeActive || copyModeActive) return; // exclusivity
-    selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height});
-  }, {passive:true});
-  host.appendChild(rectEl);
-
-  if(selectedBlockId===blk.id){
-    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height);
-  }
-}
-function getCatColorValue(catKey){
-  const cat=categories.find(c=>c.key===catKey);
-  if(!cat) return '#bbb';
-  if(cat.color.startsWith('var(')) return getComputedStyle(document.documentElement).getPropertyValue(cat.color.slice(4,-1)) || '#bbb';
-  return cat.color;
-}
-function outlineRect(absLeft, absTop, w, h){
-  clearBlockOutline();
-  const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='blk-ov';
-  group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px';
-  overlayRoot.appendChild(group);
-
-  const ghostGlow=document.createElement('div'); ghostGlow.className='glow-ghost'; ghostGlow.dataset.role='blk-ghost';
-  ghostGlow.style.left = absLeft+'px'; ghostGlow.style.top = absTop+'px'; ghostGlow.style.width=w+'px'; ghostGlow.style.height=h+'px';
-  overlayRoot.appendChild(ghostGlow);
-
-  const outline=document.createElement('div'); outline.className='marqueeRect';
-  outline.style.position='absolute'; outline.style.inset='0';
-  group.appendChild(outline);
-
-  ensureActionButtons('block');
-  repositionActionButtons();
-}
-function clearBlockOutline(){
-  if(!overlayRoot) return;
-  overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
-}
-
-/* ============ ACTION BUTTONS (selector vs block) ============ */
-function ensureActionButtons(context){
-  if(activeView!=='week') { destroyActionButtons(); return; }
-  if(window.__actionBtns && document.body.contains(window.__actionBtns)){
-    window.__actionBtns.dataset.ctx = context;
-    renderActionButtons(); // ensure proper set/layout
-    window.__actionBtns.classList.remove('selBtnHidden');
-    repositionActionButtons();
-    return;
-  }
-  const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
-  document.body.appendChild(wrap);
-  window.__actionBtns = wrap;
-  renderActionButtons();
-  repositionActionButtons();
-  attachViewportRepositioners();
-}
-function renderActionButtons(){
-  const wrap=window.__actionBtns; if(!wrap) return;
-  const ctx=wrap.dataset.ctx;
-  wrap.innerHTML='';
-
-  // Helper to make a small btn
-  const mk=(label, svg, onClick, isActive=false)=>{
-    const b=document.createElement('button'); b.className='neu-btn--sm'; b.setAttribute('aria-label', label);
-    b.innerHTML=svg;
-    if(isActive){ b.classList.add('ack'); } // reuse ack styling for active look
-    b.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(b); }, {capture:true});
-    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); onClick?.(b); }, {passive:false});
-    return b;
-  };
-
-  if(ctx==='block'){
-    // Order: Drag, Copy, Settings, X (top to bottom, single column)
-    const dragBtn = mk('Drag', arrowsSVG(), ()=>{
-      toggleDragMode();
-    }, dragModeActive);
-    const copyBtn = mk('Copy', copySVG(), ()=>{
-      toggleCopyMode();
-    }, copyModeActive);
-    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
-    const closeBtn= mk('Close', xSVG(), ()=>{
-      deselectBlock();
-    });
-    wrap.appendChild(dragBtn);
-    wrap.appendChild(copyBtn);
-    wrap.appendChild(gearBtn);
-    wrap.appendChild(closeBtn);
-  }else{
-    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
-    const closeBtn= mk('Close', xSVG(), ()=>{
-      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
-    });
-    wrap.appendChild(gearBtn);
-    wrap.appendChild(closeBtn);
-  }
-}
-function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
-function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
-
-function selectionMidRect(){
-  if(selectedBlockId){
-    const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
-    const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null;
-    const [s,e]=segs[0]; const mid=s+(e-s)/2;
-    const dayIdx=Math.floor(mid/1440), minInDay=mid-dayIdx*1440;
-    const yTop = minutesToY(Math.max(0, minInDay-30)), yBot = minutesToY(Math.min(1440, minInDay+30));
-    const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
-    const width = weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
-    const top = weekGeom.rect.top + yTop, height=Math.max(1, yBot-yTop);
-    return new DOMRect(left, top, width, height);
-  }
-  if(!snake || !weekGeom) return null;
-  const visSt = getVisibleWeekStamp();
-  const segs = segmentsForWeek(snake, visSt);
-  if(segs.length===0) return null;
-  const [segStartAbs, segEndAbs] = segs[0];
-  const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
-
-  const dayIdx = Math.floor(midAbs/1440);
-  const minInDay = midAbs - dayIdx*1440;
-  const yTop = minutesToY(Math.max(0, minInDay-30));
-  const yBot = minutesToY(Math.min(1440, minInDay+30));
-
-  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
-  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
-  const top = weekGeom.rect.top + yTop;
-  const height = Math.max(1, yBot - yTop);
-  return new DOMRect(left, top, width, height);
-}
-
-function repositionActionButtons(){
-  const pair = window.__actionBtns; if(!pair){ return; }
-  const r = selectionMidRect();
-  if(!r){ hideActionButtons(); return; }
-  pair.classList.remove('selBtnHidden');
-
-  const margin=8, btnW=44, totalH=(44* (pair.childElementCount||2)) + (8*((pair.childElementCount||2)-1));
-
-  let preferRight = (window.innerWidth - r.right) >= r.left;
-  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
-  if(left < margin){ left = r.right + margin; }
-  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
-
-  let top  = r.top + (r.height/2) - (totalH/2);
-  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
-  if(top < margin) top = margin;
-
-  pair.style.left = `${Math.round(left)}px`;
-  pair.style.top  = `${Math.round(top)}px`;
-}
-
-let _vpAttached=false;
-function attachViewportRepositioners(){
-  if(_vpAttached) return;
-  _vpAttached=true;
-  const handler = throttle(()=>{ repositionActionButtons(); }, 16);
-  window.addEventListener('scroll', handler, {passive:true});
-  window.addEventListener('resize', handler, {passive:true});
-  window.addEventListener('orientationchange', handler, {passive:true});
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
-}
-
-/* drag for selector (existing) */
+/* selector drag */
 let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0;
+
 function startSnakeDrag(ev, side){
   if(!snake) return;
   ev.preventDefault(); ev.stopPropagation();
@@ -960,7 +761,7 @@ function startSnakeDrag(ev, side){
 
     const candidate={weekSt:snake.weekSt, startAbs:newStart, dur:newDur};
     if(anyOverlapWithBlocks(candidate)){
-      return;
+      return; // never overlap existing blocks
     }
 
     snake.startAbs = newStart;
@@ -1041,6 +842,7 @@ function drawSnake(){
   ensureActionButtons('selector');
   repositionActionButtons();
 }
+function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
 
 function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   const host=document.getElementById('selHost');
@@ -1067,13 +869,13 @@ function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
   group.style.height= height + 'px';
   overlayRoot.appendChild(group);
 
-  const ghost=document.createElement('div');
-  ghost.className='glow-ghost'; ghost.dataset.role='sel-ghost';
-  ghost.style.left = (weekGeom.rect.left + colLeft) + 'px';
-  ghost.style.top  = (weekGeom.rect.top  + topY) + 'px';
-  ghost.style.width  = colWidth + 'px';
-  ghost.style.height = height + 'px';
-  overlayRoot.appendChild(ghost);
+  const glow=document.createElement('div');
+  glow.className='glow-ghost'; glow.dataset.role='sel-ghost';
+  glow.style.left = (weekGeom.rect.left + colLeft) + 'px';
+  glow.style.top  = (weekGeom.rect.top  + topY) + 'px';
+  glow.style.width  = colWidth + 'px';
+  glow.style.height = height + 'px';
+  overlayRoot.appendChild(glow);
 
   const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12;
   const borderW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--marquee-border'))||5;
@@ -1114,7 +916,6 @@ function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
     group.appendChild(botHandle);
   }
 }
-
 function chevronsSVG(dir, colW, rowH){
   const padX = 8;
   const w = Math.max(28, colW - padX*2);
@@ -1122,21 +923,222 @@ function chevronsSVG(dir, colW, rowH){
   const mid = w/2;
   const gap = h/6;
   const span = Math.min(w*0.42, h/4);
-
   const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
   const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
   const d1 = (dir==='up'? up(gap) : dn(gap));
   const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
   const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
-
-  return `<div class="chev">
-    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
-      <path d="${d1}"/><path d="${d2}"/><path d="${d3}"/>
-    </svg>
-  </div>`;
+  return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
 }
 
-/* ============ SETTINGS SHEET (unchanged UX) ============ */
+/* ============ BLOCKS ============ */
+function drawBlocks(){
+  const host=document.getElementById('blockHost'); if(!host) return;
+  host.innerHTML='';
+  ensureOverlay();
+
+  const visSt=getVisibleWeekStamp();
+  for(const blk of blocks){
+    const segs = segmentsForWeek(blk, visSt);
+    for(const [segStartAbs, segEndAbs] of segs){
+      let s=segStartAbs;
+      while(s<segEndAbs){
+        const dayIdx=Math.floor(s/1440);
+        const dayStartAbs=dayIdx*1440;
+        const segStart=s;
+        const segEnd=Math.min(segEndAbs, dayStartAbs+1440);
+
+        drawBlockSegment(blk, dayIdx, segStart-dayStartAbs, segEnd-dayStartAbs);
+        s=segEnd;
+      }
+    }
+  }
+}
+function getCatColorValue(catKey){
+  const cat=categories.find(c=>c.key===catKey);
+  if(!cat) return '#bbb';
+  if(cat.color.startsWith('var(')) return getComputedStyle(document.documentElement).getPropertyValue(cat.color.slice(4,-1)) || '#bbb';
+  return cat.color;
+}
+function drawBlockSegment(blk, dayIdx, startMin, endMin){
+  const host=document.getElementById('blockHost');
+  const colLeft = weekGeom.colX[dayIdx];
+  const colRight= weekGeom.colX[dayIdx+1];
+  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  const rectEl=document.createElement('div');
+  rectEl.className='blk';
+  rectEl.style.left = `${colLeft}px`;
+  rectEl.style.top = `${topY}px`;
+  rectEl.style.width = `${colWidth}px`;
+  rectEl.style.height = `${height}px`;
+  rectEl.style.background = getCatColorValue(blk.catKey);
+  rectEl.dataset.id = blk.id;
+  rectEl.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(snake || dragModeActive || copyModeActive) return; // exclusivity
+    selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height});
+  }, {passive:true});
+  host.appendChild(rectEl);
+
+  if(selectedBlockId===blk.id){
+    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height);
+  }
+}
+function outlineRect(absLeft, absTop, w, h){
+  clearBlockOutline();
+  const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='blk-ov';
+  group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px';
+  overlayRoot.appendChild(group);
+
+  const ghostGlow=document.createElement('div'); ghostGlow.className='glow-ghost'; ghostGlow.dataset.role='blk-ghost';
+  ghostGlow.style.left = absLeft+'px'; ghostGlow.style.top = absTop+'px'; ghostGlow.style.width=w+'px'; ghostGlow.style.height=h+'px';
+  overlayRoot.appendChild(ghostGlow);
+
+  const outline=document.createElement('div'); outline.className='marqueeRect';
+  outline.style.position='absolute'; outline.style.inset='0';
+  group.appendChild(outline);
+
+  ensureActionButtons('block');
+  repositionActionButtons();
+}
+function clearBlockOutline(){
+  if(!overlayRoot) return;
+  overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
+}
+function selectBlock(id, rect){
+  selectedBlockId=id;
+  outlineRect(rect.x, rect.y, rect.w, rect.h);
+}
+
+/* Deselect block helper */
+function deselectBlock(){
+  if(dragModeActive || copyModeActive) { deactivateModes(); }
+  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+}
+
+/* clear state helper */
+function clearSelectionState(){
+  if(dragModeActive || copyModeActive){ deactivateModes(); }
+  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+}
+
+/* ============ ACTION BUTTONS (selector vs block) ============ */
+function ensureActionButtons(context){
+  if(activeView!=='week') { destroyActionButtons(); return; }
+  if(window.__actionBtns && document.body.contains(window.__actionBtns)){
+    window.__actionBtns.dataset.ctx = context;
+    renderActionButtons();
+    window.__actionBtns.classList.remove('selBtnHidden');
+    repositionActionButtons();
+    return;
+  }
+  const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
+  document.body.appendChild(wrap);
+  window.__actionBtns = wrap;
+  renderActionButtons();
+  repositionActionButtons();
+  attachViewportRepositioners();
+}
+function renderActionButtons(){
+  const wrap=window.__actionBtns; if(!wrap) return;
+  const ctx=wrap.dataset.ctx;
+  wrap.innerHTML='';
+
+  const mk=(label, svg, onClick, isActive=false)=>{
+    const b=document.createElement('button'); b.className='neu-btn--sm'; b.setAttribute('aria-label', label);
+    b.innerHTML=svg;
+    if(isActive){ b.classList.add('ack'); }
+    b.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(b); }, {capture:true});
+    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); onClick?.(b); }, {passive:false});
+    return b;
+  };
+
+  if(ctx==='block'){
+    const dragBtn = mk('Drag', arrowsSVG(), ()=>{ toggleDragMode(); }, dragModeActive);
+    const copyBtn = mk('Copy', copySVG(), ()=>{ toggleCopyMode(); }, copyModeActive);
+    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
+    const closeBtn= mk('Close', xSVG(), ()=>{ deselectBlock(); });
+    wrap.appendChild(dragBtn);
+    wrap.appendChild(copyBtn);
+    wrap.appendChild(gearBtn);
+    wrap.appendChild(closeBtn);
+  }else{
+    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
+    const closeBtn= mk('Close', xSVG(), ()=>{
+      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
+    });
+    wrap.appendChild(gearBtn);
+    wrap.appendChild(closeBtn);
+  }
+}
+function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
+function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
+
+function selectionMidRect(){
+  if(selectedBlockId){
+    const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
+    const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null;
+    const [s,e]=segs[0]; const mid=s+(e-s)/2;
+    const dayIdx=Math.floor(mid/1440), minInDay=mid-dayIdx*1440;
+    const yTop = minutesToY(Math.max(0, minInDay-30)), yBot = minutesToY(Math.min(1440, minInDay+30));
+    const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+    const width = weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+    const top = weekGeom.rect.top + yTop, height=Math.max(1, yBot-yTop);
+    return new DOMRect(left, top, width, height);
+  }
+  if(!snake || !weekGeom) return null;
+  const visSt = getVisibleWeekStamp();
+  const segs = segmentsForWeek(snake, visSt);
+  if(segs.length===0) return null;
+  const [segStartAbs, segEndAbs] = segs[0];
+  const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
+
+  const dayIdx = Math.floor(midAbs/1440);
+  const minInDay = midAbs - dayIdx*1440;
+  const yTop = minutesToY(Math.max(0, minInDay-30));
+  const yBot = minutesToY(Math.min(1440, minInDay+30));
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
+  const top = weekGeom.rect.top + yTop;
+  const height = Math.max(1, yBot - yTop);
+  return new DOMRect(left, top, width, height);
+}
+function repositionActionButtons(){
+  const pair = window.__actionBtns; if(!pair){ return; }
+  const r = selectionMidRect();
+  if(!r){ hideActionButtons(); return; }
+  pair.classList.remove('selBtnHidden');
+
+  const margin=8, btnW=44, totalH=(44* (pair.childElementCount||2)) + (8*((pair.childElementCount||2)-1));
+  let preferRight = (window.innerWidth - r.right) >= r.left;
+  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
+  if(left < margin){ left = r.right + margin; }
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
+
+  let top  = r.top + (r.height/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
+  if(top < margin) top = margin;
+
+  pair.style.left = `${Math.round(left)}px`;
+  pair.style.top  = `${Math.round(top)}px`;
+}
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ repositionActionButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+}
+
+/* ============ SETTINGS SHEET ============ */
 let sheetCtx=null; // { mode:'selection'|'block', blkId|null, catKey|null }
 function openSettingsSheet(fromBlockId=null){
   sheetCtx = selectedBlockId ? {mode:'block', blkId:selectedBlockId} : (fromBlockId? {mode:'block', blkId:fromBlockId} : {mode:'selection', blkId:null});
@@ -1173,7 +1175,6 @@ function openSettingsSheet(fromBlockId=null){
   }
   sheetCtx.catKey = initialCatKey;
   updateCurrentCatPill();
-
   renderDropdownList();
 
   sheet.querySelector('#toggleList').onclick = ()=>{
@@ -1191,11 +1192,9 @@ function openSettingsSheet(fromBlockId=null){
     const dot=document.getElementById('currentDot'); dot.style.background = getCatColorValue(cat.key);
     document.getElementById('currentName').textContent = cat.name;
   }
-
   function renderDropdownList(){
     const dd=document.getElementById('ddList'); dd.innerHTML='';
     const totals = computeWeekTotals(getVisibleWeekStamp());
-
     for(const cat of categories){
       const row=document.createElement('div'); row.className='row'; row.dataset.key=cat.key;
 
@@ -1207,8 +1206,7 @@ function openSettingsSheet(fromBlockId=null){
       const amt=document.createElement('div'); amt.className='amt'; 
       const minutes = totals[cat.key]||0; const h=Math.floor(minutes/60), m=minutes%60; amt.textContent=`${h}h ${m}m`;
 
-      const pen=document.createElement('button'); pen.className='icon-btn'; pen.innerHTML=pencilSVG();
-      pen.title='Rename';
+      const pen=document.createElement('button'); pen.className='icon-btn'; pen.innerHTML=pencilSVG(); pen.title='Rename';
       pen.addEventListener('click', (e)=>{ e.stopPropagation(); beginInlineEdit(row, cat, nameSpan); });
 
       row.appendChild(left); row.appendChild(amt); row.appendChild(pen);
@@ -1218,7 +1216,6 @@ function openSettingsSheet(fromBlockId=null){
       dd.appendChild(row);
     }
   }
-
   function beginInlineEdit(row, cat, nameNode){
     const parent = nameNode.parentElement;
     const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
@@ -1231,10 +1228,9 @@ function openSettingsSheet(fromBlockId=null){
 
     const commit=()=>{
       const newName=input.value.trim();
-      if(!newName){ renderDropdownList(); return; }
-      if(newName===cat.name){ renderDropdownList(); return; }
+      if(!newName || newName===cat.name){ renderDropdownList(); return; }
       if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
-        // No toasts per now; simply ignore and revert
+        // no toasts yet; revert silently
         renderDropdownList(); return;
       }
       cat.name=newName;
@@ -1253,7 +1249,6 @@ function closeSheet(){
   document.querySelector('.sheet')?.remove();
   sheetCtx=null;
 }
-
 function onSheetSave(){
   if(!sheetCtx) return;
   const catKey=sheetCtx.catKey || categories[0].key;
@@ -1261,9 +1256,7 @@ function onSheetSave(){
   if(sheetCtx.mode==='selection'){
     if(!snake) { closeSheet(); return; }
     const blk={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:snake.weekSt, startAbs:snake.startAbs, dur:snake.dur, catKey };
-
-    if(anyOverlapWithBlocks(blk)){ /* silently do nothing */ return; }
-
+    if(anyOverlapWithBlocks(blk)){ return; }
     blocks.push(blk);
     persistBlocks();
     snake=null; storageSet(SEL_KEY,null);
@@ -1276,7 +1269,6 @@ function onSheetSave(){
   }
   closeSheet();
 }
-
 function onSheetDelete(){
   if(!sheetCtx) return;
   if(sheetCtx.mode==='selection'){
@@ -1289,8 +1281,6 @@ function onSheetDelete(){
     closeSheet();
   }
 }
-
-/* Totals */
 function computeWeekTotals(visSt){
   const totals={};
   for(const blk of blocks){
@@ -1303,47 +1293,200 @@ function computeWeekTotals(visSt){
   return totals;
 }
 
-/* Block selection */
-function selectBlock(id, rect){
-  selectedBlockId=id;
-  outlineRect(rect.x, rect.y, rect.w, rect.h);
+/* ---------- DRAG/COPY GHOST ---------- */
+function deactivateModes(){
+  dragModeActive=false; copyModeActive=false;
+  removeGhost();
+  renderActionButtons();
 }
-
-/* Deselect block helper */
-function deselectBlock(){
-  if(dragModeActive || copyModeActive) { deactivateModes(); }
-  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+function toggleDragMode(){
+  if(!selectedBlockId) return;
+  if(dragModeActive){
+    if(ghost && ghost.mode==='drag' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  copyModeActive=false;
+  createGhost('drag');
+  dragModeActive=true;
+  renderActionButtons();
 }
-
-/* clear state helper */
-function clearSelectionState(){
-  if(dragModeActive || copyModeActive){ deactivateModes(); }
-  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+function toggleCopyMode(){
+  if(!selectedBlockId) return;
+  if(copyModeActive){
+    if(ghost && ghost.mode==='copy' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  dragModeActive=false;
+  createGhost('copy');
+  copyModeActive=true;
+  renderActionButtons();
 }
+function createGhost(mode){
+  removeGhost();
+  const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return;
+  ghost = {
+    mode,
+    srcBlockId: blk.id,
+    startAbs: ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN,
+    dur: blk.dur,
+    valid: false
+  };
+  drawGhost();
+}
+function removeGhost(){
+  document.querySelector('.ghost')?.remove();
+  ghost=null;
+}
+function drawGhost(){
+  if(!ghost || !weekGeom) return;
+  const pos = absToRect(ghost.startAbs, ghost.dur);
+  let el = document.querySelector('.ghost');
+  if(!el){
+    el=document.createElement('div'); el.className='ghost invalid';
+    document.body.appendChild(el);
+    let dragging=false;
+    const onDown=(e)=>{ e.preventDefault(); e.stopPropagation(); dragging=true; el.setPointerCapture?.(e.pointerId); };
+    const onMove=(e)=>{
+      if(!dragging) return;
+      const snapped = pointToAbs(e.clientX, e.clientY, ghost.dur);
+      if(snapped==null) return;
+      ghost.startAbs = snapped;
+      updateGhostValidity();
+      const p = absToRect(ghost.startAbs, ghost.dur);
+      placeGhost(el, p);
+    };
+    const onUp=()=>{ dragging=false; el.releasePointerCapture?.(); };
+    el.addEventListener('pointerdown', onDown, {passive:false});
+    window.addEventListener('pointermove', onMove, {passive:false});
+    window.addEventListener('pointerup', onUp, {passive:true});
+    window.addEventListener('pointercancel', onUp, {passive:true});
+  }
+  placeGhost(el, pos);
+  updateGhostValidity();
+}
+function placeGhost(el, rect){
+  el.style.left = rect.left+'px';
+  el.style.top  = rect.top+'px';
+  el.style.width  = rect.width+'px';
+  el.style.height = rect.height+'px';
+}
+function absToRect(startAbs, dur){
+  const dayIdx = Math.floor(startAbs/1440);
+  const minInDay = startAbs - dayIdx*1440;
+  const topY  = minutesToY(minInDay);
+  const end   = Math.min(WEEK_MIN, startAbs + dur);
+  const endDayIdx=Math.floor(end/1440);
+  const endInDay = end - endDayIdx*1440;
 
-/* throttle */
-function throttle(fn, ms){
-  let t=0, lastArgs=null;
-  return function(...args){
-    lastArgs=args;
-    if(!t){
-      t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms);
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width= weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+  let height;
+  if(endDayIdx===dayIdx){
+    height = Math.max(1, minutesToY(endInDay) - topY);
+  }else{
+    height = Math.max(1, minutesToY(1440) - topY);
+  }
+  return {left, top: weekGeom.rect.top + topY, width, height};
+}
+function pointToAbs(clientX, clientY, dur){
+  if(!weekGeom) return null;
+  const rect=weekGeom.rect;
+  const relX=clientX - rect.left;
+  const relY=clientY - rect.top;
+  if(relX<0 || relX>weekGeom.totalW || relY<0 || relY>weekGeom.totalH) return null;
+
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  let startMin = Math.round(minuteFloat/15)*15; // snap 15
+  if(startMin + dur > 1440*(dayIdx+1)){
+    startMin = 1440*(dayIdx+1) - dur;
+  }
+  if(startMin < 0) startMin=0;
+  const startAbs = dayIdx*1440 + startMin;
+  if(startAbs < 0 || startAbs + dur > WEEK_MIN) return null;
+  return startAbs;
+}
+function updateGhostValidity(){
+  if(!ghost) return;
+  const candidate={weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:ghost.dur};
+  const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
+  const overlap = anyOverlapWithBlocks(candidate, ignoreId);
+  ghost.valid = !overlap;
+  const el=document.querySelector('.ghost');
+  if(el){
+    el.classList.toggle('valid', ghost.valid);
+    el.classList.toggle('invalid', !ghost.valid);
+  }
+}
+function commitGhost(){
+  if(!ghost || !ghost.valid) return;
+  if(ghost.mode==='drag'){
+    const blk=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(blk){
+      blk.startAbs = ghost.startAbs;
+      blk.weekSt   = getVisibleWeekStamp();
+      persistBlocks();
+      drawBlocks();
+      const rect = absToRect(blk.startAbs, blk.dur);
+      selectBlock(blk.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height});
+    }
+  }else if(ghost.mode==='copy'){
+    const src=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(src){
+      const dup={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:src.dur, catKey:src.catKey };
+      if(!anyOverlapWithBlocks(dup)){
+        blocks.push(dup);
+        persistBlocks();
+        drawBlocks();
+        const rect = absToRect(dup.startAbs, dup.dur);
+        selectBlock(dup.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height});
+      }
     }
   }
 }
+
+/* Toast (placeholder - not used now) */
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(()=>t.classList.remove('show'), 2000);
+}
+
+/* SVG helpers */
+function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
+function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function gearSVG(){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
+      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+function xSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`; }
+function arrowsSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M12 3l2.5 2.5L12 8 9.5 5.5 12 3z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 12l-2.5 2.5L16 12l2.5-2.5L21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 21l-2.5-2.5L12 16l2.5 2.5L12 21z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 12l2.5-2.5L8 12l-2.5 2.5L3 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`; }
+function copySVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+</svg>`; }
 
 /* save/load */
 function snapshotState(){ return { activeView, visibleWeekFirst:+weekStart(new Date()) }; }
 async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); await persistBlocks(); await persistCategories(); }
 let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
-
 async function persistBlocks(){ await storageSet(BLK_KEY, blocks); }
 async function loadBlocks(){ const v=await storageGet(BLK_KEY); if(Array.isArray(v)) blocks=v; }
 async function persistCategories(){ await storageSet(CAT_KEY, categories); }
 async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } } } }
 
 /* ---------------- PRESENT LENS ---------------- */
-let presentLensEl=null, presentLensGhost=null, lensIntervalId=null, lensAlignTimeout=null, lensSessionId=null;
 function hardClearPresentLens(){
   const lensHost = document.getElementById('lensHost');
   if(lensHost) lensHost.innerHTML='';
@@ -1374,7 +1517,6 @@ function startLensTimer(){
     lensIntervalId = setInterval(()=> updatePresentLens(false, lensSessionId), 5*60*1000);
   }, Math.max(0, wait));
 }
-
 function updatePresentLens(forceRecreate=false, sessionToken=null){
   if(activeView!=='week' || !weekGeom) return;
   if(sessionToken && sessionToken !== lensSessionId) return;
@@ -1428,208 +1570,16 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   presentLensGhost.style.height = height + 'px';
 }
 
-/* ---------- DRAG/COPY GHOST ---------- */
-function deactivateModes(){
-  dragModeActive=false; copyModeActive=false;
-  removeGhost();
-  renderActionButtons();
-}
-function toggleDragMode(){
-  if(!selectedBlockId) return;
-  if(dragModeActive){ // turning off: try commit if valid
-    if(ghost && ghost.mode==='drag' && ghost.valid){ commitGhost(); }
-    deactivateModes();
-    return;
-  }
-  // activate drag, ensure mutual exclusivity
-  copyModeActive=false;
-  createGhost('drag');
-  dragModeActive=true;
-  renderActionButtons();
-}
-function toggleCopyMode(){
-  if(!selectedBlockId) return;
-  if(copyModeActive){ // turning off: try commit if valid
-    if(ghost && ghost.mode==='copy' && ghost.valid){ commitGhost(); }
-    deactivateModes();
-    return;
-  }
-  dragModeActive=false;
-  createGhost('copy');
-  copyModeActive=true;
-  renderActionButtons();
-}
-function createGhost(mode){
-  removeGhost();
-  const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return;
-  ghost = {
-    mode,
-    srcBlockId: blk.id,
-    startAbs: ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN, // visible week-local
-    dur: blk.dur,
-    valid: false
-  };
-  drawGhost();
-}
-function removeGhost(){
-  document.querySelector('.ghost')?.remove();
-  ghost=null;
-}
-function drawGhost(){
-  if(!ghost || !weekGeom) return;
-  // Convert startAbs -> DOM rect
-  const pos = absToRect(ghost.startAbs, ghost.dur);
-  let el = document.querySelector('.ghost');
-  if(!el){
-    el=document.createElement('div'); el.className='ghost invalid'; // default invalid until validated
-    document.body.appendChild(el);
-    // pointer drag handlers
-    let dragging=false;
-    const onDown=(e)=>{
-      e.preventDefault(); e.stopPropagation();
-      dragging=true;
-      el.setPointerCapture?.(e.pointerId);
-    };
-    const onMove=(e)=>{
-      if(!dragging) return;
-      const pt = {x:e.clientX, y:e.clientY};
-      const snapped = pointToAbs(pt.x, pt.y, ghost.dur);
-      if(snapped==null) return;
-      ghost.startAbs = snapped;
-      updateGhostValidity();
-      const p = absToRect(ghost.startAbs, ghost.dur);
-      placeGhost(el, p);
-    };
-    const onUp=()=>{
-      dragging=false;
-      el.releasePointerCapture?.();
-    };
-    el.addEventListener('pointerdown', onDown, {passive:false});
-    window.addEventListener('pointermove', onMove, {passive:false});
-    window.addEventListener('pointerup', onUp, {passive:true});
-    window.addEventListener('pointercancel', onUp, {passive:true});
-  }
-  placeGhost(el, pos);
-  updateGhostValidity();
-}
-function placeGhost(el, rect){
-  el.style.left = rect.left+'px';
-  el.style.top  = rect.top+'px';
-  el.style.width  = rect.width+'px';
-  el.style.height = rect.height+'px';
-}
-function absToRect(startAbs, dur){
-  // startAbs is [0..WEEK_MIN), may span day boundary
-  const dayIdx = Math.floor(startAbs/1440);
-  const minInDay = startAbs - dayIdx*1440;
-  const topY  = minutesToY(minInDay);
-  const end   = Math.min(WEEK_MIN, startAbs + dur);
-  const endDayIdx=Math.floor(end/1440);
-  const endInDay = end - endDayIdx*1440;
-
-  // If block spans multiple days, we render ghost as a single fixed-position box sized to current-day segment.
-  // To satisfy “same size/shape even across midnight”, we size height to cover from start to end within viewport.
-  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
-  const width= weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
-  // Height across potential day boundary (but capped by grid bottom)
-  let height;
-  if(endDayIdx===dayIdx){
-    height = Math.max(1, minutesToY(endInDay) - topY);
-  }else{
-    // extends to end of day; show current column segment height
-    height = Math.max(1, minutesToY(1440) - topY);
-  }
-  return {left, top: weekGeom.rect.top + topY, width, height};
-}
-function pointToAbs(clientX, clientY, dur){
-  if(!weekGeom) return null;
-  const rect=weekGeom.rect;
-  const relX=clientX - rect.left;
-  const relY=clientY - rect.top;
-  if(relX<0 || relX>weekGeom.totalW || relY<0 || relY>weekGeom.totalH) return null;
-
-  let dayIdx=0;
-  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
-  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  let startMin = Math.round(minuteFloat/15)*15; // snap 15
-  // Keep inside week bounds with duration
-  if(startMin + dur > 1440*(dayIdx+1)){
-    startMin = 1440*(dayIdx+1) - dur;
-  }
-  if(startMin < 0) startMin=0;
-  const startAbs = dayIdx*1440 + startMin;
-  if(startAbs < 0 || startAbs + dur > WEEK_MIN) return null;
-  return startAbs;
-}
-function updateGhostValidity(){
-  if(!ghost) return;
-  const candidate={weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:ghost.dur};
-  const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
-  const overlap = anyOverlapWithBlocks(candidate, ignoreId);
-  ghost.valid = !overlap;
-  const el=document.querySelector('.ghost');
-  if(el){
-    el.classList.toggle('valid', ghost.valid);
-    el.classList.toggle('invalid', !ghost.valid);
-  }
-}
-function commitGhost(){
-  if(!ghost || !ghost.valid) return;
-  if(ghost.mode==='drag'){
-    const blk=blocks.find(b=>b.id===ghost.srcBlockId);
-    if(blk){
-      blk.startAbs = ghost.startAbs;
-      blk.weekSt   = getVisibleWeekStamp(); // normalize to this visible week for persistence
-      persistBlocks();
-      drawBlocks();
-      // Keep selection on the moved block
-      const rect = absToRect(blk.startAbs, blk.dur);
-      selectBlock(blk.id, {x:rect.left - 0, y:rect.top - 0, w:rect.width, h:rect.height});
-    }
-  }else if(ghost.mode==='copy'){
-    const src=blocks.find(b=>b.id===ghost.srcBlockId);
-    if(src){
-      const dup={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:src.dur, catKey:src.catKey };
-      if(!anyOverlapWithBlocks(dup)){
-        blocks.push(dup);
-        persistBlocks();
-        drawBlocks();
-        // select the new copy
-        const rect = absToRect(dup.startAbs, dup.dur);
-        selectBlock(dup.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height});
-      }
+/* throttle */
+function throttle(fn, ms){
+  let t=0, lastArgs=null;
+  return function(...args){
+    lastArgs=args;
+    if(!t){
+      t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms);
     }
   }
 }
-
-/* Toast (placeholder - not used now) */
-function toast(msg){
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-  clearTimeout(toast._timer);
-  toast._timer=setTimeout(()=>t.classList.remove('show'), 2000);
-}
-
-/* SVG helpers */
-function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
-function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
-function gearSVG(){
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
-    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
-      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
-function xSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`; }
-function arrowsSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
-  <path d="M12 3l2.5 2.5L12 8 9.5 5.5 12 3z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M21 12l-2.5 2.5L16 12l2.5-2.5L21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M12 21l-2.5-2.5L12 16l2.5 2.5L12 21z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M3 12l2.5-2.5L8 12l-2.5 2.5L3 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`; }
-function copySVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
-  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
-  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
-</svg>`; }
 
 /* init/render */
 async function init(){
