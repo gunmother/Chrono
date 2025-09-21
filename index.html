@@ -1,4 +1,4 @@
-<!-- W-97 START -->
+<!-- W-98 START -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,7 +89,7 @@
     box-shadow:
       calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
        var(--off)         var(--off)         var(--blur) var(--lo);
-    transition: box-shadow .2s ease, background .2s ease, transform .06s ease;
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease, color .06s ease, filter .06s ease;
     color:var(--ink);
   }
   .neu-btn svg{
@@ -154,9 +154,9 @@
 
   .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:1 }
 
-  .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:3; }
-  /* Blocks live under the mask but above background */
+  /* Ordering within .grid: background < blockHost(z:0) < mask(z:1) < lensHost(z:3) < selHost(z:4) */
   .blockHost{ position:absolute; inset:0; pointer-events:auto; z-index:0; }
+  .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:3; }
   .selHost{  position:absolute; inset:0; pointer-events:none; z-index:4; }
 
   .marqueeRect{
@@ -192,6 +192,7 @@
     filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
   }
 
+  /* Floating action buttons (selector or block) */
   .selBtns{ position:fixed; z-index:8; display:grid; gap:8px; pointer-events:auto; }
   .selBtnHidden{ display:none !important; }
 
@@ -244,7 +245,17 @@
     cursor:pointer;
   }
 
-  /* Toast */
+  /* Ghost */
+  .ghost{
+    position:fixed; z-index:30; pointer-events:auto; border-radius:10px;
+    opacity:.5; /* always 50% per spec */
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,.1);
+    touch-action:none;
+  }
+  .ghost.valid{ background:#00c853; }    /* green */
+  .ghost.invalid{ background:#ff5252; }  /* red */
+
+  /* Toast (kept off for now) */
   .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#1c2a36; color:#fff; font-weight:800;
     padding:10px 14px; border-radius:12px; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
   }
@@ -253,7 +264,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-97</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-98</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
@@ -307,7 +318,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-97 — ensure action buttons always attach to the current selection */
+/* Chrono W-98 — block drag/copy ghost; single-active-mode; exclusivity maintained */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -330,7 +341,7 @@ function getNow(){ return new Date(); }
 function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
 
 /* storage */
-const DB_NAME='chronoDB', DB_VERSION=42;
+const DB_NAME='chronoDB', DB_VERSION=43;
 let dbPromise=null, STORAGE_MODE='idb';
 function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
 function idbOpen(){
@@ -367,7 +378,7 @@ const SEL_KEY  ='snake_r81';
 const BLK_KEY  ='blocks_w95';
 const CAT_KEY  ='categories_w95';
 
-/* selection */
+/* selection (selector tool) */
 let snake = null;
 
 /* blocks */
@@ -403,6 +414,10 @@ let lensIntervalId=null, lensAlignTimeout=null;
 let lensSessionId=null;
 let dragBlockUntil=0;
 
+/* Ghost state for Drag/Copy */
+let ghost = null; // {mode:'drag'|'copy', srcBlockId, startAbs, dur, valid}
+let dragModeActive=false, copyModeActive=false;
+
 /* controls */
 document.querySelector('.controls').addEventListener('click', e=>{
   const b=e.target.closest('.neu-btn'); if(!b) return;
@@ -433,7 +448,7 @@ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot))
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* screensaver */
-function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-97</div></div>`; }
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-98</div></div>`; }
 
 /* --- Week View --- */
 function buildWeekView(){
@@ -452,7 +467,6 @@ function buildWeekView(){
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
-          <!-- z-index order inside .grid: background (this), .blockHost(z:0), .mask(z:1), .lensHost(z:3), .selHost(z:4) -->
           <div class="blockHost" id="blockHost"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
           <div class="lensHost" id="lensHost"></div>
@@ -591,10 +605,6 @@ function buildMask(geom, cols){
 }
 
 /* --- Utility for overlap checks (minutes in visible week [0,10080)) --- */
-function normalizeWeekAbs(weekSt, startAbs){
-  const diffWeeks = Math.round((getVisibleWeekStamp() - weekSt)/(7*DAY_MS));
-  return ((startAbs - diffWeeks*WEEK_MIN) % WEEK_MIN + WEEK_MIN) % WEEK_MIN;
-}
 function eachSegmentsInWeek(obj, cb){
   const segs = segmentsForWeek(obj, getVisibleWeekStamp());
   for(const [absS, absE] of segs){
@@ -607,16 +617,20 @@ function eachSegmentsInWeek(obj, cb){
     }
   }
 }
-function anyOverlapWithBlocks(candidate){
+function anyOverlapWithBlocks(candidate, ignoreId=null){
   let hit=false;
-  const cStart=normalizeWeekAbs(candidate.weekSt, candidate.startAbs);
-  const cEnd  =(cStart + candidate.dur);
+  const visSt=getVisibleWeekStamp();
   for(const b of blocks){
+    if(ignoreId && b.id===ignoreId) continue;
     const proxy={weekSt:b.weekSt, startAbs:b.startAbs, dur:b.dur};
-    eachSegmentsInWeek(proxy,(bs,be)=>{
-      if(hit) return;
-      if(Math.max(cStart,bs) < Math.min(cEnd,be)) hit=true;
-    });
+    const csegs=segmentsForWeek(candidate, visSt);
+    const bsegs=segmentsForWeek(proxy, visSt);
+    for(const [cs,ce] of csegs){
+      for(const [bs,be] of bsegs){
+        if(Math.max(cs,bs) < Math.min(ce,be)){ hit=true; break; }
+      }
+      if(hit) break;
+    }
     if(hit) break;
   }
   return hit;
@@ -652,8 +666,8 @@ function onWeekGridTap(e){
   if(!weekGeom) return;
   if(now < dragBlockUntil) return;
 
-  // Mutual exclusivity: ignore if a block is selected
-  if(selectedBlockId) return;
+  // Mutual exclusivity: ignore if a block is selected OR ghost active
+  if(selectedBlockId || dragModeActive || copyModeActive) return;
 
   const path = e.composedPath ? e.composedPath() : [];
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
@@ -677,7 +691,6 @@ function onWeekGridTap(e){
   snake = candidate;
   saveSoon(120);
   drawSnake();
-  // Ensure the action buttons attach immediately to the selector
   ensureActionButtons('selector');
   repositionActionButtons();
 }
@@ -739,7 +752,7 @@ function drawBlockSegment(blk, dayIdx, startMin, endMin){
   rectEl.dataset.id = blk.id;
   rectEl.addEventListener('click', (e)=>{
     e.stopPropagation();
-    if(snake) return; // selector active -> ignore (mutual exclusivity)
+    if(snake || dragModeActive || copyModeActive) return; // exclusivity
     selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height});
   }, {passive:true});
   host.appendChild(rectEl);
@@ -760,9 +773,9 @@ function outlineRect(absLeft, absTop, w, h){
   group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px';
   overlayRoot.appendChild(group);
 
-  const ghost=document.createElement('div'); ghost.className='glow-ghost'; ghost.dataset.role='blk-ghost';
-  ghost.style.left = absLeft+'px'; ghost.style.top = absTop+'px'; ghost.style.width=w+'px'; ghost.style.height=h+'px';
-  overlayRoot.appendChild(ghost);
+  const ghostGlow=document.createElement('div'); ghostGlow.className='glow-ghost'; ghostGlow.dataset.role='blk-ghost';
+  ghostGlow.style.left = absLeft+'px'; ghostGlow.style.top = absTop+'px'; ghostGlow.style.width=w+'px'; ghostGlow.style.height=h+'px';
+  overlayRoot.appendChild(ghostGlow);
 
   const outline=document.createElement('div'); outline.className='marqueeRect';
   outline.style.position='absolute'; outline.style.inset='0';
@@ -776,50 +789,62 @@ function clearBlockOutline(){
   overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
 }
 
-/* ============ ACTION BUTTONS ============ */
+/* ============ ACTION BUTTONS (selector vs block) ============ */
 function ensureActionButtons(context){
   if(activeView!=='week') { destroyActionButtons(); return; }
-  if(window.__actionBtns && document.body.contains(window.__actionBtns)){ 
+  if(window.__actionBtns && document.body.contains(window.__actionBtns)){
     window.__actionBtns.dataset.ctx = context;
-    window.__actionBtns.classList.remove('selBtnHidden'); 
+    renderActionButtons(); // ensure proper set/layout
+    window.__actionBtns.classList.remove('selBtnHidden');
     repositionActionButtons();
-    return; 
+    return;
   }
-
   const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
-
-  const gear = document.createElement('button'); gear.className='neu-btn--sm'; gear.setAttribute('aria-label', 'Settings');
-  gear.innerHTML = gearSVG();
-  gear.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(gear); }, {capture:true});
-  gear.addEventListener('click', (ev)=>{
-    ev.stopPropagation(); ev.preventDefault();
-    openSettingsSheet();
-  }, {passive:false});
-
-  const close = document.createElement('button'); close.className='neu-btn--sm'; close.setAttribute('aria-label', 'Close');
-  close.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-  close.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(close); }, {capture:true});
-  close.addEventListener('click', (ev)=>{
-    ev.stopPropagation(); ev.preventDefault();
-    if(selectedBlockId){
-      selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
-    }else{
-      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
-    }
-  }, {passive:false});
-
-  wrap.appendChild(gear); wrap.appendChild(close);
   document.body.appendChild(wrap);
   window.__actionBtns = wrap;
+  renderActionButtons();
   repositionActionButtons();
   attachViewportRepositioners();
 }
-function gearSVG(){
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
-    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
-      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
+function renderActionButtons(){
+  const wrap=window.__actionBtns; if(!wrap) return;
+  const ctx=wrap.dataset.ctx;
+  wrap.innerHTML='';
+
+  // Helper to make a small btn
+  const mk=(label, svg, onClick, isActive=false)=>{
+    const b=document.createElement('button'); b.className='neu-btn--sm'; b.setAttribute('aria-label', label);
+    b.innerHTML=svg;
+    if(isActive){ b.classList.add('ack'); } // reuse ack styling for active look
+    b.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(b); }, {capture:true});
+    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); onClick?.(b); }, {passive:false});
+    return b;
+  };
+
+  if(ctx==='block'){
+    // Order: Drag, Copy, Settings, X (top to bottom, single column)
+    const dragBtn = mk('Drag', arrowsSVG(), ()=>{
+      toggleDragMode();
+    }, dragModeActive);
+    const copyBtn = mk('Copy', copySVG(), ()=>{
+      toggleCopyMode();
+    }, copyModeActive);
+    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
+    const closeBtn= mk('Close', xSVG(), ()=>{
+      deselectBlock();
+    });
+    wrap.appendChild(dragBtn);
+    wrap.appendChild(copyBtn);
+    wrap.appendChild(gearBtn);
+    wrap.appendChild(closeBtn);
+  }else{
+    const gearBtn = mk('Settings', gearSVG(), ()=>{ openSettingsSheet(); });
+    const closeBtn= mk('Close', xSVG(), ()=>{
+      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
+    });
+    wrap.appendChild(gearBtn);
+    wrap.appendChild(closeBtn);
+  }
 }
 function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
 function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
@@ -861,7 +886,7 @@ function repositionActionButtons(){
   if(!r){ hideActionButtons(); return; }
   pair.classList.remove('selBtnHidden');
 
-  const margin=8, btnW=44, totalH=(44*2)+8;
+  const margin=8, btnW=44, totalH=(44* (pair.childElementCount||2)) + (8*((pair.childElementCount||2)-1));
 
   let preferRight = (window.innerWidth - r.right) >= r.left;
   let left = (preferRight ? r.right + margin : r.left - margin - btnW);
@@ -887,7 +912,7 @@ function attachViewportRepositioners(){
   if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
 }
 
-/* drag */
+/* drag for selector (existing) */
 let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0;
 function startSnakeDrag(ev, side){
   if(!snake) return;
@@ -1013,7 +1038,6 @@ function drawSnake(){
     }
   }
 
-  // Always make sure the action buttons belong to the current selector
   ensureActionButtons('selector');
   repositionActionButtons();
 }
@@ -1112,7 +1136,7 @@ function chevronsSVG(dir, colW, rowH){
   </div>`;
 }
 
-/* ============ SETTINGS SHEET ============ */
+/* ============ SETTINGS SHEET (unchanged UX) ============ */
 let sheetCtx=null; // { mode:'selection'|'block', blkId|null, catKey|null }
 function openSettingsSheet(fromBlockId=null){
   sheetCtx = selectedBlockId ? {mode:'block', blkId:selectedBlockId} : (fromBlockId? {mode:'block', blkId:fromBlockId} : {mode:'selection', blkId:null});
@@ -1200,7 +1224,7 @@ function openSettingsSheet(fromBlockId=null){
     const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
     parent.replaceChild(input, nameNode);
 
-    // Only a checkmark per spec
+    // Only a checkmark per spec (no X)
     const saveBtn=document.createElement('button'); saveBtn.className='icon-btn'; saveBtn.innerHTML=checkSVG(); saveBtn.title='Save name';
     const trailing = row.querySelector('.icon-btn:last-child');
     trailing.replaceWith(saveBtn);
@@ -1210,8 +1234,8 @@ function openSettingsSheet(fromBlockId=null){
       if(!newName){ renderDropdownList(); return; }
       if(newName===cat.name){ renderDropdownList(); return; }
       if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
-        toast('Name already exists, try again.');
-        input.focus(); return;
+        // No toasts per now; simply ignore and revert
+        renderDropdownList(); return;
       }
       cat.name=newName;
       persistCategories();
@@ -1238,7 +1262,7 @@ function onSheetSave(){
     if(!snake) { closeSheet(); return; }
     const blk={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:snake.weekSt, startAbs:snake.startAbs, dur:snake.dur, catKey };
 
-    if(anyOverlapWithBlocks(blk)){ toast('Cannot place over an existing block.'); return; }
+    if(anyOverlapWithBlocks(blk)){ /* silently do nothing */ return; }
 
     blocks.push(blk);
     persistBlocks();
@@ -1285,13 +1309,17 @@ function selectBlock(id, rect){
   outlineRect(rect.x, rect.y, rect.w, rect.h);
 }
 
-/* clear state helper */
-function clearSelectionState(){
+/* Deselect block helper */
+function deselectBlock(){
+  if(dragModeActive || copyModeActive) { deactivateModes(); }
   selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
 }
 
-/* small helpers */
-function pulseSm(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
+/* clear state helper */
+function clearSelectionState(){
+  if(dragModeActive || copyModeActive){ deactivateModes(); }
+  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+}
 
 /* throttle */
 function throttle(fn, ms){
@@ -1315,6 +1343,7 @@ async function persistCategories(){ await storageSet(CAT_KEY, categories); }
 async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } } } }
 
 /* ---------------- PRESENT LENS ---------------- */
+let presentLensEl=null, presentLensGhost=null, lensIntervalId=null, lensAlignTimeout=null, lensSessionId=null;
 function hardClearPresentLens(){
   const lensHost = document.getElementById('lensHost');
   if(lensHost) lensHost.innerHTML='';
@@ -1399,12 +1428,208 @@ function updatePresentLens(forceRecreate=false, sessionToken=null){
   presentLensGhost.style.height = height + 'px';
 }
 
-/* Toast */
+/* ---------- DRAG/COPY GHOST ---------- */
+function deactivateModes(){
+  dragModeActive=false; copyModeActive=false;
+  removeGhost();
+  renderActionButtons();
+}
+function toggleDragMode(){
+  if(!selectedBlockId) return;
+  if(dragModeActive){ // turning off: try commit if valid
+    if(ghost && ghost.mode==='drag' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  // activate drag, ensure mutual exclusivity
+  copyModeActive=false;
+  createGhost('drag');
+  dragModeActive=true;
+  renderActionButtons();
+}
+function toggleCopyMode(){
+  if(!selectedBlockId) return;
+  if(copyModeActive){ // turning off: try commit if valid
+    if(ghost && ghost.mode==='copy' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  dragModeActive=false;
+  createGhost('copy');
+  copyModeActive=true;
+  renderActionButtons();
+}
+function createGhost(mode){
+  removeGhost();
+  const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return;
+  ghost = {
+    mode,
+    srcBlockId: blk.id,
+    startAbs: ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN, // visible week-local
+    dur: blk.dur,
+    valid: false
+  };
+  drawGhost();
+}
+function removeGhost(){
+  document.querySelector('.ghost')?.remove();
+  ghost=null;
+}
+function drawGhost(){
+  if(!ghost || !weekGeom) return;
+  // Convert startAbs -> DOM rect
+  const pos = absToRect(ghost.startAbs, ghost.dur);
+  let el = document.querySelector('.ghost');
+  if(!el){
+    el=document.createElement('div'); el.className='ghost invalid'; // default invalid until validated
+    document.body.appendChild(el);
+    // pointer drag handlers
+    let dragging=false;
+    const onDown=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragging=true;
+      el.setPointerCapture?.(e.pointerId);
+    };
+    const onMove=(e)=>{
+      if(!dragging) return;
+      const pt = {x:e.clientX, y:e.clientY};
+      const snapped = pointToAbs(pt.x, pt.y, ghost.dur);
+      if(snapped==null) return;
+      ghost.startAbs = snapped;
+      updateGhostValidity();
+      const p = absToRect(ghost.startAbs, ghost.dur);
+      placeGhost(el, p);
+    };
+    const onUp=()=>{
+      dragging=false;
+      el.releasePointerCapture?.();
+    };
+    el.addEventListener('pointerdown', onDown, {passive:false});
+    window.addEventListener('pointermove', onMove, {passive:false});
+    window.addEventListener('pointerup', onUp, {passive:true});
+    window.addEventListener('pointercancel', onUp, {passive:true});
+  }
+  placeGhost(el, pos);
+  updateGhostValidity();
+}
+function placeGhost(el, rect){
+  el.style.left = rect.left+'px';
+  el.style.top  = rect.top+'px';
+  el.style.width  = rect.width+'px';
+  el.style.height = rect.height+'px';
+}
+function absToRect(startAbs, dur){
+  // startAbs is [0..WEEK_MIN), may span day boundary
+  const dayIdx = Math.floor(startAbs/1440);
+  const minInDay = startAbs - dayIdx*1440;
+  const topY  = minutesToY(minInDay);
+  const end   = Math.min(WEEK_MIN, startAbs + dur);
+  const endDayIdx=Math.floor(end/1440);
+  const endInDay = end - endDayIdx*1440;
+
+  // If block spans multiple days, we render ghost as a single fixed-position box sized to current-day segment.
+  // To satisfy “same size/shape even across midnight”, we size height to cover from start to end within viewport.
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width= weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+  // Height across potential day boundary (but capped by grid bottom)
+  let height;
+  if(endDayIdx===dayIdx){
+    height = Math.max(1, minutesToY(endInDay) - topY);
+  }else{
+    // extends to end of day; show current column segment height
+    height = Math.max(1, minutesToY(1440) - topY);
+  }
+  return {left, top: weekGeom.rect.top + topY, width, height};
+}
+function pointToAbs(clientX, clientY, dur){
+  if(!weekGeom) return null;
+  const rect=weekGeom.rect;
+  const relX=clientX - rect.left;
+  const relY=clientY - rect.top;
+  if(relX<0 || relX>weekGeom.totalW || relY<0 || relY>weekGeom.totalH) return null;
+
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  let startMin = Math.round(minuteFloat/15)*15; // snap 15
+  // Keep inside week bounds with duration
+  if(startMin + dur > 1440*(dayIdx+1)){
+    startMin = 1440*(dayIdx+1) - dur;
+  }
+  if(startMin < 0) startMin=0;
+  const startAbs = dayIdx*1440 + startMin;
+  if(startAbs < 0 || startAbs + dur > WEEK_MIN) return null;
+  return startAbs;
+}
+function updateGhostValidity(){
+  if(!ghost) return;
+  const candidate={weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:ghost.dur};
+  const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
+  const overlap = anyOverlapWithBlocks(candidate, ignoreId);
+  ghost.valid = !overlap;
+  const el=document.querySelector('.ghost');
+  if(el){
+    el.classList.toggle('valid', ghost.valid);
+    el.classList.toggle('invalid', !ghost.valid);
+  }
+}
+function commitGhost(){
+  if(!ghost || !ghost.valid) return;
+  if(ghost.mode==='drag'){
+    const blk=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(blk){
+      blk.startAbs = ghost.startAbs;
+      blk.weekSt   = getVisibleWeekStamp(); // normalize to this visible week for persistence
+      persistBlocks();
+      drawBlocks();
+      // Keep selection on the moved block
+      const rect = absToRect(blk.startAbs, blk.dur);
+      selectBlock(blk.id, {x:rect.left - 0, y:rect.top - 0, w:rect.width, h:rect.height});
+    }
+  }else if(ghost.mode==='copy'){
+    const src=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(src){
+      const dup={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:src.dur, catKey:src.catKey };
+      if(!anyOverlapWithBlocks(dup)){
+        blocks.push(dup);
+        persistBlocks();
+        drawBlocks();
+        // select the new copy
+        const rect = absToRect(dup.startAbs, dup.dur);
+        selectBlock(dup.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height});
+      }
+    }
+  }
+}
+
+/* Toast (placeholder - not used now) */
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toast._timer);
   toast._timer=setTimeout(()=>t.classList.remove('show'), 2000);
 }
+
+/* SVG helpers */
+function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
+function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function gearSVG(){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
+      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+function xSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`; }
+function arrowsSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M12 3l2.5 2.5L12 8 9.5 5.5 12 3z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 12l-2.5 2.5L16 12l2.5-2.5L21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 21l-2.5-2.5L12 16l2.5 2.5L12 21z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 12l2.5-2.5L8 12l-2.5 2.5L3 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`; }
+function copySVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+</svg>`; }
 
 /* init/render */
 async function init(){
@@ -1443,10 +1668,6 @@ function render(){
   }
 }
 
-/* SVG helpers */
-function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
-function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
-
 init();
 </script>
 
@@ -1463,4 +1684,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- W-97 EOF -->
+<!-- W-98 EOF -->
