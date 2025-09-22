@@ -317,7 +317,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-99 — full build */
+/* Chrono W-99 — full build (hotfix) */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -682,11 +682,17 @@ function onWeekGridTap(e){
   if(!weekGeom) return;
   if(now < dragBlockUntil) return;
 
-  // exclusivity: cannot create selector if block selected or ghost active
-  if(selectedBlockId || dragModeActive || copyModeActive) return;
-
   const path = e.composedPath ? e.composedPath() : [];
-  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
+  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle')))) return;
+
+  // If a block is currently selected, first deselect so user can immediately start a new selection
+  if(selectedBlockId){ deselectBlock(); }
+
+  // exclusivity: cannot create selector if a ghost mode is active
+  if(dragModeActive || copyModeActive) return;
+
+  // prevent starting selector when tapping directly on a block (block has its own click)
+  if(path.some(n=> n && n.classList && n.classList.contains('blk'))) return;
 
   const rect=weekGeom.rect;
   const relX=e.clientX - rect.left;
@@ -952,7 +958,6 @@ function drawBlocks(){
       }
     }
   }
-  // refresh stamps for selected block (after segments drawn and weekGeom known)
   if(selectedBlockId){ addBlockStamps(blocks.find(b=>b.id===selectedBlockId)); }
 }
 function getCatColorValue(catKey){
@@ -1052,22 +1057,18 @@ function clearSelectionState(){
 function addBlockStamps(blk){
   if(!blk || !weekGeom || !overlayRoot) return;
 
-  // Remove existing block stamps
   overlayRoot.querySelectorAll('[data-role="blk-stamp"]').forEach(n=>n.remove());
 
   const visSt=getVisibleWeekStamp();
   const segs = segmentsForWeek(blk, visSt);
   if(!segs.length) return;
 
-  // Find first visible segment top and last visible segment bottom
   const firstSegStartAbs = segs[0][0];
   const lastSegEndAbs = segs[segs.length-1][1];
 
-  // True start/end minutes (not clamped to visible week)
   const trueStartMin = ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN;
   const trueEndMin   = trueStartMin + blk.dur;
 
-  // Position stamps: at first visible top & last visible bottom
   const firstDayIdx = Math.floor(firstSegStartAbs/1440);
   const firstMinInDay = firstSegStartAbs - firstDayIdx*1440;
   const firstX = weekGeom.rect.left + weekGeom.colX[firstDayIdx];
@@ -1085,7 +1086,6 @@ function addBlockStamps(blk){
   const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
   const off = gap + borderW;
 
-  // START stamp
   const startStamp=document.createElement('div');
   startStamp.className='stamp';
   startStamp.dataset.role='blk-stamp';
@@ -1095,7 +1095,6 @@ function addBlockStamps(blk){
   startStamp.style.transform='translateX(-50%)';
   overlayRoot.appendChild(startStamp);
 
-  // END stamp
   const endStamp=document.createElement('div');
   endStamp.className='stamp';
   endStamp.dataset.role='blk-stamp';
@@ -1301,7 +1300,6 @@ function openSettingsSheet(fromBlockId=null){
     const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
     parent.replaceChild(input, nameNode);
 
-    // Only a checkmark per spec (no X)
     const saveBtn=document.createElement('button'); saveBtn.className='icon-btn'; saveBtn.innerHTML=checkSVG(); saveBtn.title='Save name';
     const trailing = row.querySelector('.icon-btn:last-child');
     trailing.replaceWith(saveBtn);
@@ -1310,7 +1308,6 @@ function openSettingsSheet(fromBlockId=null){
       const newName=input.value.trim();
       if(!newName || newName===cat.name){ renderDropdownList(); return; }
       if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
-        // no toasts yet; revert silently
         renderDropdownList(); return;
       }
       cat.name=newName;
@@ -1417,7 +1414,6 @@ function createGhost(mode){
 }
 function removeGhost(){
   document.querySelector('.ghost')?.remove();
-  // remove ghost stamps
   overlayRoot?.querySelectorAll('[data-role^="ghost-stamp"]').forEach(n=>n.remove());
   ghost=null;
 }
@@ -1433,7 +1429,7 @@ function drawGhost(){
     const onDown=(e)=>{ e.preventDefault(); e.stopPropagation(); dragging=true; el.setPointerCapture?.(e.pointerId); };
     const onMove=(e)=>{
       if(!dragging) return;
-      const snapped = pointToAbsCenter(e.clientX, e.clientY, ghost.dur); // CENTER GRAB
+      const snapped = pointToAbsCenter(e.clientX, e.clientY, ghost.dur); // CENTER GRAB (fixed)
       if(snapped==null) return;
       ghost.startAbs = snapped;
       updateGhostValidity();
@@ -1475,6 +1471,8 @@ function absToRect(startAbs, dur){
   }
   return {left, top: weekGeom.rect.top + topY, width, height};
 }
+
+/* FIXED: center-grab math (use within-column minutes consistently) */
 function pointToAbsCenter(clientX, clientY, dur){
   if(!weekGeom) return null;
   const rect=weekGeom.rect;
@@ -1482,29 +1480,16 @@ function pointToAbsCenter(clientX, clientY, dur){
   const relY=clientY - rect.top;
   if(relX<0 || relX>weekGeom.totalW || relY<0 || relY>weekGeom.totalH) return null;
 
-  // column/day
   let dayIdx=0;
   for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
 
-  // map pointer to CENTER minute; then compute start = center - dur/2, snapped to 15
-  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  let centerMin = Math.round(minuteFloat/15)*15;
+  // minutes within the selected column/day
+  const minuteInDay = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  let center = Math.round(minuteInDay/15)*15;
+  let startInDay = Math.round((center - dur/2)/15)*15;
+  startInDay = clamp(startInDay, 0, 1440 - dur);
 
-  // derive start from center; clamp to the day column
-  let startMin = centerMin - Math.floor(dur/2);
-  // snap start to 15-min grid as well
-  startMin = Math.round(startMin/15)*15;
-
-  // clamp within the column
-  if(startMin < 0) startMin = 0;
-  if(startMin + dur > 1440*(dayIdx+1)){
-    startMin = 1440*(dayIdx+1) - dur;
-  }
-  if(startMin < dayIdx*1440) startMin = dayIdx*1440;
-
-  const startAbs = dayIdx*1440 + (startMin - dayIdx*1440);
-  if(startAbs < 0 || startAbs + dur > WEEK_MIN) return null;
-  return startAbs;
+  return dayIdx*1440 + startInDay;
 }
 function pointToAbs(clientX, clientY, dur){
   if(!weekGeom) return null;
@@ -1516,14 +1501,9 @@ function pointToAbs(clientX, clientY, dur){
   let dayIdx=0;
   for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
   const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
-  let startMin = Math.round(minuteFloat/15)*15; // snap 15
-  if(startMin + dur > 1440*(dayIdx+1)){
-    startMin = 1440*(dayIdx+1) - dur;
-  }
-  if(startMin < 0) startMin=0;
-  const startAbs = dayIdx*1440 + startMin;
-  if(startAbs < 0 || startAbs + dur > WEEK_MIN) return null;
-  return startAbs;
+  let startInDay = Math.round(minuteFloat/15)*15;
+  startInDay = clamp(startInDay, 0, 1440 - dur);
+  return dayIdx*1440 + startInDay;
 }
 function updateGhostValidity(){
   if(!ghost) return;
@@ -1541,16 +1521,13 @@ function updateGhostValidity(){
 /* Ghost stamps (top=start, bottom=end) */
 function updateGhostStamps(rect){
   if(!overlayRoot) return;
-  // ensure overlay exists
   ensureOverlay();
 
-  // find or create
   let topStamp = overlayRoot.querySelector('[data-role="ghost-stamp-top"]');
   let botStamp = overlayRoot.querySelector('[data-role="ghost-stamp-bottom"]');
   if(!topStamp){ topStamp=document.createElement('div'); topStamp.className='stamp'; topStamp.dataset.role='ghost-stamp-top'; overlayRoot.appendChild(topStamp); }
   if(!botStamp){ botStamp=document.createElement('div'); botStamp.className='stamp'; botStamp.dataset.role='ghost-stamp-bottom'; overlayRoot.appendChild(botStamp); }
 
-  // compute times from ghost.startAbs/dur (true edges)
   const startMin = ghost.startAbs % 1440;
   const endMin = (ghost.startAbs + ghost.dur) % 1440;
 
@@ -1604,7 +1581,7 @@ function commitGhost(){
 function toast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toast._timer);
-  t._timer=setTimeout(()=>t.classList.remove('show'), 2000);
+  toast._timer=setTimeout(()=>t.classList.remove('show'), 2000);
 }
 
 /* SVG helpers */
