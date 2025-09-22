@@ -1,4 +1,4 @@
-<!-- W-99 START (full build) -->
+<!-- W-99 START (full build, ghost drag fixed) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -327,10 +327,10 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-99 — full build; based on W-98 with:
+/* Chrono W-99 — full build; includes:
    1) Top/bottom timestamp chips on selected blocks
    2) Top/bottom timestamp chips on ghost during drag/copy
-   3) Ghost grabs from center (thumb not blocking)
+   3) Ghost grabs from center; draggable vertically & horizontally
 */
 
 const screenEl = document.getElementById('screen');
@@ -1387,49 +1387,41 @@ function drawGhost(){
   const pos = absToRect(ghost.startAbs, ghost.dur);
   let el = document.querySelector('.ghost');
   if(!el){
-    el=document.createElement('div'); el.className='ghost invalid';
+    el=document.createElement('div');
+    el.className='ghost invalid';
+    el.style.cursor='grab';
     document.body.appendChild(el);
 
-    /* W-99: Grab by CENTER for better visibility under thumb */
-    let dragging=false, anchorDeltaY=0;
-    const onDown=(e)=>{
-      e.preventDefault(); e.stopPropagation();
-      dragging=true; el.setPointerCapture?.(e.pointerId);
-      const rect=el.getBoundingClientRect();
-      const centerY = rect.top + rect.height/2;
-      // Snap so the ghost's center aligns under the pointer (no obstruction)
-      anchorDeltaY = 0; // force-center behavior
-      // Immediately reposition to center under pointer on grab
-      const targetCenter = e.clientY - anchorDeltaY;
-      moveGhostCenterTo(targetCenter);
-    };
-    const onMove=(e)=>{
-      if(!dragging) return;
-      const targetCenter = e.clientY - anchorDeltaY;
-      moveGhostCenterTo(targetCenter);
-    };
-    const onUp=()=>{ dragging=false; el.releasePointerCapture?.(); };
+    // Drag state
+    let dragging=false;
 
-    el.addEventListener('pointerdown', onDown, {passive:false});
-    window.addEventListener('pointermove', onMove, {passive:false});
-    window.addEventListener('pointerup', onUp, {passive:true});
-    window.addEventListener('pointercancel', onUp, {passive:true});
-
-    function moveGhostCenterTo(centerClientY){
-      // Convert center Y to startAbs snapped to 15 min and clamped to day bounds
+    // Helpers: map pointer → day index & Y minutes
+    function clientXToDayIdx(x){
       const rect = weekGeom.rect;
-      const relY = clamp(centerClientY - rect.top, 0, weekGeom.totalH);
-      let minuteFloat = (relY / weekGeom.totalH) * 1440; // minutes within day column (we keep same day column as startAbs)
-      // Snap center to 15-min grid by aligning start so center is centered
-      const startFromCenter = minuteFloat - (ghost.dur/2);
-      const dayIdx = Math.floor(ghost.startAbs/1440); // keep same day column while dragging vertically
-      let startMin = Math.round(startFromCenter/15)*15;
+      const relX = clamp(x - rect.left, 0, weekGeom.totalW);
+      for(let i=0;i<7;i++){
+        if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]) return i;
+      }
+      return 0;
+    }
+    function clientYToMinutes(y){
+      const rect = weekGeom.rect;
+      const relY = clamp(y - rect.top, 0, weekGeom.totalH);
+      return (relY / weekGeom.totalH) * 1440; // 0..1440
+    }
 
-      // clamp within the day for the current column
-      if(startMin < dayIdx*1440) startMin = dayIdx*1440;
-      if(startMin + ghost.dur > (dayIdx+1)*1440) startMin = (dayIdx+1)*1440 - ghost.dur;
+    function moveGhostCenterTo(clientX, clientY){
+      const dayIdx = clientXToDayIdx(clientX);
+      const minutesY = clientYToMinutes(clientY);
 
-      const newStartAbs = startMin;
+      // center under finger: start = minutesY - dur/2
+      let startMinInDay = Math.round((minutesY - ghost.dur/2)/15)*15;
+      // clamp to stay within the chosen day column
+      if(startMinInDay < 0) startMinInDay = 0;
+      if(startMinInDay + ghost.dur > 1440) startMinInDay = 1440 - ghost.dur;
+
+      const newStartAbs = dayIdx*1440 + startMinInDay;
+
       const candidate={weekSt:getVisibleWeekStamp(), startAbs:newStartAbs, dur:ghost.dur};
       const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
       if(anyOverlapWithBlocks(candidate, ignoreId)){
@@ -1439,7 +1431,31 @@ function drawGhost(){
       }
       updateGhost(el);
     }
+
+    const onDown=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dragging=true; el.setPointerCapture?.(e.pointerId);
+      el.style.cursor='grabbing';
+      // Center on the finger immediately
+      moveGhostCenterTo(e.clientX, e.clientY);
+    };
+    const onMove=(e)=>{
+      if(!dragging) return;
+      e.preventDefault();
+      moveGhostCenterTo(e.clientX, e.clientY);
+    };
+    const onUp=()=>{
+      dragging=false; el.releasePointerCapture?.();
+      el.style.cursor='grab';
+    };
+
+    // Listen on the element (not window) once we have the capture
+    el.addEventListener('pointerdown', onDown, {passive:false});
+    el.addEventListener('pointermove', onMove, {passive:false});
+    el.addEventListener('pointerup', onUp, {passive:true});
+    el.addEventListener('pointercancel', onUp, {passive:true});
   }
+
   placeGhost(el, pos);
   updateGhostValidity();
   ensureGhostStamps();
@@ -1712,7 +1728,7 @@ function render(){
 
 init();
 
-/* ===== Convenience: add a sample block if storage empty (for testing) ===== */
+/* ===== Convenience: seed a couple blocks if storage empty (for testing) ===== */
 if(!localStorage.getItem('chrono_has_seed')){
   (async ()=>{
     await idbOpen();
