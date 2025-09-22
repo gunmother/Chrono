@@ -317,7 +317,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-99 — full build (selector & block selection hotfix) */
+/* Chrono W-99 — full build with selector + block timestamps + center-grab ghost + nav hotfix */
 
 const screenEl = document.getElementById('screen');
 const buttons = [...document.querySelectorAll('.neu-btn')];
@@ -508,7 +508,7 @@ function buildWeekView(){
 
   const gridEl = document.getElementById('weekGrid');
 
-  /* IMPORTANT: use pointerdown (not click) so overlays never swallow clicks */
+  /* Use pointerdown to begin a selection; prevents overlay swallowing clicks */
   gridEl.addEventListener('pointerdown', onWeekGridPointerDown, {passive:false});
 
   ensureOverlay();
@@ -523,7 +523,12 @@ function buildWeekView(){
   startLensTimer();
 }
 
-function ackPulse(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack), 250); }); } // harmless if fails
+function ackPulse(btn){
+  requestAnimationFrame(()=>{
+    btn.classList.add('ack');
+    setTimeout(()=>btn.classList.remove('ack'), 250);
+  });
+}
 
 function repaintWeek(skipDraw=false){
   const first=weekStart(visibleWeekFirst), last=addDays(first,6);
@@ -680,19 +685,16 @@ function nearestEdgesAround(startAbs, dur, side){
 let selectedBlockId=null;
 
 function onWeekGridPointerDown(e){
-  // left click / primary touch only
-  if(e.pointerType === 'mouse' && e.button !== 0) return;
+  if(e.pointerType === 'mouse' && e.button !== 0) return; // primary only
   const now = Date.now();
   if(!weekGeom) return;
   if(now < dragBlockUntil) return;
 
   const path = e.composedPath ? e.composedPath() : [];
-  // ignore if interacted on handles, action buttons, or existing blocks
+  // ignore interactions on handles, action buttons, or existing blocks
   if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
 
-  // if a block is active, deselect so new selector can start
   if(selectedBlockId) deselectBlock();
-
   if(dragModeActive || copyModeActive) return;
 
   const rect=weekGeom.rect;
@@ -985,7 +987,6 @@ function drawBlockSegment(blk, dayIdx, startMin, endMin){
   rectEl.style.background = getCatColorValue(blk.catKey);
   rectEl.dataset.id = blk.id;
 
-  // Use pointerdown to ensure the grid doesn't steal the event
   rectEl.addEventListener('pointerdown', (e)=>{
     e.preventDefault();
     e.stopPropagation();
