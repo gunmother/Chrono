@@ -1,9 +1,2444 @@
-:root{ --bg:#e3eaf2; --ink:#7a8ba2; --icon-inactive:#7a8ba2; --icon-active:#4ff7ff; --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.32); --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1; --gap:24px; --radius:12px; --border:#c6cfda; --grid-line:#cfd9e5; --chart-bg:#d1dce8; --mask-surface: var(--bg); --hour-col:64px; --dow-h:32px; --label-size:12px; --marquee-border:5px; --marquee-glow:0 0 9px 4px var(--turq-glow); --handle-stroke:#5e7286; --chev-stroke-w:2.2; --handle-gap:12px; --handle-height-mult:1.75; --stamp-h:26px; --past-navy: rgba(16,58,91,0.50); } html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink); font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden; -webkit-tap-highlight-color: transparent; } *{box-sizing:border-box} .app{ width:clamp(320px, 96vw, 520px); height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))); margin:max(16px, env(safe-area-inset-top)) auto; display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap); color:var(--ink); } #screen{ flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg); box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); position:relative; overflow:hidden; display:grid; place-items:center; color:var(--ink); font-weight:900; letter-spacing:.06em; } /* Bottom controls */ .controls{ display:flex; gap:var(--gap); padding-bottom:2px; color:var(--ink); } .neu-btn{ --btn-d: calc((100% - (3 * var(--gap))) / 4); flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1; border-radius:50%; border:none; outline:none; cursor:pointer; background:var(--bg); display:grid; place-items:center; box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); transition: box-shadow .2s ease, background .2s ease, transform .06s ease, color .06s ease, filter .06s ease; color:var(--ink); } .neu-btn svg{ width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .neu-btn.is-pressed{ background: radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%), var(--pressed-navy); box-shadow: var(--off) var(--off) var(--blur) var(--hi), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo); } .neu-btn.is-pressed svg{ stroke:var(--icon-active); filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow)); } .neu-btn:active{ transform:scale(.985); } /* Small neu buttons */ .neu-btn--sm{ width:44px; height:44px; border-radius:12px; background:var(--bg); border:none; cursor:pointer; display:grid; place-items:center; color:var(--ink); box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); transition: box-shadow .2s ease, background .2s ease, transform .06s ease, filter .2s ease, color .06s ease; } .neu-btn--sm svg *{ stroke:currentColor; } .neu-btn--sm svg{ width:22px; height:22px; stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } .neu-btn--sm.ack{ background:var(--pressed-navy); color:var(--icon-active); box-shadow: var(--off) var(--off) var(--blur) var(--hi), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo); } /* Week screen layout */ .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0; color:var(--ink) } .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; } .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink) } .grid-area{ position:relative; overflow:visible } .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:3 } .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 } .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 } .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px } .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) } .grid{ position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0; background:var(--chart-bg); border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line); z-index:0; overflow:visible; } /* ORDERING inside .grid (updated for W-101): background < pastOverlay(z:1) < blockHost(z:2) < mask(z:3) < lensHost(z:4) < selHost(z:5) */ .pastOverlay{ position:absolute; inset:0; pointer-events:none; z-index:1; } .blockHost{ position:absolute; inset:0; pointer-events:auto; z-index:2; } .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:3 } .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:4; } .selHost{ position:absolute; inset:0; pointer-events:none; z-index:5; } .marqueeRect{ position:absolute; box-sizing:border-box; background:transparent; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow: var(--marquee-glow); } .overlayRoot{ position:fixed; inset:0; z-index:6; pointer-events:none; } .ov-group{ position:absolute; pointer-events:none; } .glow-ghost{ position:absolute; border-radius:12px; pointer-events:none; box-shadow: var(--marquee-glow); } .stamp{ position:absolute; left:50%; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active); border:1px solid #273b4d; border-radius:10px; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap; pointer-events:none; height:var(--stamp-h); display:grid; place-items:center; box-shadow: 0 0 2px rgba(79,247,255,.28), 0 0 10px rgba(79,247,255,.28); z-index:3; } .ghost-stamp{ position:fixed; left:50%; transform:translateX(-50%); background:var(--pressed-navy); color:var(--icon-active); border:1px solid #273b4d; border-radius:10px; padding:3px 6px; font-size:11px; font-variant-numeric:tabular-nums; font-weight:800; white-space:nowrap; pointer-events:none; z-index:31; box-shadow: 0 0 2px rgba(79,247,255,.28), 0 0 10px rgba(79,247,255,.28); } .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; display:grid; place-items:center; } .chev-chip{ width:100%; height:100%; border-radius:14px; background:var(--bg); box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); display:grid; place-items:center; } .chev path{ fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round; filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo)); } /* Floating action buttons (selector or block) */ .selBtns{ position:fixed; z-index:8; display:grid; gap:8px; pointer-events:auto; } .selBtnHidden{ display:none !important; } .present-lens{ position:absolute; box-sizing:border-box; border:var(--marquee-border) solid #fff; border-radius:12px; box-shadow:var(--marquee-glow); z-index:2; pointer-events:none; } .screensaver{ width:100%; height:100%; display:grid; place-items:center; } .wm{ font-weight:900; letter-spacing:.06em; opacity:.9; } /* ===== Blocks — SQUARE corners (no rounding) ===== */ .blk{ position:absolute; border-radius:0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); cursor:pointer; } /* Ghost — SQUARE corners */ .ghost{ position:fixed; z-index:30; pointer-events:auto; border-radius:0; opacity:.5; box-shadow: inset 0 0 0 2px rgba(0,0,0,.1); touch-action:none; } .ghost.valid{ background:#00c853; } .ghost.invalid{ background:#ff5252; } /* Toast */ .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#1c2a36; color:#fff; font-weight:800; padding:10px 14px; border-radius:12px; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease; } .toast.show{ opacity:1; transform:translate(-50%,-4px); } /* ===== FULL-SCREEN SETTINGS scaffolding (panel & veil; content built in Part 2) ===== */ .fs-veil{ position:fixed; inset:0; background:rgba(0,0,0,.12); backdrop-filter:saturate(120%) blur(2px); z-index:200; display:none; } .fs-panel{ position:fixed; inset:0; display:none; z-index:201; background:var(--bg); grid-template-rows:auto auto 1fr auto; } .fs-head{ display:flex; align-items:center; justify-content:center; padding:10px; font-weight:800; } .fs-sub{ padding:8px 14px; display:grid; gap:8px; } .pill{ display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:10px; padding:8px 10px; background:var(--bg); box-shadow: inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); } .dot{ width:14px; height:14px; border-radius:50%; flex:0 0 14px; } .dropdown{ padding:8px 14px 0 14px; } .dropdown-btn{ width:100%; border:none; background:transparent; color:var(--ink); text-align:left; font-weight:700; padding:8px 0; display:flex; align-items:center; gap:10px; } .dropdown-list{ /* no max-height; page will scroll if large */ padding:6px 2px 10px 2px; } .row{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; margin:8px 12px; border-radius:10px; background:var(--bg); box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); } .row .name{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .row .amt{ opacity:.9; font-variant-numeric:tabular-nums; font-weight:800; } .name-edit{ width:100%; max-width:180px; border:none; outline:none; background:#ffffffaa; border-radius:8px; padding:4px 8px; font-weight:700; } .icon-btn{ border:none; background:transparent; color:var(--ink); cursor:pointer; display:grid; place-items:center; width:28px; height:28px; border-radius:8px; } .icon-btn:active{ transform:scale(.96); } .fs-body{ overflow:auto; padding:8px 14px; } .fs-foot{ display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:12px 14px 14px 14px; } .btn{ border:none; border-radius:12px; padding:10px 14px; background:var(--bg); color:var(--ink); font-weight:800; box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo); } .btn:active{ transform:scale(.985); } .btn-warn{ color:#d83a3a; } .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); } .fs-panel.ro .btn, .fs-panel.ro input, .fs-panel.ro select, .fs-panel.ro .icon-btn{ opacity:.55; pointer-events:none; } /* === W-102p — Salvage2: minimal layering only, no layout === */ .grid .blockHost { z-index:10 !important; } .grid #pastOverlay, .grid .pastOverlay { z-index:20 !important; opacity:0.75 !important; pointer-events:none !important; } .grid .mask { z-index:30 !important; } .grid .lensHost { z-index:40 !important; } .grid .selHost { z-index:50 !important; } /* Keep Exit active in read-only settings */ .fs-panel.ro #btnExit{ pointer-events:auto !important; opacity:1 !important; cursor:pointer !important; } /* ====================================== */ Chrono W-102 
 
-Settings
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chrono W-102b</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000" />
+<style>
+  :root{
+    --bg:#e3eaf2; --ink:#7a8ba2;
+    --icon-inactive:#7a8ba2; --icon-active:#4ff7ff;
+    --pressed-navy:#355169; --turq-glow: rgba(79,247,255,.32);
 
-Categories 
+    --off:5px; --blur:9px; --hi:#ffffff; --lo:#b7c3d1;
+    --gap:24px; --radius:12px;
 
-Delete Exit Save 
+    --border:#c6cfda; --grid-line:#cfd9e5;
+    --chart-bg:#d1dce8; --mask-surface: var(--bg);
 
-/* Chrono W-102 (Part 1) Key changes in Part 1: - Navy past overlay sits UNDER blocks but ABOVE background; grid mask remains on top. - Action buttons use global pointer window.__openSettingsFS so Settings works once Part 2 loads. - Completed blocks: Settings enabled (read-only in Part 2), Copy enabled, Move hidden. - Present/Future blocks: Move + Copy + Settings all enabled. */ const screenEl = document.getElementById('screen'); const buttons = [...document.querySelectorAll('.neu-btn')]; let activeView = null; // screensaver landing let visibleWeekFirst = weekStart(new Date()); const DAY_MS = 86400000; const WEEK_MIN = 7*1440; const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; } function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; } function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); } function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; } function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; } function getNow(){ return new Date(); } function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); } function weekAbsToMs(weekSt, absMin){ return weekSt + absMin*60000; } /* storage */ const DB_NAME='chronoDB', DB_VERSION=45; let dbPromise=null, STORAGE_MODE='idb'; function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } } function idbOpen(){ if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); } if(dbPromise) return dbPromise; dbPromise = new Promise((resolve,reject)=>{ const req = indexedDB.open(DB_NAME, DB_VERSION); req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); }; req.onsuccess = ()=>resolve(req.result); req.onerror = ()=>reject(req.error); }); return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; }); } async function storageSet(k,v){ if(STORAGE_MODE==='ls'){ if(v===undefined||v===null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; } const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); } return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); const store=tx.objectStore('kv'); if(v===undefined||v===null) store.delete(k); else store.put({k,v}); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); }); } async function storageGet(k){ if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; } const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); } return new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const req=tx.objectStore('kv').get(k); req.onsuccess=()=>res(req.result? req.result.v:undefined); req.onerror=()=>rej(req.error); }); } const STATE_KEY='state_w101'; const SEL_KEY ='snake_w101'; const BLK_KEY ='blocks_w101'; const CAT_KEY ='categories_w101'; /* selection (selector tool) */ let snake = null; /* blocks */ let blocks = []; // {id, weekSt, startAbs, dur, catKey, note?, privacy?, notif?, occ?, catNameSnap?} /* categories */ let categories = [ {key:'work', name:'Work', color:'var(--c-work)'}, {key:'school', name:'School', color:'var(--c-school)'}, {key:'commute', name:'Commute', color:'var(--c-commute)'}, {key:'chores', name:'Chores', color:'var(--c-chores)'}, {key:'errands', name:'Errands', color:'var(--c-errands)'}, {key:'meal', name:'Meal Time', color:'var(--c-meal)'}, {key:'hygiene', name:'Hygiene', color:'var(--c-hygiene)'}, {key:'childcare', name:'Child Care', color:'var(--c-childcare)'}, {key:'selfcare', name:'Self Care', color:'var(--c-selfcare)'}, {key:'exercise', name:'Exercise', color:'var(--c-exercise)'}, {key:'family', name:'Family Time',color:'var(--c-family)'}, {key:'hobbies', name:'Hobbies', color:'var(--c-hobbies)'}, {key:'projects', name:'Projects', color:'var(--c-projects)'}, {key:'rnr', name:'R & R', color:'var(--c-rnr)'}, {key:'freetime', name:'Free Time', color:'var(--c-freetime)'}, {key:'sleep', name:'Sleep', color:'var(--c-sleep)'}, ]; /* swatches & mapping retained */ document.documentElement.style.setProperty('--c-work','#db3b3b'); document.documentElement.style.setProperty('--c-school','#eb7d7b'); document.documentElement.style.setProperty('--c-commute','#d49c14'); document.documentElement.style.setProperty('--c-chores','#bf7716'); document.documentElement.style.setProperty('--c-errands','#e9b627'); document.documentElement.style.setProperty('--c-meal','#f6e48f'); document.documentElement.style.setProperty('--c-hygiene','#f7d9d8'); document.documentElement.style.setProperty('--c-childcare','#1c7a44'); document.documentElement.style.setProperty('--c-selfcare','#4ea282'); document.documentElement.style.setProperty('--c-exercise','#0f3c32'); document.documentElement.style.setProperty('--c-family','#d9eef4'); document.documentElement.style.setProperty('--c-hobbies','#4ea282'); document.documentElement.style.setProperty('--c-projects','#4aa0d6'); document.documentElement.style.setProperty('--c-rnr','#1e6fb2'); document.documentElement.style.setProperty('--c-freetime','#d49c14'); document.documentElement.style.setProperty('--c-sleep','#103a5b'); /* flags & timers */ let dragging = false; let rafPending = false; let weekGeom=null, overlayRoot=null; let presentLensEl=null, presentLensGhost=null; let lensIntervalId=null, lensAlignTimeout=null; let lensSessionId=null; let dragBlockUntil=0; /* Ghost state for Drag/Copy */ let ghost = null; // {mode:'drag'|'copy', srcBlockId, startAbs, dur, valid} let dragModeActive=false, copyModeActive=false; /* ===== NAV BUTTONS ===== */ buttons.forEach(btn=>{ btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); const v = btn.dataset.view; const wasPressed = btn.classList.contains('is-pressed'); buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); }); if(!wasPressed){ btn.classList.add('is-pressed'); btn.setAttribute('aria-pressed','true'); } if(activeView === v){ activeView = null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); showScreensaver(); destroyActionButtons(); destroyOverlay(); endDrag('nav'); stopLensTimer(true); } else { const switchingToWeek = (v === 'week' && activeView !== 'week'); activeView = v; if(switchingToWeek){ visibleWeekFirst = weekStart(new Date()); } endDrag('nav'); render(); } saveSoon(120); }, {passive:false}); }); /* overlay */ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot)) return; overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot'; document.body.appendChild(overlayRoot); } function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; } /* screensaver */ function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-102</div></div>`; } /* --- Week View --- */ function buildWeekView(){ screenEl.innerHTML = ` <div class="wrap"> <div class="head"> <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous"> <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg> </button> <div class="title" id="weekTitle"></div> <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next"> <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg> </button> </div> <div class="grid-area"> <div class="top-row week" id="dowPills"></div> <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid"> <!-- Past overlay is UNDER blocks but ABOVE background --> <canvas class="pastOverlay" id="pastOverlay"></canvas> <div class="blockHost" id="blockHost"></div> <svg class="mask" id="maskSVG" aria-hidden="true"></svg> <div class="lensHost" id="lensHost"></div> <div class="selHost" id="selHost"></div> </div> <div class="hours" id="weekHours"></div> </div> </div> `; const prevBtn=document.getElementById('prevWeekBtn'); const nextBtn=document.getElementById('nextWeekBtn'); prevBtn.onclick = ()=>{ ackPulse(prevBtn); endDrag('nav'); clearSelectionState(); stopLensTimer(true); visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); drawBlocks(); drawSnake(); applyPastOverlay(); startLensTimer(); saveSoon(120); }; nextBtn.onclick = ()=>{ ackPulse(nextBtn); endDrag('nav'); clearSelectionState(); stopLensTimer(true); visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); drawBlocks(); drawSnake(); applyPastOverlay(); startLensTimer(); saveSoon(120); }; const gridEl = document.getElementById('weekGrid'); gridEl.addEventListener('click', onWeekGridTap, {passive:true}); ensureOverlay(); repaintWeek(); const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); applyPastOverlay(); } }, 32); new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); applyPastOverlay(); }).observe(gridEl); window.addEventListener('scroll', sync, {passive:true}); window.addEventListener('orientationchange', sync, {passive:true}); if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true}); startLensTimer(); applyPastOverlay(); } function ackPulse(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); } function repaintWeek(skipDraw=false){ const first=weekStart(visibleWeekFirst), last=addDays(first,6); const titleEl = document.getElementById('weekTitle'); if(titleEl){ titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} – ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`; } const pills=document.getElementById('dowPills'); if(pills){ pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); } } const gh=document.getElementById('weekHours'); if(gh) gh.innerHTML=''; const gridEl=document.getElementById('weekGrid'); weekGeom=computeGeometry(gridEl,7); if(gh){ for(let i=0;i<24;i++){ const s=document.createElement('div'); s.className='hour-stamp'; s.textContent = hourToAMPM(i); s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px'; gh.appendChild(s); } } buildMask(weekGeom,7); if(!skipDraw){ drawBlocks(); drawSnake(); } updatePresentLens(true); } function computeGeometry(gridEl, cols){ const r=gridEl.getBoundingClientRect(); const totalW=Math.max(0, Math.round(r.width)); const totalH=Math.max(0, Math.round(r.height)); const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols; const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24; const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); } const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); } const slotY=[0]; for(let hr=0;hr<24;hr++){ const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4; const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1; for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]); } return {totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r}; } function buildMask(geom, cols){ const svg=document.getElementById('maskSVG'); if(!svg) return; svg.innerHTML=''; const { totalW, totalH, colX, rowY } = geom; if(totalW<=0 || totalH<=0) return; svg.setAttribute('width', totalW); svg.setAttribute('height', totalH); svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`); svg.setAttribute('preserveAspectRatio','none'); const NS='http://www.w3.org/2000/svg'; const defs=document.createElementNS(NS,'defs'); const sym=document.createElementNS(NS,'symbol'); sym.setAttribute('id','tile900x300'); sym.setAttribute('viewBox','0 0 900 300'); sym.setAttribute('preserveAspectRatio','none'); const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2'; const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;}; const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;}; sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24)); sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300)); sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24)); sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61')); sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239')); defs.appendChild(sym); svg.appendChild(defs); for(let rI=0;rI<24;rI++){ for(let cI=0;cI<cols;cI++){ const use=document.createElementNS(NS,'use'); use.setAttribute('href','#tile900x300'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]); use.setAttribute('width',colX[cI+1]-colX[cI]); use.setAttribute('height',rowY[rI+1]-rowY[rI]); svg.appendChild(use); } } } /* --- overlap utilities & week segmentation --- */ function segmentsForWeek(obj, visibleWeekStamp){ const weekLen = WEEK_MIN; const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS)); const offsetMin = weekDiff * weekLen; const start = obj.startAbs - offsetMin; const end = start + obj.dur; const s = clamp(start, 0, weekLen); const e = clamp(end, 0, weekLen); return (e > s) ? s,e : []; } function eachSegmentsInWeek(obj, cb){ const segs = segmentsForWeek(obj, getVisibleWeekStamp()); for(const [absS, absE] of segs){ let s=absS; while(s<absE){ const dayIdx=Math.floor(s/1440), dayStart=dayIdx*1440; const e=Math.min(absE, dayStart+1440); cb(s,e); s=e; } } } function anyOverlapWithBlocks(candidate, ignoreId=null){ let hit=false; const visSt=getVisibleWeekStamp(); for(const b of blocks){ if(ignoreId && b.id===ignoreId) continue; const proxy={weekSt:b.weekSt, startAbs:b.startAbs, dur:b.dur}; const csegs=segmentsForWeek(candidate, visSt); const bsegs=segmentsForWeek(proxy, visSt); for(const [cs,ce] of csegs){ for(const [bs,be] of bsegs){ if(Math.max(cs,bs) < Math.min(ce,be)){ hit=true; break; } } if(hit) break; } if(hit) break; } return hit; } function nearestEdgesAround(startAbs, dur, side){ const selStart = ((startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN; const selEnd = Math.min(WEEK_MIN, selStart + dur); const edgeAbs = (side==='top'? selStart : selEnd-1); const dayIdx = Math.floor(edgeAbs/1440); const dayStart= dayIdx*1440, dayEnd = dayStart+1440; const edges=[dayStart, dayEnd]; for(const b of blocks){ eachSegmentsInWeek(b,(bs,be)=>{ if(bs>=dayEnd || be<=dayStart) return; edges.push(bs,be); }); } edges.sort((a,b)=>a-b); let min=dayStart, max=dayEnd; for(let i=1;i<edges.length;i++){ if(edgeAbs>=edges[i-1] && edgeAbs<=edges[i]){ min=edges[i-1]; max=edges[i]; break; } } return {minStart:min, maxEnd:max}; } /* --- selector creation --- */ let selectedBlockId=null; function onWeekGridTap(e){ const now = Date.now(); if(!weekGeom) return; if(now < dragBlockUntil) return; // exclusivity: cannot create selector if block selected or ghost active if(selectedBlockId || dragModeActive || copyModeActive) return; const path = e.composedPath ? e.composedPath() : []; if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return; const rect=weekGeom.rect; const relX=e.clientX - rect.left; const relY=e.clientY - rect.top; let dayIdx=0; for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } } const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440; const startMin = Math.floor(minuteFloat/60)*60; const startAbs = dayIdx*1440 + startMin; const candidate = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 }; if(anyOverlapWithBlocks(candidate)){ return; // selector cannot overlap blocks } snake = candidate; saveSoon(120); drawSnake(); ensureActionButtons('selector'); repositionActionButtons(); } /* selector drag */ let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0; function startSnakeDrag(ev, side){ if(!snake) return; ev.preventDefault(); ev.stopPropagation(); ev.currentTarget.setPointerCapture(ev.pointerId); dragging=true; dragSide = side; dragStartY = ev.clientY; baseStartAbs = snake.startAbs; baseDur = snake.dur; const gridHeight = weekGeom.totalH || 1; const move=(e)=>{ const dyPx = e.clientY - dragStartY; const deltaMinRaw = (dyPx / gridHeight) * 1440; let snappedDelta = Math.round(deltaMinRaw / 15) * 15; if(snappedDelta === 0) return; let newStart = baseStartAbs, newDur = baseDur; if(dragSide==='top'){ newStart = baseStartAbs + snappedDelta; const endAbs = baseStartAbs + baseDur; newDur = clamp(endAbs - newStart, 15, 1440); }else{ const newEnd = baseStartAbs + baseDur + snappedDelta; newDur = clamp(newEnd - baseStartAbs, 15, 1440); } const bracket = nearestEdgesAround(newStart, newDur, dragSide); const selStart = ((newStart%WEEK_MIN)+WEEK_MIN)%WEEK_MIN; const selEnd = Math.min(WEEK_MIN, selStart + newDur); if(dragSide==='top'){ if(selStart < bracket.minStart) { const diff = bracket.minStart - selStart; newStart += diff; newDur -= diff; } }else{ if(selEnd > bracket.maxEnd){ const diff = selEnd - bracket.maxEnd; newDur -= diff; } } newDur = Math.max(15, Math.min(newDur, 1440)); const candidate={weekSt:snake.weekSt, startAbs:newStart, dur:newDur}; if(anyOverlapWithBlocks(candidate)){ return; // never overlap existing blocks } snake.startAbs = newStart; snake.dur = newDur; if(!rafPending){ rafPending = true; requestAnimationFrame(()=>{ rafPending=false; drawSnake(); repositionActionButtons(); }); } }; const up=(e)=>{ endDrag('up', e); }; const cancel=(e)=>{ endDrag('cancel', e); }; const lost=(e)=>{ endDrag('lost', e); }; window.addEventListener('pointermove', move, {passive:false}); window.addEventListener('pointerup', up, {passive:true}); window.addEventListener('pointercancel', cancel, {passive:true}); ev.currentTarget.addEventListener('lostpointercapture', lost, {once:true}); startSnakeDrag._listeners = { move, up, cancel, target: ev.currentTarget }; } function endDrag(reason, ev){ if(!dragging && !startSnakeDrag._listeners) return; const ls = startSnakeDrag._listeners || {}; try{ window.removeEventListener('pointermove', ls.move); window.removeEventListener('pointerup', ls.up); window.removeEventListener('pointercancel', ls.cancel); ls.target?.releasePointerCapture?.(ev?.pointerId); }catch{} startSnakeDrag._listeners = null; dragging=false; dragSide=null; if(snake){ while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; } while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; } } dragBlockUntil = Date.now() + 120; drawSnake(); repositionActionButtons(); saveSoon(80); } /* selection painter */ function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); } function drawSnake(){ const host=document.getElementById('selHost'); if(!host) { destroyActionButtons(); return; } ensureOverlay(); host.innerHTML=''; clearSelectionOverlays(); if(!snake){ if(!selectedBlockId) destroyActionButtons(); return; } const visSt = getVisibleWeekStamp(); const segs = segmentsForWeek(snake, visSt); if(segs.length===0){ destroyActionButtons(); return; } if(anyOverlapWithBlocks(snake)){ return; } const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000; const endLocalMin = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000; for(const [segStartAbs, segEndAbs] of segs){ let s = segStartAbs; while(s < segEndAbs){ const dayIdx = Math.floor(s / 1440); const dayStartAbs = dayIdx*1440; const segStart = s; const segEnd = Math.min(segEndAbs, dayStartAbs + 1440); const showTopHere = (startLocalMin >= segStart && startLocalMin < segEnd); const showBottomHere = (endLocalMin > segStart && endLocalMin <= segEnd); drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs, showTopHere, showBottomHere); s = segEnd; } } ensureActionButtons('selector'); repositionActionButtons(); } function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; } function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){ const host=document.getElementById('selHost'); const colLeft = weekGeom.colX[dayIdx]; const colRight= weekGeom.colX[dayIdx+1]; const colWidth= (colRight - colLeft) - (dayIdx===6?1:0); const topY = minutesToY(startMin); const botY = minutesToY(endMin); const height= Math.max(1, botY - topY); const rectEl=document.createElement('div'); rectEl.className='marqueeRect'; rectEl.style.left = `${colLeft}px`; rectEl.style.top = `${topY}px`; rectEl.style.width = `${colWidth}px`; rectEl.style.height = `${height}px`; host.appendChild(rectEl); const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='sel-ov'; group.style.left = (weekGeom.rect.left + colLeft) + 'px'; group.style.top = (weekGeom.rect.top + topY) + 'px'; group.style.width= colWidth + 'px'; group.style.height= height + 'px'; overlayRoot.appendChild(group); const glow=document.createElement('div'); glow.className='glow-ghost'; glow.dataset.role='sel-ghost'; glow.style.left = (weekGeom.rect.left + colLeft) + 'px'; glow.style.top = (weekGeom.rect.top + topY) + 'px'; glow.style.width = colWidth + 'px'; glow.style.height = height + 'px'; overlayRoot.appendChild(glow); const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12; const borderW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--marquee-border'))||5; const rowH0 = weekGeom.rowH[0] || 48; const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75))); const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26'); const off = gap + borderW; if(showTop){ const topStamp=document.createElement('div'); topStamp.className='stamp'; topStamp.textContent = HHMM(startMin); topStamp.style.left = (colWidth/2)+'px'; topStamp.style.top = (- (off + stampH))+'px'; group.appendChild(topStamp); const topHandle=document.createElement('div'); topHandle.className='handle top'; topHandle.style.left='0px'; topHandle.style.top = (- (off + stampH + gap + hH))+'px'; topHandle.style.width=colWidth+'px'; topHandle.style.height=hH+'px'; topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', colWidth, rowH0)}</div>`; topHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'top'), {passive:false}); group.appendChild(topHandle); } if(showBottom){ const botStamp=document.createElement('div'); botStamp.className='stamp'; botStamp.textContent = HHMM(endMin%1440); botStamp.style.left = (colWidth/2)+'px'; botStamp.style.top = (height + off)+'px'; group.appendChild(botStamp); const botHandle=document.createElement('div'); botHandle.className='handle bottom'; botHandle.style.left='0px'; botHandle.style.top = (height + off + stampH + gap)+'px'; botHandle.style.width=colWidth+'px'; botHandle.style.height=hH+'px'; botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', colWidth, rowH0)}</div>`; botHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'bottom'), {passive:false}); group.appendChild(botHandle); } } function chevronsSVG(dir, colW, rowH){ const padX = 8; const w = Math.max(28, colW - padX*2); const h = Math.max(48, Math.floor(rowH * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75))); const mid = w/2; const gap = h/6; const span = Math.min(w*0.42, h/4); const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`; const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`; const d1 = (dir==='up'? up(gap) : dn(gap)); const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2)); const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4)); return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`; } /* ============ TEMPORAL HELPERS ============ */ function isBlockFullyPast(blk){ const endMs = weekAbsToMs(getVisibleWeekStamp(), ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN + blk.dur); // Adjust endMs to absolute week shown: use blk.weekSt with segments const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return false; const [s,e]=segs[0]; const absEndMs = weekAbsToMs(getVisibleWeekStamp(), e); return absEndMs <= Date.now(); } function isBlockOngoing(blk){ const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return false; const [s,e]=segs[0]; const nowMin = Math.floor(((Date.now()-getVisibleWeekStamp())/60000)); return nowMin >= s && nowMin < e; } function isBlockFuture(blk){ const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return false; const [s,_e]=segs[0]; const nowMin = Math.floor(((Date.now()-getVisibleWeekStamp())/60000)); return s > nowMin; } /* ============ BLOCKS ============ */ function drawBlocks(){ const host=document.getElementById('blockHost'); if(!host) return; host.innerHTML=''; ensureOverlay(); const visSt=getVisibleWeekStamp(); for(const blk of blocks){ const segs = segmentsForWeek(blk, visSt); for(const [segStartAbs, segEndAbs] of segs){ let s=segStartAbs; while(s<segEndAbs){ const dayIdx=Math.floor(s/1440); const dayStartAbs=dayIdx*1440; const segStart=s; const segEnd=Math.min(segEndAbs, dayStartAbs+1440); drawBlockSegment(blk, dayIdx, segStart-dayStartAbs, segEnd-dayStartAbs); s=segEnd; } } } } function getCatColorValue(catKey){ const cat=categories.find(c=>c.key===catKey); if(!cat) return '#bbb'; if(cat.color.startsWith('var(')) return getComputedStyle(document.documentElement).getPropertyValue(cat.color.slice(4,-1)) || '#bbb'; return cat.color; } function drawBlockSegment(blk, dayIdx, startMin, endMin){ const host=document.getElementById('blockHost'); const colLeft = weekGeom.colX[dayIdx]; const colRight= weekGeom.colX[dayIdx+1]; const colWidth= (colRight - colLeft) - (dayIdx===6?1:0); const topY = minutesToY(startMin); const botY = minutesToY(endMin); const height= Math.max(1, botY - topY); const rectEl=document.createElement('div'); rectEl.className='blk'; rectEl.style.left = `${colLeft}px`; rectEl.style.top = `${topY}px`; rectEl.style.width = `${colWidth}px`; rectEl.style.height = `${height}px`; rectEl.style.background = getCatColorValue(blk.catKey); rectEl.dataset.id = blk.id; rectEl.addEventListener('click', (e)=>{ e.stopPropagation(); if(snake || dragModeActive || copyModeActive) return; selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height}, {dayIdx, startMin, endMin}); }, {passive:true}); host.appendChild(rectEl); if(selectedBlockId===blk.id){ outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height, segMeta={dayIdx, startMin, endMin}); } } function outlineRect(absLeft, absTop, w, h, segMeta=null){ clearBlockOutline(); const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='blk-ov'; group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px'; overlayRoot.appendChild(group); const ghostGlow=document.createElement('div'); ghostGlow.className='glow-ghost'; ghostGlow.dataset.role='blk-ghost'; ghostGlow.style.left = absLeft+'px'; ghostGlow.style.top = absTop+'px'; ghostGlow.style.width=w+'px'; ghostGlow.style.height=h+'px'; overlayRoot.appendChild(ghostGlow); const outline=document.createElement('div'); outline.className='marqueeRect'; outline.style.position='absolute'; outline.style.inset='0'; group.appendChild(outline); try{ const blk=blocks.find(b=>b.id===selectedBlockId); if(blk){ const visSt=getVisibleWeekStamp(); let sAbs=0,eAbs=0; if(segMeta){ const {dayIdx,startMin,endMin}=segMeta; sAbs = dayIdx*1440 + startMin; eAbs = dayIdx*1440 + endMin; }else{ const segs=segmentsForWeek(blk, visSt); if(segs.length){ [sAbs,eAbs]=segs[0]; } } const topStamp=document.createElement('div'); topStamp.className='stamp'; topStamp.textContent = HHMM(sAbs%1440); topStamp.style.left = (w/2)+'px'; topStamp.style.top = (- (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26') + 12))+'px'; group.appendChild(topStamp); const botStamp=document.createElement('div'); botStamp.className='stamp'; botStamp.textContent = HHMM(eAbs%1440); botStamp.style.left = (w/2)+'px'; botStamp.style.top = (h + 8)+'px'; group.appendChild(botStamp); } }catch{} ensureActionButtons('block'); repositionActionButtons(); } function clearBlockOutline(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove()); } function selectBlock(id, rect, segMeta){ selectedBlockId=id; outlineRect(rect.x, rect.y, rect.w, rect.h, segMeta||null); } /* Deselect block helper */ function deselectBlock(){ if(dragModeActive || copyModeActive) { deactivateModes(); } selectedBlockId=null; clearBlockOutline(); destroyActionButtons(); } /* clear state helper */ function clearSelectionState(){ if(dragModeActive || copyModeActive){ deactivateModes(); } selectedBlockId=null; clearBlockOutline(); destroyActionButtons(); } /* ====== Action buttons auto-avoid ghost + build with temporal rules ====== */ function getGhostRect(){ if(!ghost || !weekGeom) return null; const g = absToRect(ghost.startAbs, ghost.dur); return new DOMRect(g.left, g.top, g.width, g.height); } function repositionActionButtons(){ const pair = window.__actionBtns; if(!pair){ return; } const selR = selectionMidRect(); if(!selR){ hideActionButtons(); return; } pair.classList.remove('selBtnHidden'); const margin=8, btnW=44, btnGap=8; const count = pair.childElementCount||2; const totalH=(44* count) + (btnGap*(count-1)); let preferRight = (window.innerWidth - selR.right) >= selR.left; let left = (preferRight ? selR.right + margin : selR.left - margin - btnW); if(left < margin){ left = selR.right + margin; } if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, selR.left - margin - btnW); } let top = selR.top + (selR.height/2) - (totalH/2); if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); } if(top < margin) top = margin; const gRect = getGhostRect(); if(gRect){ const overlap = !(left+btnW < gRect.left-4 || left > gRect.right+4 || top+totalH < gRect.top-4 || top > gRect.bottom+4); if(overlap){ const spaceLeft = gRect.left - margin - btnW; const spaceRight = window.innerWidth - (gRect.right + margin + btnW); if(spaceRight >= spaceLeft && gRect.right + margin + btnW <= window.innerWidth - margin){ left = gRect.right + margin; top = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH); }else if(spaceLeft >= 0){ left = Math.max(margin, gRect.left - margin - btnW); top = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH); }else{ const spaceAbove = gRect.top - margin - totalH; const spaceBelow = window.innerHeight - (gRect.bottom + margin + totalH); if(spaceBelow >= spaceAbove && gRect.bottom + margin + totalH <= window.innerHeight - margin){ top = gRect.bottom + margin; left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW); }else{ top = Math.max(margin, gRect.top - margin - totalH); left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW); } } } } pair.style.left = `${Math.round(left)}px`; pair.style.top = `${Math.round(top)}px`; } let _vpAttached=false; function attachViewportRepositioners(){ if(_vpAttached) return; _vpAttached=true; const handler = throttle(()=>{ repositionActionButtons(); }, 16); window.addEventListener('scroll', handler, {passive:true}); window.addEventListener('resize', handler, {passive:true}); window.addEventListener('orientationchange', handler, {passive:true}); if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true}); } function ensureActionButtons(context){ if(activeView!=='week') { destroyActionButtons(); return; } if(window.__actionBtns && document.body.contains(window.__actionBtns)){ window.__actionBtns.dataset.ctx = context; renderActionButtons(); window.__actionBtns.classList.remove('selBtnHidden'); repositionActionButtons(); return; } const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context; document.body.appendChild(wrap); window.__actionBtns = wrap; renderActionButtons(); repositionActionButtons(); attachViewportRepositioners(); } function renderActionButtons(){ const wrap=window.__actionBtns; if(!wrap) return; const ctx=wrap.dataset.ctx; wrap.innerHTML=''; const mk=(label, svg, onClick, isActive=false)=>{ const b=document.createElement('button'); b.className='neu-btn--sm'; b.setAttribute('aria-label', label); b.innerHTML=svg; if(isActive){ b.classList.add('ack'); } b.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(b); }, {capture:true}); b.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); onClick?.(b); }, {passive:false}); return b; }; if(ctx==='block'){ const blk=blocks.find(b=>b.id===selectedBlockId); const inPast = blk ? isBlockFullyPast(blk) : false; const ongoing = blk ? isBlockOngoing(blk) : false; // MOVE: hidden for completed blocks; visible otherwise if(!inPast){ wrap.appendChild(mk('Drag', arrowsSVG(), ()=>{ toggleDragMode(); }, dragModeActive)); } // COPY: always available (including completed) wrap.appendChild(mk('Copy', copySVG(), ()=>{ toggleCopyMode(); }, copyModeActive)); // SETTINGS: always available; uses global pointer set in Part 2 wrap.appendChild(mk('Settings', gearSVG(), ()=>{ if (window.__openSettingsFS) { window.__openSettingsFS(); } else { toast('Settings will load after Part 2 is pasted.'); } })); // CLOSE wrap.appendChild(mk('Close', xSVG(), ()=>{ deselectBlock(); })); }else{ // Selector buttons: Settings (create) + Close wrap.appendChild(mk('Settings', gearSVG(), ()=>{ if (window.__openSettingsFS) { window.__openSettingsFS(); } else { toast('Settings will load after Part 2 is pasted.'); } })); wrap.appendChild(mk('Close', xSVG(), ()=>{ endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons(); })); } } function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } } function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); } /* Selection center rect */ function selectionMidRect(){ if(selectedBlockId){ const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null; const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null; const [s,e]=segs[0]; const mid=s+(e-s)/2; const dayIdx=Math.floor(mid/1440), minInDay=mid-dayIdx*1440; const yTop = minutesToY(Math.max(0, minInDay-30)), yBot = minutesToY(Math.min(1440, minInDay+30)); const left = weekGeom.rect.left + weekGeom.colX[dayIdx]; const width = weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx]; const top = weekGeom.rect.top + yTop, height=Math.max(1, yBot-yTop); return new DOMRect(left, top, width, height); } if(!snake || !weekGeom) return null; const visSt = getVisibleWeekStamp(); const segs = segmentsForWeek(snake, visSt); if(segs.length===0) return null; const [segStartAbs, segEndAbs] = segs[0]; const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2; const dayIdx = Math.floor(midAbs/1440); const minInDay = midAbs - dayIdx*1440; const yTop = minutesToY(Math.max(0, minInDay-30)); const yBot = minutesToY(Math.min(1440, minInDay+30)); const left = weekGeom.rect.left + weekGeom.colX[dayIdx]; const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx]; const top = weekGeom.rect.top + yTop; const height = Math.max(1, yBot - yTop); return new DOMRect(left, top, width, height); } /* ---------- DRAG/COPY GHOST ---------- */ function deactivateModes(){ dragModeActive=false; copyModeActive=false; removeGhost(); renderActionButtons(); repositionActionButtons(); } function toggleDragMode(){ if(!selectedBlockId) return; const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk) return; if(isBlockFullyPast(blk)) return; // no move on completed if(dragModeActive){ if(ghost && ghost.mode==='drag' && ghost.valid){ commitGhost(); } deactivateModes(); return; } copyModeActive=false; createGhost('drag'); dragModeActive=true; renderActionButtons(); repositionActionButtons(); } function toggleCopyMode(){ if(!selectedBlockId) return; if(copyModeActive){ if(ghost && ghost.mode==='copy' && ghost.valid){ commitGhost(); } deactivateModes(); return; } dragModeActive=false; createGhost('copy'); copyModeActive=true; renderActionButtons(); repositionActionButtons(); } function createGhost(mode){ removeGhost(); const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return; ghost = { mode, srcBlockId: blk.id, startAbs: ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN, dur: blk.dur, valid: false }; drawGhost(); repositionActionButtons(); } function removeGhost(){ document.querySelector('.ghost')?.remove(); document.getElementById('ghostStampTop')?.remove(); document.getElementById('ghostStampBot')?.remove(); ghost=null; repositionActionButtons(); } function drawGhost(){ if(!ghost || !weekGeom) return; const pos = absToRect(ghost.startAbs, ghost.dur); let el = document.querySelector('.ghost'); if(!el){ el=document.createElement('div'); el.className='ghost invalid'; el.style.cursor='grab'; document.body.appendChild(el); function clientXToDayIdx(x){ const rect = weekGeom.rect; const relX = clamp(x - rect.left, 0, weekGeom.totalW); for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]) return i; } return 0; } function clientYToMinutes(y){ const rect = weekGeom.rect; const relY = clamp(y - rect.top, 0, weekGeom.totalH); return (relY / weekGeom.totalH) * 1440; } function moveGhostCenterTo(clientX, clientY){ const dayIdx = clientXToDayIdx(clientX); const minutesY = clientYToMinutes(clientY); let startMinInDay = Math.round((minutesY - ghost.dur/2)/15)*15; if(startMinInDay < 0) startMinInDay = 0; if(startMinInDay + ghost.dur > 1440) startMinInDay = 1440 - ghost.dur; const newStartAbs = dayIdx*1440 + startMinInDay; const candidate={weekSt:getVisibleWeekStamp(), startAbs:newStartAbs, dur:ghost.dur}; const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null; if(anyOverlapWithBlocks(candidate, ignoreId)){ ghost.valid=false; }else{ ghost.startAbs=newStartAbs; ghost.valid=true; } updateGhost(el); } const onDown=(e)=>{ e.preventDefault(); e.stopPropagation(); el.setPointerCapture?.(e.pointerId); el.style.cursor='grabbing'; moveGhostCenterTo(e.clientX, e.clientY); repositionActionButtons(); }; const onMove=(e)=>{ if(!(e.buttons&1)) return; e.preventDefault(); moveGhostCenterTo(e.clientX, e.clientY); repositionActionButtons(); }; const onUp=()=>{ el.releasePointerCapture?.(); el.style.cursor='grab'; repositionActionButtons(); }; el.addEventListener('pointerdown', onDown, {passive:false}); el.addEventListener('pointermove', onMove, {passive:false}); el.addEventListener('pointerup', onUp, {passive:true}); el.addEventListener('pointercancel', onUp, {passive:true}); } placeGhost(el, pos); updateGhostValidity(); ensureGhostStamps(); updateGhostStamps(); repositionActionButtons(); } function placeGhost(el, rect){ el.style.left = rect.left+'px'; el.style.top = rect.top+'px'; el.style.width = rect.width+'px'; el.style.height = rect.height+'px'; } function absToRect(startAbs, dur){ const dayIdx = Math.floor(startAbs/1440); const minInDay = startAbs - dayIdx*1440; const topY = minutesToY(minInDay); const end = Math.min(WEEK_MIN, startAbs + dur); const endDayIdx=Math.floor(end/1440); const endInDay = end - endDayIdx*1440; const left = weekGeom.rect.left + weekGeom.colX[dayIdx]; const width= weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx]; let height; if(endDayIdx===dayIdx){ height = Math.max(1, minutesToY(endInDay) - topY); }else{ height = Math.max(1, minutesToY(1440) - topY); } return {left, top: weekGeom.rect.top + topY, width, height}; } function updateGhostValidity(){ if(!ghost) return; const candidate={weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:ghost.dur}; const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null; const overlap = anyOverlapWithBlocks(candidate, ignoreId); ghost.valid = !overlap; const el=document.querySelector('.ghost'); if(el){ el.classList.toggle('valid', ghost.valid); el.classList.toggle('invalid', !ghost.valid); } } function ensureGhostStamps(){ if(!document.getElementById('ghostStampTop')){ const t=document.createElement('div'); t.className='ghost-stamp'; t.id='ghostStampTop'; document.body.appendChild(t); } if(!document.getElementById('ghostStampBot')){ const b=document.createElement('div'); b.className='ghost-stamp'; b.id='ghostStampBot'; document.body.appendChild(b); } } function updateGhostStamps(){ const t=document.getElementById('ghostStampTop'); const b=document.getElementById('ghostStampBot'); if(!ghost || !weekGeom || !t || !b) return; const rect=absToRect(ghost.startAbs, ghost.dur); const cx = rect.left + rect.width/2; t.style.left = cx+'px'; t.style.top = (rect.top - 22)+'px'; b.style.left = cx+'px'; b.style.top = (rect.top + rect.height + 6)+'px'; t.textContent = HHMM(ghost.startAbs%1440); b.textContent = HHMM((ghost.startAbs + ghost.dur)%1440); } function commitGhost(){ if(!ghost || !ghost.valid) return; if(ghost.mode==='drag'){ const blk=blocks.find(b=>b.id===ghost.srcBlockId); if(blk){ if(isBlockFullyPast(blk)) return; // safety blk.startAbs = ghost.startAbs; blk.weekSt = getVisibleWeekStamp(); persistBlocks().then(()=>{ drawBlocks(); const rect = absToRect(blk.startAbs, blk.dur); selectBlock(blk.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height}); applyPastOverlay(); }); } }else if(ghost.mode==='copy'){ const src=blocks.find(b=>b.id===ghost.srcBlockId); if(src){ const dup={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:src.dur, catKey:src.catKey, note:src.note, privacy:src.privacy, notif:src.notif, occ:src.occ, catNameSnap:src.catNameSnap }; if(!anyOverlapWithBlocks(dup)){ blocks.push(dup); persistBlocks().then(()=>{ drawBlocks(); const rect = absToRect(dup.startAbs, dup.dur); selectBlock(dup.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height}); applyPastOverlay(); }); } } } removeGhost(); } /* Toast */ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'), 1800); } /* SVG helpers */ function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; } function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; } function gearSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"> <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/> <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/> </svg>`; } function xSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`; } function arrowsSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"> <path d="M12 3l2.5 2.5L12 8 9.5 5.5 12 3z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/> <path d="M21 12l-2.5 2.5L16 12l2.5-2.5L21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/> <path d="M12 21l-2.5-2.5L12 16l2.5 2.5L12 21z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/> <path d="M3 12l2.5-2.5L8 12l-2.5 2.5L3 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/> </svg>`; } function copySVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"> <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/> <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/> </svg>`; } /* save/load */ function snapshotState(){ return { activeView, visibleWeekFirst:+weekStart(new Date()) }; } async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); await persistBlocks(); await persistCategories(); } let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); } async function persistBlocks(){ await storageSet(BLK_KEY, blocks); } async function loadBlocks(){ const v=await storageGet(BLK_KEY); if(Array.isArray(v)) blocks=v; } async function persistCategories(){ await storageSet(CAT_KEY, categories); } async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } } } } /* ---------------- PRESENT LENS ---------------- */ function hardClearPresentLens(){ const lensHost = document.getElementById('lensHost'); if(lensHost) lensHost.innerHTML=''; if(presentLensGhost && overlayRoot?.contains(presentLensGhost)) presentLensGhost.remove(); presentLensEl=null; presentLensGhost=null; } function stopLensTimer(hardClear=false){ if(lensAlignTimeout){ clearTimeout(lensAlignTimeout); lensAlignTimeout=null; } if(lensIntervalId){ clearInterval(lensIntervalId); lensIntervalId=null; } lensSessionId=null; if(hardClear) hardClearPresentLens(); } function startLensTimer(){ stopLensTimer(true); if(activeView!=='week') return; lensSessionId = Symbol('lens-session'); updatePresentLens(true, lensSessionId); const now = new Date(); const ms = now.getSeconds()*1000 + now.getMilliseconds(); const mins = now.getMinutes(); const next5 = (Math.floor(mins/5)+1)*5; const wait = (((next5%60) - mins + 60)%60)*60000 - ms; lensAlignTimeout = setTimeout(()=>{ updatePresentLens(true, lensSessionId); lensIntervalId = setInterval(()=> updatePresentLens(false, lensSessionId), 5*60*1000); }, Math.max(0, wait)); } function updatePresentLens(forceRecreate=false, sessionToken=null){ if(activeView!=='week' || !weekGeom) return; if(sessionToken && sessionToken !== lensSessionId) return; const lensHost = document.getElementById('lensHost'); if(!lensHost) return; const now = getNow(); const visibleStart = +weekStart(visibleWeekFirst); const visibleEnd = visibleStart + 7*DAY_MS; const nowMs = +now; if(!(nowMs >= visibleStart && nowMs < visibleEnd)){ hardClearPresentLens(); return; } const dayIdx = now.getDay(); const minsNow = now.getHours()*60 + now.getMinutes(); const startMin = Math.floor(minsNow/15)*15; const endMin = Math.min(1440, startMin + 60); const colLeft = weekGeom.colX[dayIdx]; const colRight = weekGeom.colX[dayIdx+1]; const colWidth = (colRight - colLeft) - (dayIdx===6?1:0); const topY = minutesToY(startMin); const botY = minutesToY(endMin); const height= Math.max(1, botY - topY); if(!presentLensEl || forceRecreate){ lensHost.innerHTML = ''; presentLensEl = document.createElement('div'); presentLensEl.className='present-lens'; lensHost.appendChild(presentLensEl); } presentLensEl.style.left = `${colLeft}px`; presentLensEl.style.top = `${topY}px`; presentLensEl.style.width = `${colWidth}px`; presentLensEl.style.height = `${height}px`; if(!presentLensGhost || !overlayRoot?.contains(presentLensGhost)){ presentLensGhost?.remove(); presentLensGhost = document.createElement('div'); presentLensGhost.className='glow-ghost'; presentLensGhost.dataset.role='lens-ghost'; ensureOverlay(); overlayRoot.appendChild(presentLensGhost); } presentLensGhost.style.left = (weekGeom.rect.left + colLeft) + 'px'; presentLensGhost.style.top = (weekGeom.rect.top + topY) + 'px'; presentLensGhost.style.width = colWidth + 'px'; presentLensGhost.style.height = height + 'px'; } /* ------ PAST OVERLAY (navy, under blocks, over background) ------ */ function applyPastOverlay(){ const canvas = document.getElementById('pastOverlay'); if(!canvas || !weekGeom) return; const {totalW,totalH,colX,rowY,slotY} = weekGeom; canvas.width = totalW; canvas.height = totalH; const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,totalW,totalH); ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--past-navy') || 'rgba(16,58,91,0.5)'; const now = getNow(); const visibleStart = +weekStart(visibleWeekFirst); const visibleEnd = visibleStart + 7*DAY_MS; const nowMs = +now; if(nowMs < visibleStart){ // Future week: no overlay return; } else if(nowMs >= visibleEnd){ // Previous weeks: cover all ctx.fillRect(0,0,totalW,totalH); } else { // Current week: overlay minutes <= now tick const dayIdx = now.getDay(); const minsNow = now.getHours()*60 + now.getMinutes(); // Fill full days before today for(let d=0; d<dayIdx; d++){ const x=colX[d], w=colX[d+1]-colX[d]; const h=totalH; ctx.fillRect(x,0,w,h); } // Fill today's portion up to minsNow (snapped to slotY grid) const x=colX[dayIdx], w=colX[dayIdx+1]-colX[dayIdx]; const yBot = minutesToY(Math.min(1440, Math.max(0, minsNow))); ctx.fillRect(x, 0, w, yBot); } } /* throttle */ function throttle(fn, ms){ let t=0, lastArgs=null; return function(...args){ lastArgs=args; if(!t){ t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms); } } } /* small UI pulse */ function pulseSm(el){ el.classList.add('ack'); setTimeout(()=>el.classList.remove('ack'), 180); } /* init/render */ async function init(){ try{ visibleWeekFirst = weekStart(new Date()); const savedSel = await storageGet(SEL_KEY); if(savedSel && typeof savedSel==='object'){ snake = savedSel; } await loadBlocks(); await loadCategories(); }catch{} render(); document.getElementById('btnExit').onclick = ()=>{ document.getElementById('fsVeil').style.display='none'; document.getElementById('fsPanel').style.display='none'; }; document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden'){ saveAll().catch(()=>{}); stopLensTimer(false); }else{ if(activeView==='week'){ startLensTimer(); applyPastOverlay(); } } }); window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); stopLensTimer(false); }); } function render(){ if(activeView==='week'){ buildWeekView(); } else if(activeView==='day' || activeView==='month' || activeView==='todo'){ screenEl.textContent=''; screenEl.innerHTML=''; screenEl.style.display='grid'; screenEl.style.placeItems='center'; screenEl.textContent=''; destroyActionButtons(); destroyOverlay(); endDrag('nav'); stopLensTimer(true); } else { showScreensaver(); destroyActionButtons(); destroyOverlay(); endDrag('nav'); stopLensTimer(true); } } init(); /* ===== Convenience seed (testing) ===== */ if(!localStorage.getItem('chrono_w101_has_seed')){ (async ()=>{ await idbOpen(); const v = await storageGet(BLK_KEY); if(!Array.isArray(v) || v.length===0){ const st = getVisibleWeekStamp(); blocks.push({id:'b'+Math.random().toString(36).slice(2,9), weekSt:st, startAbs: (1*1440)+ (60*9), dur:90, catKey:'work', catNameSnap:'Work'}); // Mon 09:00-10:30 blocks.push({id:'b'+Math.random().toString(36).slice(2,9), weekSt:st, startAbs: (3*1440)+ (60*14+30), dur:120, catKey:'exercise', catNameSnap:'Exercise'}); // Wed 14:30-16:30 await persistBlocks(); } localStorage.setItem('chrono_w101_has_seed','1'); })(); } /* ===== Service worker registration ===== */ if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./service-worker.js') .then(reg => console.log('SW registered', reg.scope)) .catch(err => console.error('SW registration failed', err)); }); } /* Expose no-op fallback for settings in Part 1; Part 2 will set window.__openSettingsFS = openSettingsFS */ window.__openSettingsFS = window.__openSettingsFS || null; /* ========================= W-101 — SETTINGS (FULL-SCREEN) ========================= */ (function(){ const fsPanel = document.getElementById('fsPanel'); const fsVeil = document.getElementById('fsVeil'); // ===== Helpers: time/format/snap ===== function minToHM(min){ const h=Math.floor(min/60); const m=min%60; return {h,m}; } function to12h(h){ const ampm = h>=12?'PM':'AM'; const hh = h%12||12; return {hh,ampm}; } function fmtHMLabel(min){ const {h,m}=minToHM(((min%1440)+1440)%1440); const t12=to12h(h); return `${t12.hh}:${String(m).padStart(2,'0')} ${t12.ampm}`; } function fmtBox(min, dayIdx){ return `${fmtHMLabel(min)} · ${SHORT_DOW[dayIdx]}`; } function snap15(rawMin){ const m = ((Math.round(rawMin)|0)+1440)%1440; const q = m%15; if(q<=7) return m - q; return m + (15 - q); } function findNearestFree(startAbs, dur, ignoreId=null){ // Search the current day (0..1440-dur) for a nearest 15-min aligned non-overlapping slot const dayIdx = Math.floor(startAbs/1440); const base = dayIdx*1440; const target = clamp(startAbs, base, base+1440-dur); const aligned = base + snap15(target-base); const candidate = (st)=>({weekSt:getVisibleWeekStamp(), startAbs:st, dur}); const ok=(st)=>!anyOverlapWithBlocks(candidate(st), ignoreId); if(ok(aligned)) return aligned; // expand search radius in 15-min steps const steps = Math.ceil(1440/15); for(let i=1;i<=steps;i++){ const lo = aligned - i*15, hi = aligned + i*15; if(lo>=base && ok(lo)) return lo; if(hi<=base+1440-dur && ok(hi)) return hi; } return null; // no space in that day } function absForUI(blk){ // Return [dayIdx, startMin, endMin] for the segment in visible week (first segment) const segs=segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return [0,0,15]; const [s,e]=segs[0]; const dIdx=Math.floor(s/1440); return [dIdx, s - dIdx*1440, e - dIdx*1440]; } function isSelectionPastEnd(sel){ const endMs = sel.weekSt + (sel.startAbs+sel.dur)*60000; return endMs <= Date.now(); } function ensureNotPastEnd(startAbs, dur){ // for universal rule: new blocks cannot end in the past const endMs = getVisibleWeekStamp() + (startAbs+dur)*60000; return endMs > Date.now(); } function buildNotePill(value=''){ const wrap = document.createElement('div'); wrap.className='pill'; wrap.innerHTML = ` <div style="display:flex; align-items:center; gap:10px; width:100%;"> <span class="icon-btn" aria-hidden="true">${pencilSVG()}</span> <input id="noteInput" class="name-edit" maxlength="14" placeholder="Bank run · Dog walk · Gym" value="${(value||'').slice(0,14)}" style="flex:1; max-width:none;" /> </div> `; return wrap; } // ===== Category dropdown (with rename) ===== function wireCategoryUI(state){ const dot=document.getElementById('currentDot'); const nameSpan=document.getElementById('currentName'); const ddBtn=document.getElementById('toggleList'); const ddArea=document.getElementById('dropdownArea'); const ddList=document.getElementById('ddList'); function setCurrentCat(key){ state.catKey = key; const cat = categories.find(c=>c.key===key) || categories[0]; dot.style.background = getCatColorValue(cat.key); nameSpan.textContent = cat.name; } function totalsForWeek(){ const visSt=getVisibleWeekStamp(); const totals={}; for(const blk of blocks){ const segs=segmentsForWeek(blk, visSt); for(const [sa,ea] of segs){ const mins=Math.max(0, ea-sa); totals[blk.catKey]=(totals[blk.catKey]||0)+mins; } } return totals; } function renderList(){ ddList.innerHTML=''; const totals=totalsForWeek(); for(const cat of categories){ const row=document.createElement('div'); row.className='row'; row.dataset.key=cat.key; const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='10px'; const dotEl=document.createElement('span'); dotEl.className='dot'; dotEl.style.background=getCatColorValue(cat.key); const nameEl=document.createElement('span'); nameEl.className='name'; nameEl.textContent=cat.name; left.appendChild(dotEl); left.appendChild(nameEl); const amt=document.createElement('div'); amt.className='amt'; const minutes = totals[cat.key]||0; const h=Math.floor(minutes/60), m=minutes%60; amt.textContent=`${h}h ${m}m`; const pen=document.createElement('button'); pen.className='icon-btn'; pen.innerHTML=pencilSVG(); pen.title='Rename'; pen.addEventListener('click', (e)=>{ e.stopPropagation(); beginInlineEdit(row, cat, nameEl); }); row.appendChild(left); row.appendChild(amt); row.appendChild(pen); row.addEventListener('click', ()=>{ setCurrentCat(cat.key); ddArea.style.display='none'; }); ddList.appendChild(row); } } function beginInlineEdit(row, cat, nameNode){ // Past blocks open read-only -> editing disabled if state.readOnly if(state.readOnly) return; const parent = nameNode.parentElement; const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name; parent.replaceChild(input, nameNode); const saveBtn=document.createElement('button'); saveBtn.className='icon-btn'; saveBtn.innerHTML=checkSVG(); saveBtn.title='Save name'; const trailing = row.querySelector('.icon-btn:last-child'); trailing.replaceWith(saveBtn); const commit=()=>{ const newName=input.value.trim(); if(!newName || newName===cat.name){ renderList(); setCurrentCat(state.catKey); return; } if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){ renderList(); setCurrentCat(state.catKey); return; } cat.name=newName; persistCategories().then(()=>{ renderList(); setCurrentCat(state.catKey); }); }; saveBtn.onclick=(e)=>{ e.stopPropagation(); commit(); }; input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } if(e.key==='Escape'){ e.preventDefault(); renderList(); setCurrentCat(state.catKey); }}); setTimeout(()=>input.focus(),0); } ddBtn.onclick = ()=>{ ddArea.style.display = (ddArea.style.display==='none') ? 'block':'none'; }; setCurrentCat(state.catKey); renderList(); } // ===== Time Editor ===== function buildTimeEditor(state){ // state: {mode:'block'|'selection', dayIdx, startMin, endMin, readOnly, srcBlockId?} const wrap = document.createElement('div'); wrap.style.padding='8px 14px'; wrap.style.display='grid'; wrap.style.gap='10px'; const line = document.createElement('div'); line.style.display='grid'; line.style.gridTemplateColumns='1fr 1fr'; line.style.gap='10px'; // From const from = document.createElement('button'); from.className='btn'; from.id='fromBtn'; from.style.fontVariantNumeric='tabular-nums'; from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx); from.disabled = state.readOnly || (state.mode==='block' && state.ongoing); // ongoing: start locked from.addEventListener('click', ()=>{ // open native time picker via hidden input const input=document.createElement('input'); input.type='time'; input.step='60'; // 1m granularity; we will snap in code to 15 min per spec input.value = toTimeValue(state.startMin); input.style.position='fixed'; input.style.left='-9999px'; document.body.appendChild(input); input.addEventListener('change', ()=>{ let min = timeValueToMin(input.value); min = snap15(min); if(min < 0) min = 0; if(min>1425) min=1425; const proposedStartAbs = state.dayIdx*1440 + min; const dur = clamp(state.endMin - min, 15, 1440); let newStartAbs = proposedStartAbs; // prevent past end for new blocks, and for moving future/ongoing starts const ignoreId = state.mode==='block' ? state.srcBlockId : null; if(!ensureNotPastEnd(newStartAbs, dur)){ toast('No new blocks may end in the past.'); document.body.removeChild(input); return; } let snap = findNearestFree(newStartAbs, dur, ignoreId); if(snap===null){ toast('No free 15-min slot.'); document.body.removeChild(input); return; } state.startMin = snap - state.dayIdx*1440; state.endMin = state.startMin + dur; from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx); toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx); }, {once:true}); input.click(); setTimeout(()=>{ document.body.removeChild(input); }, 0); }); // Day toggles on From label (cycle) from.addEventListener('contextmenu', (e)=>{ e.preventDefault(); if(state.readOnly || (state.mode==='block' && state.ongoing)) return; cycleDay(+1); }); // To const toBtn = document.createElement('button'); toBtn.className='btn'; toBtn.id='toBtn'; toBtn.style.fontVariantNumeric='tabular-nums'; toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx); toBtn.disabled = state.readOnly ? true : false; toBtn.addEventListener('click', ()=>{ const input=document.createElement('input'); input.type='time'; input.step='60'; input.value = toTimeValue(state.endMin%1440); input.style.position='fixed'; input.style.left='-9999px'; document.body.appendChild(input); input.addEventListener('change', ()=>{ let min = timeValueToMin(input.value); min = snap15(min); if(min<=state.startMin) min = state.startMin + 15; const dur = min - state.startMin; const proposedAbs = state.dayIdx*1440 + state.startMin; // ongoing: end must be > now if(state.ongoing){ const endMs = getVisibleWeekStamp() + (state.dayIdx*1440 + min)*60000; if(endMs <= Date.now()){ toast('Ongoing end must be after now.'); document.body.removeChild(input); return; } } if(!ensureNotPastEnd(proposedAbs, dur)){ toast('No new blocks may end in the past.'); document.body.removeChild(input); return; } // overlap prevention -> snap nearest free end by moving end or, if needed, shift start minimally const ignoreId = state.mode==='block' ? state.srcBlockId : null; const candidate={weekSt:getVisibleWeekStamp(), startAbs:state.dayIdx*1440 + state.startMin, dur}; if(anyOverlapWithBlocks(candidate, ignoreId)){ // try to expand end forward to nearest non-overlap let tryDur = dur; let moved=false; for(let step=1; step<= (1440/15); step++){ tryDur = dur + step*15; if(state.startMin + tryDur <= 1440){ const test={weekSt:getVisibleWeekStamp(), startAbs:state.dayIdx*1440 + state.startMin, dur:tryDur}; if(!anyOverlapWithBlocks(test, ignoreId)){ moved=true; break; } }else break; } if(!moved){ toast('No free 15-min slot.'); document.body.removeChild(input); return; } state.endMin = state.startMin + tryDur; }else{ state.endMin = min; } toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx); }, {once:true}); input.click(); setTimeout(()=>{ document.body.removeChild(input); }, 0); }); function cycleDay(delta){ let d = (state.dayIdx + delta + 7) % 7; // keep time band same; find nearest free slot that preserves duration const dur = state.endMin - state.startMin; let startAbs = d*1440 + state.startMin; const ignoreId = state.mode==='block' ? state.srcBlockId : null; let snap = findNearestFree(startAbs, dur, ignoreId); if(snap===null){ toast('No free 15-min slot.'); return; } state.dayIdx = Math.floor(snap/1440); state.startMin = snap - state.dayIdx*1440; state.endMin = state.startMin + dur; from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx); toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx); } line.appendChild(from); line.appendChild(toBtn); wrap.appendChild(line); return {root:wrap, getValues:()=>({dayIdx:state.dayIdx, startMin:state.startMin, endMin:state.endMin})}; } function toTimeValue(min){ const h=Math.floor(min/60); const m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; } function timeValueToMin(val){ const [h,m]=val.split(':').map(n=>parseInt(n||'0',10)); return (h*60+m)%1440; } // ===== Occurrence / Privacy / Notifications ===== function buildRadios(state){ const body = document.createElement('div'); body.style.display='grid'; body.style.gap='12px'; body.style.padding='8px 14px'; // Occurrence const occWrap=document.createElement('div'); occWrap.innerHTML = `<div style="font-weight:800; margin-bottom:6px;">Occurrence</div>`; const occList=document.createElement('div'); occList.style.display='grid'; occList.style.gap='6px'; const occOpts=[ {v:'recurring', label:'Recurring (weekly)', def:true}, {v:'once', label:'Only today'}, {v:'next30', label:'Next 30 days (weekly)'} ]; const occName='occ_'+Math.random().toString(36).slice(2,7); for(const o of occOpts){ const id=occName+'_'+o.v; const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.innerHTML=`<input type="radio" name="${occName}" id="${id}" value="${o.v}" ${state.occ===o.v || (!state.occ && o.def) ? 'checked':''} ${state.readOnly?'disabled':''}> <span>${o.label}</span>`; occList.appendChild(row); } const occSum=document.createElement('div'); occSum.style.opacity='.8'; occSum.style.fontSize='14px'; occSum.style.fontWeight='700'; occWrap.appendChild(occList); occWrap.appendChild(occSum); body.appendChild(occWrap); function calcOccSummary(){ const sel = (occList.querySelector('input:checked')||{}).value || 'recurring'; // estimate future instances from selected time band const {dayIdx,startMin,endMin}=state.timeGetter(); if(sel==='once'){ occSum.textContent='Will create 1 future instance (if in the future).'; return; } const nowMs=Date.now(), visSt=getVisibleWeekStamp(); // We’ll look ahead 30 days for next30, otherwise show generic text if(sel==='next30'){ let count=0; for(let i=0;i<30;i++){ const d = addDays(visibleWeekFirst, i); if(d.getDay()!==dayIdx) continue; const startMs = +weekStart(d) + (dayIdx*1440+startMin)*60000 - (d.getDay()*1440*60000); const endMs = +weekStart(d) + (dayIdx*1440+endMin)*60000 - (d.getDay()*1440*60000); if(endMs>nowMs) count++; } occSum.textContent = `Will create ${count} future instance${count===1?'':'s'}.`; }else{ occSum.textContent = `Repeats weekly going forward.`; } } // Privacy const prvWrap=document.createElement('div'); prvWrap.innerHTML = `<div style="font-weight:800; margin:10px 0 6px;">Privacy</div>`; const prvList=document.createElement('div'); prvList.style.display='grid'; prvList.style.gap='6px'; const prvName='prv_'+Math.random().toString(36).slice(2,7); const prvOpts=[ {v:'private', label:'Private (default)'}, {v:'shared', label:'Shared'} ]; for(const p of prvOpts){ const id=prvName+'_'+p.v; const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.innerHTML=`<input type="radio" name="${prvName}" id="${id}" value="${p.v}" ${ (state.privacy||'private')===p.v?'checked':'' } ${state.readOnly?'disabled':''}> <span>${p.label}</span>`; prvList.appendChild(row); } prvWrap.appendChild(prvList); body.appendChild(prvWrap); // Notifications const nWrap=document.createElement('div'); nWrap.innerHTML = `<div style="font-weight:800; margin:10px 0 6px;">Notifications (owner only)</div>`; const scopeList=document.createElement('div'); scopeList.style.display='grid'; scopeList.style.gap='6px'; const scopeName='scope_'+Math.random().toString(36).slice(2,7); const scopeOpts=[ {v:'recurring', label:'Recurring (default)'}, {v:'once', label:'Only this time'}, {v:'off', label:'Off'} ]; for(const s of scopeOpts){ const id=scopeName+'_'+s.v; const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px'; row.innerHTML=`<input type="radio" name="${scopeName}" id="${id}" value="${s.v}" ${ ((state.notif?.scope)||'recurring')===s.v?'checked':'' } ${state.readOnly?'disabled':''}> <span>${s.label}</span>`; scopeList.appendChild(row); } const timingSel=document.createElement('select'); timingSel.style.padding='8px 10px'; timingSel.style.borderRadius='10px'; timingSel.disabled = state.readOnly; const timings=[15,30,45,60,1440]; timings.forEach(m=>{ const o=document.createElement('option'); o.value=String(m); o.textContent= m===1440 ? '24h before' : `${m}m before`; if(((state.notif?.minutesBefore)||15)===m) o.selected=true; timingSel.appendChild(o); }); nWrap.appendChild(scopeList); const timingRow=document.createElement('div'); timingRow.style.marginTop='6px'; timingRow.appendChild(timingSel); nWrap.appendChild(timingRow); body.appendChild(nWrap); // Stats tab button const statsBtn=document.createElement('button'); statsBtn.className='btn'; statsBtn.textContent='Open Stats'; statsBtn.style.marginTop='6px'; statsBtn.addEventListener('click', ()=> openStatsView(state.catKey)); body.appendChild(statsBtn); // Wire occList.addEventListener('change', calcOccSummary); calcOccSummary(); return { root: body, getOcc: ()=> (occList.querySelector('input:checked')||{}).value || 'recurring', getPrivacy: ()=> (prvList.querySelector('input:checked')||{}).value || 'private', getNotif: ()=> ({ scope: (scopeList.querySelector('input:checked')||{}).value || 'recurring', minutesBefore: parseInt(timingSel.value||'15',10) }), refreshOccSummary: calcOccSummary }; } // ===== Stats view ===== function openStatsView(catKey){ const cat = categories.find(c=>c.key===catKey) || categories[0]; const body = document.getElementById('fsBody'); body.innerHTML=''; const wrap=document.createElement('div'); wrap.style.padding='12px 14px'; wrap.innerHTML = `<div style="font-weight:900; margin-bottom:8px;">Stats — ${cat.name}</div>`; const now = new Date(); const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const weekStartMs = +weekStart(now); const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); const yearStart = new Date(now.getFullYear(), 0, 1); function sumInRange(msStart, msEnd){ let total=0; for(const b of blocks){ // Iterate visible-week projections across possible weeks touching this range // Simplified: approximate by projecting block's absolute times within its original week const segs = segmentsForWeek(b, getVisibleWeekStamp()); for(const [s,e] of segs){ const sMs = getVisibleWeekStamp() + s*60000; const eMs = getVisibleWeekStamp() + e*60000; const overlap = Math.max(0, Math.min(eMs, msEnd) - Math.max(sMs, msStart)); total += Math.floor(overlap/60000); } } return total; } const mintoday = sumInRange(+todayStart, +todayStart + DAY_MS); const minweek = sumInRange(weekStartMs, weekStartMs + 7*DAY_MS); const minmonth = sumInRange(+monthStart, +monthStart + 31*DAY_MS); // overcount safe for display const minyear = sumInRange(+yearStart, +yearStart + 366*DAY_MS); const percOfWeek = Math.round((minweek/ (7*24*60)) * 100); wrap.innerHTML += ` <div style="display:grid; gap:8px;"> <div><strong>Today:</strong> ${Math.floor(mintoday/60)}h ${mintoday%60}m</div> <div><strong>This week:</strong> ${Math.floor(minweek/60)}h ${minweek%60}m</div> <div><strong>This month:</strong> ${Math.floor(minmonth/60)}h ${minmonth%60}m</div> <div><strong>This year:</strong> ${Math.floor(minyear/60)}h ${minyear%60}m</div> <div><strong>% of week (this activity):</strong> ${percOfWeek}%</div> </div> <div style="margin-top:12px; opacity:.8;">Comparisons (prev/next periods) coming in W-102.</div> <div style="margin-top:14px;"><button class="btn" id="statsExitBtn">Exit</button></div> `; body.appendChild(wrap); document.getElementById('statsExitBtn').onclick = ()=>{ // Re-open settings root for current selection if(typeof window.__openSettingsFS === 'function') window.__openSettingsFS(); }; } // ===== OPEN Settings (block or selection) ===== function openSettingsFS(){ const head = fsPanel.querySelector('.fs-head'); const sub = fsPanel.querySelector('.fs-sub'); const body = document.getElementById('fsBody'); const foot = fsPanel.querySelector('.fs-foot'); // Determine context const hasBlock = !!selectedBlockId; const ctx = {}; if(hasBlock){ const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk) return; const [d, sMin, eMin] = absForUI(blk); ctx.mode='block'; ctx.srcBlockId=blk.id; ctx.catKey=blk.catKey; ctx.note=blk.note||''; ctx.privacy=blk.privacy||'private'; ctx.notif=blk.notif||{scope:'recurring', minutesBefore:15}; ctx.occ=blk.occ||'recurring'; ctx.readOnly = isBlockFullyPast(blk); // completed -> read-only ctx.ongoing = isBlockOngoing(blk); ctx.dayIdx=d; ctx.startMin=sMin; ctx.endMin=eMin; ctx.timeGetter = ()=>({dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin}); }else if(snake){ ctx.mode='selection'; ctx.catKey = categories[0].key; ctx.note=''; ctx.privacy='private'; ctx.notif={scope:'recurring', minutesBefore:15}; ctx.occ='recurring'; ctx.readOnly=false; ctx.ongoing=false; const dayIdx = Math.floor(snake.startAbs/1440); const startMin = snake.startAbs - dayIdx*1440; const endMin = startMin + snake.dur; ctx.dayIdx=dayIdx; ctx.startMin=startMin; ctx.endMin=endMin; ctx.timeGetter = ()=>({dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin}); }else{ toast('Select a block or make a selection first.'); return; } // Build UI fsPanel.classList.toggle('ro', !!ctx.readOnly); fsVeil.style.display='block'; fsPanel.style.display='grid'; head.textContent='Settings'; // Category current pill + dropdown document.getElementById('currentName').textContent=''; document.getElementById('dropdownArea').style.display='none'; wireCategoryUI(ctx); // Body content body.innerHTML=''; // Note field body.appendChild(buildNotePill(ctx.note||'')); // Time Editor const timeUI = buildTimeEditor({mode:ctx.mode, dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin, readOnly:ctx.readOnly || (ctx.mode==='block' && isBlockFullyPast(blocks.find(b=>b.id===ctx.srcBlockId)||{})), ongoing:ctx.ongoing, srcBlockId:ctx.srcBlockId}); body.appendChild(timeUI.root); // Occ/Privacy/Notif const optionsUI = buildRadios({occ:ctx.occ, privacy:ctx.privacy, notif:ctx.notif, readOnly:ctx.readOnly, catKey:ctx.catKey, timeGetter:()=>timeUI.getValues()}); body.appendChild(optionsUI.root); // FOOT buttons const btnExit=document.getElementById('btnExit'); const btnSave=document.getElementById('btnSave'); const btnDelete=document.getElementById('btnDelete'); btnExit.onclick = ()=>{ fsVeil.style.display='none'; fsPanel.style.display='none'; }; btnDelete.disabled = ctx.readOnly; // completed blocks immutable btnDelete.onclick = ()=>{ if(ctx.readOnly) return; if(ctx.mode==='block'){ const idx=blocks.findIndex(b=>b.id===ctx.srcBlockId); if(idx>=0){ blocks.splice(idx,1); persistBlocks().then(()=>{ fsVeil.style.display='none'; fsPanel.style.display='none'; selectedBlockId=null; destroyActionButtons(); clearBlockOutline(); drawBlocks(); applyPastOverlay(); }); } }else{ // selection: just dismiss selection snake=null; storageSet(SEL_KEY,null); fsVeil.style.display='none'; fsPanel.style.display='none'; drawSnake(); destroyActionButtons(); } }; btnSave.disabled = false; btnSave.onclick = ()=>{ // Read current UI values (respect read-only) const catKey = ctx.readOnly ? ctx.catKey : (ctx.catKey = (document.getElementById('currentName').textContent ? categories.find(c=>c.name===document.getElementById('currentName').textContent)?.key : ctx.catKey) || ctx.catKey); const noteVal = ctx.readOnly ? (ctx.note||'') : (document.getElementById('noteInput')?.value||'').slice(0,14); const tvals = timeUI.getValues(); const occVal = ctx.readOnly ? ctx.occ : optionsUI.getOcc(); const prvVal = ctx.readOnly ? ctx.privacy : optionsUI.getPrivacy(); const notifVal = ctx.readOnly ? (ctx.notif||{scope:'recurring',minutesBefore:15}) : optionsUI.getNotif(); // Past immutability if(ctx.mode==='block' && ctx.readOnly){ fsVeil.style.display='none'; fsPanel.style.display='none'; return; } // Build candidate(s) const startAbs = tvals.dayIdx*1440 + tvals.startMin; const dur = clamp(tvals.endMin - tvals.startMin, 15, 1440); // Universal past rule if(!ensureNotPastEnd(startAbs, dur)){ toast('No new blocks may end in the past.'); return; } const ignoreId = ctx.mode==='block' ? ctx.srcBlockId : null; const slot = findNearestFree(startAbs, dur, ignoreId); if(slot===null){ toast('No free 15-min slot.'); return; } if(ctx.mode==='selection'){ // create according to occurrence const instances = []; if(occVal==='once'){ instances.push({weekSt:getVisibleWeekStamp(), startAbs:slot, dur}); }else if(occVal==='next30'){ const nowMs = Date.now(); for(let i=0;i<30;i++){ const wd = addDays(visibleWeekFirst, i); const wst = +weekStart(wd); const abs = tvals.dayIdx*1440 + tvals.startMin; const endMs = wst + (tvals.dayIdx*1440 + tvals.endMin)*60000; if(endMs>nowMs){ // check overlap on that week's canvas const cand={weekSt:wst, startAbs:abs, dur}; if(!anyOverlapWithBlocks(cand, null)){ instances.push(cand); } } } }else{ // recurring // Create one for this visible week if future const endMs = getVisibleWeekStamp() + (tvals.dayIdx*1440 + tvals.endMin)*60000; if(endMs>Date.now()){ instances.push({weekSt:getVisibleWeekStamp(), startAbs:slot, dur}); } } for(const inst of instances){ blocks.push({ id:'b'+Math.random().toString(36).slice(2,9), weekSt:inst.weekSt, startAbs:inst.startAbs, dur:inst.dur, catKey, note:noteVal, privacy:prvVal, notif:notifVal, occ:occVal, catNameSnap: (categories.find(c=>c.key===catKey)?.name || 'Activity') }); } persistBlocks().then(()=>{ snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons(); drawBlocks(); applyPastOverlay(); }); fsVeil.style.display='none'; fsPanel.style.display='none'; }else{ // block update (future or ongoing only) const blk=blocks.find(b=>b.id===ctx.srcBlockId); if(!blk) return; // Apply temporal constraints: if(isBlockOngoing(blk)){ // Only end can change; start locked const [d0, s0, _e0] = absForUI(blk); const lockedStartAbs = d0*1440 + s0; let newDur = dur; if((getVisibleWeekStamp() + (tvals.dayIdx*1440 + tvals.endMin)*60000) <= Date.now()){ toast('Ongoing end must be after now.'); return; } const cand={weekSt:getVisibleWeekStamp(), startAbs:lockedStartAbs, dur:newDur}; if(anyOverlapWithBlocks(cand, blk.id)){ const slot2 = findNearestFree(lockedStartAbs, newDur, blk.id); if(slot2===null || slot2!==lockedStartAbs){ toast('No free 15-min slot.'); return; } } // Commit blk.dur = newDur; }else{ // Future block: allow start & end changes blk.startAbs = slot; blk.weekSt = getVisibleWeekStamp(); blk.dur = dur; } blk.catKey = catKey; blk.note = noteVal; blk.privacy= prvVal; blk.notif = notifVal; blk.occ = occVal; if(!blk.catNameSnap) blk.catNameSnap = (categories.find(c=>c.key===catKey)?.name || 'Activity'); persistBlocks().then(()=>{ drawBlocks(); applyPastOverlay(); }); fsVeil.style.display='none'; fsPanel.style.display='none'; } }; } // end openSettingsFS // Expose for Part 1 action buttons window.__openSettingsFS = openSettingsFS; })(); 
+    --hour-col:64px; --dow-h:32px; --label-size:12px;
+
+    --marquee-border:5px;
+    --marquee-glow:0 0 9px 4px var(--turq-glow);
+
+    --handle-stroke:#5e7286;
+    --chev-stroke-w:2.2;
+    --handle-gap:12px;
+    --handle-height-mult:1.75;
+    --stamp-h:26px;
+
+    --past-navy: rgba(16,58,91,0.50);
+  }
+
+  html,body{
+    height:100%; margin:0; background:var(--bg); color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    overflow:hidden; -webkit-tap-highlight-color: transparent;
+  }
+  *{box-sizing:border-box}
+
+  .app{
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin:max(16px, env(safe-area-inset-top)) auto;
+    display:flex; flex-direction:column; gap:var(--gap); padding:0 var(--gap);
+    color:var(--ink);
+  }
+
+  #screen{
+    flex:1; min-height:420px; border-radius:var(--radius); background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    position:relative; overflow:hidden; display:grid; place-items:center;
+    color:var(--ink); font-weight:900; letter-spacing:.06em;
+  }
+
+  /* Bottom controls */
+  .controls{ display:flex; gap:var(--gap); padding-bottom:2px; color:var(--ink); }
+  .neu-btn{
+    --btn-d: calc((100% - (3 * var(--gap))) / 4);
+    flex:0 0 var(--btn-d); width:var(--btn-d); aspect-ratio:1/1;
+    border-radius:50%; border:none; outline:none; cursor:pointer;
+    background:var(--bg); display:grid; place-items:center;
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease, color .06s ease, filter .06s ease;
+    color:var(--ink);
+  }
+  .neu-btn svg{
+    width:86%; height:auto; stroke:var(--icon-inactive); stroke-width:1.25;
+    fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-btn.is-pressed{
+    background:
+      radial-gradient(circle at 82% 82%, rgba(79,247,255,.12) 0%, rgba(79,247,255,.07) 34%, rgba(79,247,255,0) 60%),
+      var(--pressed-navy);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+  .neu-btn.is-pressed svg{
+    stroke:var(--icon-active);
+    filter:drop-shadow(0 0 2px var(--turq-glow)) drop-shadow(0 0 10px var(--turq-glow));
+  }
+  .neu-btn:active{ transform:scale(.985); }
+
+  /* Small neu buttons */
+  .neu-btn--sm{
+    width:44px; height:44px; border-radius:12px; background:var(--bg);
+    border:none; cursor:pointer; display:grid; place-items:center; color:var(--ink);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    transition: box-shadow .2s ease, background .2s ease, transform .06s ease, filter .2s ease, color .06s ease;
+  }
+  .neu-btn--sm svg *{ stroke:currentColor; }
+  .neu-btn--sm svg{ width:22px; height:22px; stroke-width:1.6; fill:none; stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+  .neu-btn--sm.ack{
+    background:var(--pressed-navy);
+    color:var(--icon-active);
+    box-shadow:
+       var(--off)         var(--off)         var(--blur) var(--hi),
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--lo);
+  }
+
+  /* Week screen layout */
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0; color:var(--ink) }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink) }
+
+  .grid-area{ position:relative; overflow:visible }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:3 }
+  .hour-stamp{ position:absolute; right:8px; transform:translateY(-50%); font-size:var(--label-size); color:var(--ink); opacity:.95; white-space:nowrap; text-align:right; z-index:3 }
+
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(11px, 2vw, 13px); background:transparent; color:var(--ink) }
+
+  .grid{
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+    z-index:0; overflow:visible;
+  }
+
+  /* ORDERING inside .grid (updated for W-101):
+     background < pastOverlay(z:1) < blockHost(z:2) < mask(z:3) < lensHost(z:4) < selHost(z:5)
+  */
+  .pastOverlay{ position:absolute; inset:0; pointer-events:none; z-index:1; }
+  .blockHost{ position:absolute; inset:0; pointer-events:auto; z-index:2; }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:3 }
+  .lensHost{ position:absolute; inset:0; pointer-events:none; z-index:4; }
+  .selHost{  position:absolute; inset:0; pointer-events:none; z-index:5; }
+
+  .marqueeRect{
+    position:absolute; box-sizing:border-box; background:transparent;
+    border:var(--marquee-border) solid #fff; border-radius:12px;
+    box-shadow: var(--marquee-glow);
+  }
+
+  .overlayRoot{ position:fixed; inset:0; z-index:6; pointer-events:none; }
+  .ov-group{ position:absolute; pointer-events:none; }
+  .glow-ghost{ position:absolute; border-radius:12px; pointer-events:none; box-shadow: var(--marquee-glow); }
+
+  .stamp{
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:4px 8px;
+    font-size:12px; font-variant-numeric:tabular-nums; font-weight:900; letter-spacing:.02em; white-space:nowrap;
+    pointer-events:none; height:var(--stamp-h); display:grid; place-items:center;
+    box-shadow: 0 0 2px rgba(79,247,255,.28), 0 0 10px rgba(79,247,255,.28);
+    z-index:3;
+  }
+
+  .ghost-stamp{
+    position:fixed; left:50%; transform:translateX(-50%);
+    background:var(--pressed-navy); color:var(--icon-active);
+    border:1px solid #273b4d; border-radius:10px; padding:3px 6px;
+    font-size:11px; font-variant-numeric:tabular-nums; font-weight:800; white-space:nowrap;
+    pointer-events:none; z-index:31; box-shadow: 0 0 2px rgba(79,247,255,.28), 0 0 10px rgba(79,247,255,.28);
+  }
+
+  .handle{ position:absolute; left:0; width:100%; pointer-events:auto; cursor:ns-resize; z-index:2; touch-action:none; display:grid; place-items:center; }
+  .chev-chip{
+    width:100%; height:100%; border-radius:14px; background:var(--bg);
+    box-shadow:
+      calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi),
+       var(--off)         var(--off)         var(--blur) var(--lo);
+    display:grid; place-items:center;
+  }
+  .chev path{
+    fill:none; stroke:var(--handle-stroke); stroke-width:var(--chev-stroke-w); stroke-linecap:round; stroke-linejoin:round;
+    filter: drop-shadow(-0.6px -0.6px 0 var(--hi)) drop-shadow(0.6px 0.6px 0 var(--lo));
+  }
+
+  /* Floating action buttons (selector or block) */
+  .selBtns{ position:fixed; z-index:8; display:grid; gap:8px; pointer-events:auto; }
+  .selBtnHidden{ display:none !important; }
+
+  .present-lens{
+    position:absolute; box-sizing:border-box;
+    border:var(--marquee-border) solid #fff; border-radius:12px;
+    box-shadow:var(--marquee-glow); z-index:2; pointer-events:none;
+  }
+
+  .screensaver{ width:100%; height:100%; display:grid; place-items:center; }
+  .wm{ font-weight:900; letter-spacing:.06em; opacity:.9; }
+
+  /* ===== Blocks â€” SQUARE corners (no rounding) ===== */
+  .blk{
+    position:absolute; border-radius:0;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    cursor:pointer;
+  }
+
+  /* Ghost â€” SQUARE corners */
+  .ghost{
+    position:fixed; z-index:30; pointer-events:auto; border-radius:0;
+    opacity:.5; box-shadow: inset 0 0 0 2px rgba(0,0,0,.1);
+    touch-action:none;
+  }
+  .ghost.valid{ background:#00c853; }
+  .ghost.invalid{ background:#ff5252; }
+
+  /* Toast */
+  .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#1c2a36; color:#fff; font-weight:800;
+    padding:10px 14px; border-radius:12px; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{ opacity:1; transform:translate(-50%,-4px); }
+
+  /* ===== FULL-SCREEN SETTINGS scaffolding (panel & veil; content built in Part 2) ===== */
+  .fs-veil{ position:fixed; inset:0; background:rgba(0,0,0,.12); backdrop-filter:saturate(120%) blur(2px); z-index:200; display:none; }
+  .fs-panel{
+    position:fixed; inset:0; display:none; z-index:201; background:var(--bg);
+    grid-template-rows:auto auto 1fr auto;
+  }
+  .fs-head{ display:flex; align-items:center; justify-content:center; padding:10px; font-weight:800; }
+  .fs-sub{ padding:8px 14px; display:grid; gap:8px; }
+  .pill{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:10px; padding:8px 10px;
+    background:var(--bg); box-shadow: inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo), calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .dot{ width:14px; height:14px; border-radius:50%; flex:0 0 14px; }
+  .dropdown{ padding:8px 14px 0 14px; }
+  .dropdown-btn{ width:100%; border:none; background:transparent; color:var(--ink); text-align:left; font-weight:700; padding:8px 0; display:flex; align-items:center; gap:10px; }
+  .dropdown-list{ /* no max-height; page will scroll if large */ padding:6px 2px 10px 2px; }
+  .row{
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:8px 10px; margin:8px 12px; border-radius:10px; background:var(--bg);
+    box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .row .name{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .amt{ opacity:.9; font-variant-numeric:tabular-nums; font-weight:800; }
+  .name-edit{ width:100%; max-width:180px; border:none; outline:none; background:#ffffffaa; border-radius:8px; padding:4px 8px; font-weight:700; }
+  .icon-btn{ border:none; background:transparent; color:var(--ink); cursor:pointer; display:grid; place-items:center; width:28px; height:28px; border-radius:8px; }
+  .icon-btn:active{ transform:scale(.96); }
+  .fs-body{ overflow:auto; padding:8px 14px; }
+  .fs-foot{ display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:12px 14px 14px 14px; }
+  .btn{ border:none; border-radius:12px; padding:10px 14px; background:var(--bg); color:var(--ink); font-weight:800;
+    box-shadow: calc(-1*var(--off)) calc(-1*var(--off)) var(--blur) var(--hi), var(--off) var(--off) var(--blur) var(--lo);
+  }
+  .btn:active{ transform:scale(.985); }
+  .btn-warn{ color:#d83a3a; }
+  .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); }
+  .fs-panel.ro .btn, .fs-panel.ro input, .fs-panel.ro select, .fs-panel.ro .icon-btn{ opacity:.55; pointer-events:none; }
+
+/* === W-102p â€” Salvage2: minimal layering only, no layout === */
+.grid .blockHost { z-index:10 !important; }
+.grid #pastOverlay, .grid .pastOverlay { z-index:20 !important; opacity:0.75 !important; pointer-events:none !important; }
+.grid .mask      { z-index:30 !important; }
+.grid .lensHost  { z-index:40 !important; }
+.grid .selHost   { z-index:50 !important; }
+/* Keep Exit active in read-only settings */
+.fs-panel.ro #btnExit{ pointer-events:auto !important; opacity:1 !important; cursor:pointer !important; }
+/* ====================================== */
+
+</head>
+<body>
+  <main class="app">
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-102</section>
+
+    <nav class="controls" role="group" aria-label="Primary views">
+      <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="5.5"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18.5"/>
+          <line x1="9" y1="10" x2="9" y2="18.5"/>
+          <line x1="12" y1="10" x2="12" y2="18.5"/>
+          <line x1="15" y1="10" x2="15" y2="18.5"/>
+          <line x1="18" y1="10" x2="18" y2="18.5"/>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="Month view (blank)" aria-pressed="false" data-view="month" title="Month">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="3"/>
+          <line x1="3" y1="8" x2="21" y2="8"/>
+          <g>
+            <circle cx="7" cy="11" r="0.8"/><circle cx="11" cy="11" r="0.8"/><circle cx="15" cy="11" r="0.8"/>
+            <circle cx="7" cy="14" r="0.8"/><circle cx="11" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/>
+            <circle cx="7" cy="17" r="0.8"/><circle cx="11" cy="17" r="0.8"/><circle cx="15" cy="17" r="0.8"/>
+          </g>
+        </svg>
+      </button>
+
+      <button class="neu-btn" aria-label="To-Do (blank)" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="3"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- FULL-SCREEN SETTINGS scaffolding (content & logic wired in Part 2) -->
+  <div id="fsVeil" class="fs-veil" aria-hidden="true"></div>
+  <section id="fsPanel" class="fs-panel" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="fs-head">Settings</div>
+    <div class="fs-sub">
+      <div class="pill" id="currentCatPill">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="dot" id="currentDot"></span>
+          <span id="currentName" style="font-weight:800"></span>
+        </div>
+        <button class="icon-btn" id="toggleList" aria-label="Choose category">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="dropdown" id="dropdownArea" style="display:none;">
+      <button class="dropdown-btn" type="button">Categories</button>
+      <div class="dropdown-list" id="ddList"></div>
+    </div>
+    <div class="fs-body" id="fsBody"></div>
+    <div class="fs-foot">
+      <button class="btn btn-warn" id="btnDelete">Delete</button>
+      <button class="btn" id="btnExit">Exit</button>
+      <button class="btn btn-primary" id="btnSave">Save</button>
+    </div>
+  </section>
+
+<script>
+/* Chrono W-102 (Part 1)
+   Key changes in Part 1:
+   - Navy past overlay sits UNDER blocks but ABOVE background; grid mask remains on top.
+   - Action buttons use global pointer window.__openSettingsFS so Settings works once Part 2 loads.
+   - Completed blocks: Settings enabled (read-only in Part 2), Copy enabled, Move hidden.
+   - Present/Future blocks: Move + Copy + Settings all enabled.
+*/
+
+const screenEl = document.getElementById('screen');
+const buttons = [...document.querySelectorAll('.neu-btn')];
+
+let activeView = null; // screensaver landing
+let visibleWeekFirst = weekStart(new Date());
+
+const DAY_MS = 86400000;
+const WEEK_MIN = 7*1440;
+
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTH_INIT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function hourToAMPM(h){ return h===0? '12 AM' : h<12? `${h} AM` : h===12? '12 PM' : `${h-12} PM`; }
+function HHMM(min){ const m=((Math.round(min)|0)+1440)%1440; const h=Math.floor(m/60), r=m%60; return `${String(h).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
+function getNow(){ return new Date(); }
+function getVisibleWeekStamp(){ return +weekStart(visibleWeekFirst); }
+function weekAbsToMs(weekSt, absMin){ return weekSt + absMin*60000; }
+
+/* storage */
+const DB_NAME='chronoDB', DB_VERSION=45;
+let dbPromise=null, STORAGE_MODE='idb';
+function idbSupported(){ try { return !!window.indexedDB; } catch { return false; } }
+function idbOpen(){
+  if(!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{ const db = req.result; if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror   = ()=>reject(req.error);
+  });
+  return dbPromise.catch(()=>{ STORAGE_MODE='ls'; return null; });
+}
+async function storageSet(k,v){
+  if(STORAGE_MODE==='ls'){ if(v===undefined||v===null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); return true; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageSet(k,v); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readwrite'); const store=tx.objectStore('kv');
+    if(v===undefined||v===null) store.delete(k); else store.put({k,v});
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+  });
+}
+async function storageGet(k){
+  if(STORAGE_MODE==='ls'){ const s=localStorage.getItem(k); return s? JSON.parse(s):undefined; }
+  const db = await idbOpen(); if(!db){ STORAGE_MODE='ls'; return storageGet(k); }
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('kv','readonly'); const req=tx.objectStore('kv').get(k);
+    req.onsuccess=()=>res(req.result? req.result.v:undefined);
+    req.onerror=()=>rej(req.error);
+  });
+}
+const STATE_KEY='state_w101';
+const SEL_KEY  ='snake_w101';
+const BLK_KEY  ='blocks_w101';
+const CAT_KEY  ='categories_w101';
+
+/* selection (selector tool) */
+let snake = null;
+
+/* blocks */
+let blocks = []; // {id, weekSt, startAbs, dur, catKey, note?, privacy?, notif?, occ?, catNameSnap?}
+
+/* categories */
+let categories = [
+  {key:'work',      name:'Work',       color:'var(--c-work)'},
+  {key:'school',    name:'School',     color:'var(--c-school)'},
+  {key:'commute',   name:'Commute',    color:'var(--c-commute)'},
+  {key:'chores',    name:'Chores',     color:'var(--c-chores)'},
+  {key:'errands',   name:'Errands',    color:'var(--c-errands)'},
+  {key:'meal',      name:'Meal Time',  color:'var(--c-meal)'},
+  {key:'hygiene',   name:'Hygiene',    color:'var(--c-hygiene)'},
+  {key:'childcare', name:'Child Care', color:'var(--c-childcare)'},
+  {key:'selfcare',  name:'Self Care',  color:'var(--c-selfcare)'},
+  {key:'exercise',  name:'Exercise',   color:'var(--c-exercise)'},
+  {key:'family',    name:'Family Time',color:'var(--c-family)'},
+  {key:'hobbies',   name:'Hobbies',    color:'var(--c-hobbies)'},
+  {key:'projects',  name:'Projects',   color:'var(--c-projects)'},
+  {key:'rnr',       name:'R & R',      color:'var(--c-rnr)'},
+  {key:'freetime',  name:'Free Time',  color:'var(--c-freetime)'},
+  {key:'sleep',     name:'Sleep',      color:'var(--c-sleep)'},
+];
+
+/* swatches & mapping retained */
+document.documentElement.style.setProperty('--c-work','#db3b3b');
+document.documentElement.style.setProperty('--c-school','#eb7d7b');
+document.documentElement.style.setProperty('--c-commute','#d49c14');
+document.documentElement.style.setProperty('--c-chores','#bf7716');
+document.documentElement.style.setProperty('--c-errands','#e9b627');
+document.documentElement.style.setProperty('--c-meal','#f6e48f');
+document.documentElement.style.setProperty('--c-hygiene','#f7d9d8');
+document.documentElement.style.setProperty('--c-childcare','#1c7a44');
+document.documentElement.style.setProperty('--c-selfcare','#4ea282');
+document.documentElement.style.setProperty('--c-exercise','#0f3c32');
+document.documentElement.style.setProperty('--c-family','#d9eef4');
+document.documentElement.style.setProperty('--c-hobbies','#4ea282');
+document.documentElement.style.setProperty('--c-projects','#4aa0d6');
+document.documentElement.style.setProperty('--c-rnr','#1e6fb2');
+document.documentElement.style.setProperty('--c-freetime','#d49c14');
+document.documentElement.style.setProperty('--c-sleep','#103a5b');
+
+/* flags & timers */
+let dragging = false;
+let rafPending = false;
+
+let weekGeom=null, overlayRoot=null;
+let presentLensEl=null, presentLensGhost=null;
+let lensIntervalId=null, lensAlignTimeout=null;
+let lensSessionId=null;
+let dragBlockUntil=0;
+
+/* Ghost state for Drag/Copy */
+let ghost = null; // {mode:'drag'|'copy', srcBlockId, startAbs, dur, valid}
+let dragModeActive=false, copyModeActive=false;
+
+/* ===== NAV BUTTONS ===== */
+buttons.forEach(btn=>{
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    const v = btn.dataset.view;
+
+    const wasPressed = btn.classList.contains('is-pressed');
+    buttons.forEach(x=>{ x.classList.remove('is-pressed'); x.setAttribute('aria-pressed','false'); });
+
+    if(!wasPressed){ btn.classList.add('is-pressed'); btn.setAttribute('aria-pressed','true'); }
+
+    if(activeView === v){
+      activeView = null;
+      buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+      showScreensaver();
+      destroyActionButtons(); destroyOverlay();
+      endDrag('nav');
+      stopLensTimer(true);
+    } else {
+      const switchingToWeek = (v === 'week' && activeView !== 'week');
+      activeView = v;
+      if(switchingToWeek){ visibleWeekFirst = weekStart(new Date()); }
+      endDrag('nav');
+      render();
+    }
+    saveSoon(120);
+  }, {passive:false});
+});
+
+/* overlay */
+function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot)) return; overlayRoot=document.createElement('div'); overlayRoot.className='overlayRoot'; overlayRoot.id='overlayRoot'; document.body.appendChild(overlayRoot); }
+function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
+
+/* screensaver */
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-102</div></div>`; }
+
+/* --- Week View --- */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="neu-btn--sm" aria-label="Previous week" title="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15,5 8,12 15,19"/></svg>
+        </button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="neu-btn--sm" aria-label="Next week" title="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9,5 16,12 9,19"/></svg>
+        </button>
+      </div>
+
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
+        <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
+          <!-- Past overlay is UNDER blocks but ABOVE background -->
+          <canvas class="pastOverlay" id="pastOverlay"></canvas>
+          <div class="blockHost" id="blockHost"></div>
+          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="lensHost" id="lensHost"></div>
+          <div class="selHost"  id="selHost"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+
+  const prevBtn=document.getElementById('prevWeekBtn');
+  const nextBtn=document.getElementById('nextWeekBtn');
+  prevBtn.onclick = ()=>{
+    ackPulse(prevBtn);
+    endDrag('nav'); clearSelectionState();
+    stopLensTimer(true);
+    visibleWeekFirst=addDays(visibleWeekFirst,-7);
+    repaintWeek();
+    drawBlocks();
+    drawSnake();
+    applyPastOverlay();
+    startLensTimer();
+    saveSoon(120);
+  };
+  nextBtn.onclick = ()=>{
+    ackPulse(nextBtn);
+    endDrag('nav'); clearSelectionState();
+    stopLensTimer(true);
+    visibleWeekFirst=addDays(visibleWeekFirst, 7);
+    repaintWeek();
+    drawBlocks();
+    drawSnake();
+    applyPastOverlay();
+    startLensTimer();
+    saveSoon(120);
+  };
+
+  const gridEl = document.getElementById('weekGrid');
+  gridEl.addEventListener('click', onWeekGridTap, {passive:true});
+
+  ensureOverlay();
+  repaintWeek();
+
+  const sync = throttle(()=>{ if(activeView==='week'){ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); applyPastOverlay(); } }, 32);
+  new ResizeObserver(()=>{ repaintWeek(true); drawBlocks(); drawSnake(); repositionActionButtons(); updatePresentLens(true); applyPastOverlay(); }).observe(gridEl);
+  window.addEventListener('scroll', sync, {passive:true});
+  window.addEventListener('orientationchange', sync, {passive:true});
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, {passive:true});
+
+  startLensTimer();
+  applyPastOverlay();
+}
+
+function ackPulse(btn){ requestAnimationFrame(()=>{ btn.classList.add('ack'); setTimeout(()=>btn.classList.remove('ack'), 250); }); }
+
+function repaintWeek(skipDraw=false){
+  const first=weekStart(visibleWeekFirst), last=addDays(first,6);
+  const titleEl = document.getElementById('weekTitle');
+  if(titleEl){ titleEl.textContent = `${MONTH_INIT[first.getMonth()]} ${first.getDate()} â€“ ${MONTH_INIT[last.getMonth()]} ${last.getDate()}`; }
+
+  const pills=document.getElementById('dowPills'); if(pills){ pills.innerHTML=''; for(let i=0;i<7;i++){ const el=document.createElement('div'); el.className='day-pill'; el.textContent = SHORT_DOW[i]; pills.appendChild(el); } }
+
+  const gh=document.getElementById('weekHours'); if(gh) gh.innerHTML='';
+  const gridEl=document.getElementById('weekGrid');
+  weekGeom=computeGeometry(gridEl,7);
+  if(gh){
+    for(let i=0;i<24;i++){
+      const s=document.createElement('div'); s.className='hour-stamp';
+      s.textContent = hourToAMPM(i);
+      s.style.top=((weekGeom.rowY[i]+weekGeom.rowY[i+1])/2)+'px';
+      gh.appendChild(s);
+    }
+  }
+
+  buildMask(weekGeom,7);
+  if(!skipDraw){ drawBlocks(); drawSnake(); }
+  updatePresentLens(true);
+}
+
+function computeGeometry(gridEl, cols){
+  const r=gridEl.getBoundingClientRect();
+  const totalW=Math.max(0, Math.round(r.width));
+  const totalH=Math.max(0, Math.round(r.height));
+  const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
+  const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+
+  const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
+  const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+
+  const slotY=[0];
+  for(let hr=0;hr<24;hr++){
+    const h=rowH[hr];
+    const base=Math.floor(h/4); let rem=h-base*4;
+    const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
+    for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
+  }
+  return {totalW,totalH,colW,colX,rowH,rowY,slotY, rect:r};
+}
+
+function buildMask(geom, cols){
+  const svg=document.getElementById('maskSVG'); if(!svg) return; svg.innerHTML='';
+  const { totalW, totalH, colX, rowY } = geom;
+  if(totalW<=0 || totalH<=0) return;
+  svg.setAttribute('width', totalW);
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.setAttribute('preserveAspectRatio','none');
+
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs');
+  const sym=document.createElementNS(NS,'symbol');
+  sym.setAttribute('id','tile900x300');
+  sym.setAttribute('viewBox','0 0 900 300');
+  sym.setAttribute('preserveAspectRatio','none');
+
+  const surface=getComputedStyle(document.documentElement).getPropertyValue('--mask-surface')||'#e3eaf2';
+  const rct=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
+  const poly=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
+
+  sym.appendChild(rct(0,0,900,24)); sym.appendChild(rct(0,276,900,24));
+  sym.appendChild(rct(0,0,24,300)); sym.appendChild(rct(876,0,24,300));
+  sym.appendChild(rct(24,69,852,24)); sym.appendChild(rct(24,138,852,24)); sym.appendChild(rct(24,207,852,24));
+  sym.appendChild(poly('23,23 61,23 23,61')); sym.appendChild(poly('877,23 839,23 877,61'));
+  sym.appendChild(poly('23,277 61,277 23,239')); sym.appendChild(poly('877,277 839,277 877,239'));
+
+  defs.appendChild(sym); svg.appendChild(defs);
+
+  for(let rI=0;rI<24;rI++){
+    for(let cI=0;cI<cols;cI++){
+      const use=document.createElementNS(NS,'use');
+      use.setAttribute('href','#tile900x300');
+      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
+      use.setAttribute('width',colX[cI+1]-colX[cI]);
+      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
+      svg.appendChild(use);
+    }
+  }
+}
+
+/* --- overlap utilities & week segmentation --- */
+function segmentsForWeek(obj, visibleWeekStamp){
+  const weekLen = WEEK_MIN;
+  const weekDiff = Math.round((visibleWeekStamp - obj.weekSt) / (7*DAY_MS));
+  const offsetMin = weekDiff * weekLen;
+  const start = obj.startAbs - offsetMin;
+  const end   = start + obj.dur;
+  const s = clamp(start, 0, weekLen);
+  const e = clamp(end,   0, weekLen);
+  return (e > s) ? [[s,e]] : [];
+}
+function eachSegmentsInWeek(obj, cb){
+  const segs = segmentsForWeek(obj, getVisibleWeekStamp());
+  for(const [absS, absE] of segs){
+    let s=absS;
+    while(s<absE){
+      const dayIdx=Math.floor(s/1440), dayStart=dayIdx*1440;
+      const e=Math.min(absE, dayStart+1440);
+      cb(s,e);
+      s=e;
+    }
+  }
+}
+function anyOverlapWithBlocks(candidate, ignoreId=null){
+  let hit=false;
+  const visSt=getVisibleWeekStamp();
+  for(const b of blocks){
+    if(ignoreId && b.id===ignoreId) continue;
+    const proxy={weekSt:b.weekSt, startAbs:b.startAbs, dur:b.dur};
+    const csegs=segmentsForWeek(candidate, visSt);
+    const bsegs=segmentsForWeek(proxy, visSt);
+    for(const [cs,ce] of csegs){
+      for(const [bs,be] of bsegs){
+        if(Math.max(cs,bs) < Math.min(ce,be)){ hit=true; break; }
+      }
+      if(hit) break;
+    }
+    if(hit) break;
+  }
+  return hit;
+}
+function nearestEdgesAround(startAbs, dur, side){
+  const selStart = ((startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN;
+  const selEnd   = Math.min(WEEK_MIN, selStart + dur);
+  const edgeAbs = (side==='top'? selStart : selEnd-1);
+  const dayIdx  = Math.floor(edgeAbs/1440);
+  const dayStart= dayIdx*1440, dayEnd = dayStart+1440;
+
+  const edges=[dayStart, dayEnd];
+  for(const b of blocks){
+    eachSegmentsInWeek(b,(bs,be)=>{
+      if(bs>=dayEnd || be<=dayStart) return;
+      edges.push(bs,be);
+    });
+  }
+  edges.sort((a,b)=>a-b);
+
+  let min=dayStart, max=dayEnd;
+  for(let i=1;i<edges.length;i++){
+    if(edgeAbs>=edges[i-1] && edgeAbs<=edges[i]){
+      min=edges[i-1]; max=edges[i]; break;
+    }
+  }
+  return {minStart:min, maxEnd:max};
+}
+
+/* --- selector creation --- */
+let selectedBlockId=null;
+
+function onWeekGridTap(e){
+  const now = Date.now();
+  if(!weekGeom) return;
+  if(now < dragBlockUntil) return;
+
+  // exclusivity: cannot create selector if block selected or ghost active
+  if(selectedBlockId || dragModeActive || copyModeActive) return;
+
+  const path = e.composedPath ? e.composedPath() : [];
+  if(path.some(n=> n && n.classList && (n.classList.contains('selBtns') || n.classList.contains('handle') || n.classList.contains('blk')))) return;
+
+  const rect=weekGeom.rect;
+  const relX=e.clientX - rect.left;
+  const relY=e.clientY - rect.top;
+
+  let dayIdx=0;
+  for(let i=0;i<7;i++){ if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]){ dayIdx=i; break; } }
+
+  const minuteFloat = clamp(relY / weekGeom.totalH, 0, 1) * 1440;
+  const startMin = Math.floor(minuteFloat/60)*60;
+  const startAbs = dayIdx*1440 + startMin;
+
+  const candidate = { weekSt:getVisibleWeekStamp(), startAbs, dur:60 };
+  if(anyOverlapWithBlocks(candidate)){
+    return; // selector cannot overlap blocks
+  }
+
+  snake = candidate;
+  saveSoon(120);
+  drawSnake();
+  ensureActionButtons('selector');
+  repositionActionButtons();
+}
+
+/* selector drag */
+let dragSide=null, dragStartY=0, baseStartAbs=0, baseDur=0;
+
+function startSnakeDrag(ev, side){
+  if(!snake) return;
+  ev.preventDefault(); ev.stopPropagation();
+  ev.currentTarget.setPointerCapture(ev.pointerId);
+
+  dragging=true; dragSide = side; dragStartY = ev.clientY;
+  baseStartAbs = snake.startAbs; baseDur = snake.dur;
+
+  const gridHeight = weekGeom.totalH || 1;
+
+  const move=(e)=>{
+    const dyPx = e.clientY - dragStartY;
+    const deltaMinRaw = (dyPx / gridHeight) * 1440;
+    let snappedDelta = Math.round(deltaMinRaw / 15) * 15;
+    if(snappedDelta === 0) return;
+
+    let newStart = baseStartAbs, newDur = baseDur;
+
+    if(dragSide==='top'){
+      newStart = baseStartAbs + snappedDelta;
+      const endAbs = baseStartAbs + baseDur;
+      newDur = clamp(endAbs - newStart, 15, 1440);
+    }else{
+      const newEnd = baseStartAbs + baseDur + snappedDelta;
+      newDur = clamp(newEnd - baseStartAbs, 15, 1440);
+    }
+
+    const bracket = nearestEdgesAround(newStart, newDur, dragSide);
+    const selStart = ((newStart%WEEK_MIN)+WEEK_MIN)%WEEK_MIN;
+    const selEnd   = Math.min(WEEK_MIN, selStart + newDur);
+
+    if(dragSide==='top'){
+      if(selStart < bracket.minStart) {
+        const diff = bracket.minStart - selStart;
+        newStart += diff; newDur -= diff;
+      }
+    }else{
+      if(selEnd > bracket.maxEnd){
+        const diff = selEnd - bracket.maxEnd;
+        newDur -= diff;
+      }
+    }
+    newDur = Math.max(15, Math.min(newDur, 1440));
+
+    const candidate={weekSt:snake.weekSt, startAbs:newStart, dur:newDur};
+    if(anyOverlapWithBlocks(candidate)){
+      return; // never overlap existing blocks
+    }
+
+    snake.startAbs = newStart;
+    snake.dur      = newDur;
+
+    if(!rafPending){ rafPending = true; requestAnimationFrame(()=>{ rafPending=false; drawSnake(); repositionActionButtons(); }); }
+  };
+
+  const up=(e)=>{ endDrag('up', e); };
+  const cancel=(e)=>{ endDrag('cancel', e); };
+  const lost=(e)=>{ endDrag('lost', e); };
+
+  window.addEventListener('pointermove', move, {passive:false});
+  window.addEventListener('pointerup', up, {passive:true});
+  window.addEventListener('pointercancel', cancel, {passive:true});
+  ev.currentTarget.addEventListener('lostpointercapture', lost, {once:true});
+
+  startSnakeDrag._listeners = { move, up, cancel, target: ev.currentTarget };
+}
+
+function endDrag(reason, ev){
+  if(!dragging && !startSnakeDrag._listeners) return;
+  const ls = startSnakeDrag._listeners || {};
+  try{
+    window.removeEventListener('pointermove', ls.move);
+    window.removeEventListener('pointerup', ls.up);
+    window.removeEventListener('pointercancel', ls.cancel);
+    ls.target?.releasePointerCapture?.(ev?.pointerId);
+  }catch{}
+  startSnakeDrag._listeners = null;
+
+  dragging=false; dragSide=null;
+  if(snake){
+    while(snake.startAbs < 0){ snake.startAbs += WEEK_MIN; snake.weekSt -= 7*DAY_MS; }
+    while(snake.startAbs >= WEEK_MIN){ snake.startAbs -= WEEK_MIN; snake.weekSt += 7*DAY_MS; }
+  }
+  dragBlockUntil = Date.now() + 120;
+  drawSnake();
+  repositionActionButtons();
+  saveSoon(80);
+}
+
+/* selection painter */
+function clearSelectionOverlays(){ if(!overlayRoot) return; overlayRoot.querySelectorAll('[data-role="sel-ov"], .glow-ghost[data-role="sel-ghost"]').forEach(n=>n.remove()); }
+function drawSnake(){
+  const host=document.getElementById('selHost'); if(!host) { destroyActionButtons(); return; }
+  ensureOverlay();
+
+  host.innerHTML='';
+  clearSelectionOverlays();
+
+  if(!snake){ if(!selectedBlockId) destroyActionButtons(); return; }
+
+  const visSt = getVisibleWeekStamp();
+  const segs = segmentsForWeek(snake, visSt);
+  if(segs.length===0){ destroyActionButtons(); return; }
+
+  if(anyOverlapWithBlocks(snake)){ return; }
+
+  const startLocalMin = (snake.weekSt + snake.startAbs*60000 - visSt) / 60000;
+  const endLocalMin   = (snake.weekSt + (snake.startAbs + snake.dur)*60000 - visSt) / 60000;
+
+  for(const [segStartAbs, segEndAbs] of segs){
+    let s = segStartAbs;
+    while(s < segEndAbs){
+      const dayIdx = Math.floor(s / 1440);
+      const dayStartAbs = dayIdx*1440;
+      const segStart = s;
+      const segEnd   = Math.min(segEndAbs, dayStartAbs + 1440);
+
+      const showTopHere    = (startLocalMin >= segStart && startLocalMin < segEnd);
+      const showBottomHere = (endLocalMin   >  segStart && endLocalMin  <= segEnd);
+
+      drawSnakeSegment(dayIdx, segStart - dayStartAbs, segEnd - dayStartAbs, showTopHere, showBottomHere);
+      s = segEnd;
+    }
+  }
+
+  ensureActionButtons('selector');
+  repositionActionButtons();
+}
+function minutesToY(min){ const idx = clamp(Math.round(min/15), 0, 96); return weekGeom.slotY[idx]; }
+
+function drawSnakeSegment(dayIdx, startMin, endMin, showTop, showBottom){
+  const host=document.getElementById('selHost');
+  const colLeft = weekGeom.colX[dayIdx];
+  const colRight= weekGeom.colX[dayIdx+1];
+  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  const rectEl=document.createElement('div');
+  rectEl.className='marqueeRect';
+  rectEl.style.left   = `${colLeft}px`;
+  rectEl.style.top    = `${topY}px`;
+  rectEl.style.width  = `${colWidth}px`;
+  rectEl.style.height = `${height}px`;
+  host.appendChild(rectEl);
+
+  const group=document.createElement('div');
+  group.className='ov-group'; group.dataset.role='sel-ov';
+  group.style.left = (weekGeom.rect.left + colLeft) + 'px';
+  group.style.top  = (weekGeom.rect.top  + topY) + 'px';
+  group.style.width= colWidth + 'px';
+  group.style.height= height + 'px';
+  overlayRoot.appendChild(group);
+
+  const glow=document.createElement('div');
+  glow.className='glow-ghost'; glow.dataset.role='sel-ghost';
+  glow.style.left = (weekGeom.rect.left + colLeft) + 'px';
+  glow.style.top  = (weekGeom.rect.top  + topY) + 'px';
+  glow.style.width  = colWidth + 'px';
+  glow.style.height = height + 'px';
+  overlayRoot.appendChild(glow);
+
+  const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--handle-gap'))||12;
+  const borderW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--marquee-border'))||5;
+  const rowH0 = weekGeom.rowH[0] || 48;
+  const hH = Math.max(48, Math.floor(rowH0 * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
+  const stampH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26');
+  const off = gap + borderW;
+
+  if(showTop){
+    const topStamp=document.createElement('div'); topStamp.className='stamp';
+    topStamp.textContent = HHMM(startMin);
+    topStamp.style.left = (colWidth/2)+'px';
+    topStamp.style.top  = (- (off + stampH))+'px';
+    group.appendChild(topStamp);
+
+    const topHandle=document.createElement('div'); topHandle.className='handle top';
+    topHandle.style.left='0px';
+    topHandle.style.top = (- (off + stampH + gap + hH))+'px';
+    topHandle.style.width=colWidth+'px'; topHandle.style.height=hH+'px';
+    topHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('up', colWidth, rowH0)}</div>`;
+    topHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'top'), {passive:false});
+    group.appendChild(topHandle);
+  }
+
+  if(showBottom){
+    const botStamp=document.createElement('div'); botStamp.className='stamp';
+    botStamp.textContent = HHMM(endMin%1440);
+    botStamp.style.left = (colWidth/2)+'px';
+    botStamp.style.top  = (height + off)+'px';
+    group.appendChild(botStamp);
+
+    const botHandle=document.createElement('div'); botHandle.className='handle bottom';
+    botHandle.style.left='0px';
+    botHandle.style.top = (height + off + stampH + gap)+'px';
+    botHandle.style.width=colWidth+'px'; botHandle.style.height=hH+'px';
+    botHandle.innerHTML = `<div class="chev-chip">${chevronsSVG('down', colWidth, rowH0)}</div>`;
+    botHandle.addEventListener('pointerdown', ev=>startSnakeDrag(ev,'bottom'), {passive:false});
+    group.appendChild(botHandle);
+  }
+}
+function chevronsSVG(dir, colW, rowH){
+  const padX = 8;
+  const w = Math.max(28, colW - padX*2);
+  const h = Math.max(48, Math.floor(rowH * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle-height-mult')||1.75)));
+  const mid = w/2;
+  const gap = h/6;
+  const span = Math.min(w*0.42, h/4);
+  const up = (y)=>`M ${mid-span} ${y+span} L ${mid} ${y} L ${mid+span} ${y+span}`;
+  const dn = (y)=>`M ${mid-span} ${y} L ${mid} ${y+span} L ${mid+span} ${y}`;
+  const d1 = (dir==='up'? up(gap) : dn(gap));
+  const d2 = (dir==='up'? up(gap*2.2) : dn(gap*2.2));
+  const d3 = (dir==='up'? up(gap*3.4) : dn(gap*3.4));
+  return `<div class="chev"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d1}"/><path d="${d2}"/><path d="${d3}"/></svg></div>`;
+}
+
+/* ============ TEMPORAL HELPERS ============ */
+function isBlockFullyPast(blk){
+  const endMs = weekAbsToMs(getVisibleWeekStamp(), ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN + blk.dur);
+  // Adjust endMs to absolute week shown: use blk.weekSt with segments
+  const segs = segmentsForWeek(blk, getVisibleWeekStamp());
+  if(!segs.length) return false;
+  const [s,e]=segs[0];
+  const absEndMs = weekAbsToMs(getVisibleWeekStamp(), e);
+  return absEndMs <= Date.now();
+}
+function isBlockOngoing(blk){
+  const segs = segmentsForWeek(blk, getVisibleWeekStamp());
+  if(!segs.length) return false;
+  const [s,e]=segs[0];
+  const nowMin = Math.floor(((Date.now()-getVisibleWeekStamp())/60000));
+  return nowMin >= s && nowMin < e;
+}
+function isBlockFuture(blk){
+  const segs = segmentsForWeek(blk, getVisibleWeekStamp());
+  if(!segs.length) return false;
+  const [s,_e]=segs[0];
+  const nowMin = Math.floor(((Date.now()-getVisibleWeekStamp())/60000));
+  return s > nowMin;
+}
+
+/* ============ BLOCKS ============ */
+function drawBlocks(){
+  const host=document.getElementById('blockHost'); if(!host) return;
+  host.innerHTML='';
+  ensureOverlay();
+
+  const visSt=getVisibleWeekStamp();
+  for(const blk of blocks){
+    const segs = segmentsForWeek(blk, visSt);
+    for(const [segStartAbs, segEndAbs] of segs){
+      let s=segStartAbs;
+      while(s<segEndAbs){
+        const dayIdx=Math.floor(s/1440);
+        const dayStartAbs=dayIdx*1440;
+        const segStart=s;
+        const segEnd=Math.min(segEndAbs, dayStartAbs+1440);
+        drawBlockSegment(blk, dayIdx, segStart-dayStartAbs, segEnd-dayStartAbs);
+        s=segEnd;
+      }
+    }
+  }
+}
+function getCatColorValue(catKey){
+  const cat=categories.find(c=>c.key===catKey);
+  if(!cat) return '#bbb';
+  if(cat.color.startsWith('var(')) return getComputedStyle(document.documentElement).getPropertyValue(cat.color.slice(4,-1)) || '#bbb';
+  return cat.color;
+}
+function drawBlockSegment(blk, dayIdx, startMin, endMin){
+  const host=document.getElementById('blockHost');
+  const colLeft = weekGeom.colX[dayIdx];
+  const colRight= weekGeom.colX[dayIdx+1];
+  const colWidth= (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  const rectEl=document.createElement('div');
+  rectEl.className='blk';
+  rectEl.style.left = `${colLeft}px`;
+  rectEl.style.top = `${topY}px`;
+  rectEl.style.width = `${colWidth}px`;
+  rectEl.style.height = `${height}px`;
+  rectEl.style.background = getCatColorValue(blk.catKey);
+  rectEl.dataset.id = blk.id;
+  rectEl.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(snake || dragModeActive || copyModeActive) return;
+    selectBlock(blk.id, {x:weekGeom.rect.left+colLeft, y:weekGeom.rect.top+topY, w:colWidth, h:height}, {dayIdx, startMin, endMin});
+  }, {passive:true});
+  host.appendChild(rectEl);
+
+  if(selectedBlockId===blk.id){
+    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height, segMeta={dayIdx, startMin, endMin});
+  }
+}
+function outlineRect(absLeft, absTop, w, h, segMeta=null){
+  clearBlockOutline();
+  const group=document.createElement('div'); group.className='ov-group'; group.dataset.role='blk-ov';
+  group.style.left = absLeft+'px'; group.style.top = absTop+'px'; group.style.width=w+'px'; group.style.height=h+'px';
+  overlayRoot.appendChild(group);
+
+  const ghostGlow=document.createElement('div'); ghostGlow.className='glow-ghost'; ghostGlow.dataset.role='blk-ghost';
+  ghostGlow.style.left = absLeft+'px'; ghostGlow.style.top = absTop+'px'; ghostGlow.style.width=w+'px'; ghostGlow.style.height=h+'px';
+  overlayRoot.appendChild(ghostGlow);
+
+  const outline=document.createElement('div'); outline.className='marqueeRect';
+  outline.style.position='absolute'; outline.style.inset='0';
+  group.appendChild(outline);
+
+  try{
+    const blk=blocks.find(b=>b.id===selectedBlockId);
+    if(blk){
+      const visSt=getVisibleWeekStamp();
+      let sAbs=0,eAbs=0;
+      if(segMeta){
+        const {dayIdx,startMin,endMin}=segMeta;
+        sAbs = dayIdx*1440 + startMin;
+        eAbs = dayIdx*1440 + endMin;
+      }else{
+        const segs=segmentsForWeek(blk, visSt);
+        if(segs.length){ [sAbs,eAbs]=segs[0]; }
+      }
+      const topStamp=document.createElement('div'); topStamp.className='stamp';
+      topStamp.textContent = HHMM(sAbs%1440);
+      topStamp.style.left = (w/2)+'px';
+      topStamp.style.top  = (- (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--stamp-h')||'26') + 12))+'px';
+      group.appendChild(topStamp);
+
+      const botStamp=document.createElement('div'); botStamp.className='stamp';
+      botStamp.textContent = HHMM(eAbs%1440);
+      botStamp.style.left = (w/2)+'px';
+      botStamp.style.top  = (h + 8)+'px';
+      group.appendChild(botStamp);
+    }
+  }catch{}
+
+  ensureActionButtons('block');
+  repositionActionButtons();
+}
+function clearBlockOutline(){
+  if(!overlayRoot) return;
+  overlayRoot.querySelectorAll('[data-role="blk-ov"], [data-role="blk-ghost"]').forEach(n=>n.remove());
+}
+function selectBlock(id, rect, segMeta){
+  selectedBlockId=id;
+  outlineRect(rect.x, rect.y, rect.w, rect.h, segMeta||null);
+}
+
+/* Deselect block helper */
+function deselectBlock(){
+  if(dragModeActive || copyModeActive) { deactivateModes(); }
+  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+}
+
+/* clear state helper */
+function clearSelectionState(){
+  if(dragModeActive || copyModeActive){ deactivateModes(); }
+  selectedBlockId=null; clearBlockOutline(); destroyActionButtons();
+}
+
+/* ====== Action buttons auto-avoid ghost + build with temporal rules ====== */
+function getGhostRect(){
+  if(!ghost || !weekGeom) return null;
+  const g = absToRect(ghost.startAbs, ghost.dur);
+  return new DOMRect(g.left, g.top, g.width, g.height);
+}
+
+function repositionActionButtons(){
+  const pair = window.__actionBtns; if(!pair){ return; }
+  const selR = selectionMidRect();
+  if(!selR){ hideActionButtons(); return; }
+  pair.classList.remove('selBtnHidden');
+
+  const margin=8, btnW=44, btnGap=8;
+  const count = pair.childElementCount||2;
+  const totalH=(44* count) + (btnGap*(count-1));
+
+  let preferRight = (window.innerWidth - selR.right) >= selR.left;
+  let left = (preferRight ? selR.right + margin : selR.left - margin - btnW);
+  if(left < margin){ left = selR.right + margin; }
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, selR.left - margin - btnW); }
+
+  let top  = selR.top + (selR.height/2) - (totalH/2);
+  if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
+  if(top < margin) top = margin;
+
+  const gRect = getGhostRect();
+  if(gRect){
+    const overlap = !(left+btnW < gRect.left-4 || left > gRect.right+4 || top+totalH < gRect.top-4 || top > gRect.bottom+4);
+    if(overlap){
+      const spaceLeft  = gRect.left - margin - btnW;
+      const spaceRight = window.innerWidth - (gRect.right + margin + btnW);
+      if(spaceRight >= spaceLeft && gRect.right + margin + btnW <= window.innerWidth - margin){
+        left = gRect.right + margin;
+        top  = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH);
+      }else if(spaceLeft >= 0){
+        left = Math.max(margin, gRect.left - margin - btnW);
+        top  = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH);
+      }else{
+        const spaceAbove = gRect.top - margin - totalH;
+        const spaceBelow = window.innerHeight - (gRect.bottom + margin + totalH);
+        if(spaceBelow >= spaceAbove && gRect.bottom + margin + totalH <= window.innerHeight - margin){
+          top  = gRect.bottom + margin;
+          left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW);
+        }else{
+          top  = Math.max(margin, gRect.top - margin - totalH);
+          left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW);
+        }
+      }
+    }
+  }
+
+  pair.style.left = `${Math.round(left)}px`;
+  pair.style.top  = `${Math.round(top)}px`;
+}
+let _vpAttached=false;
+function attachViewportRepositioners(){
+  if(_vpAttached) return;
+  _vpAttached=true;
+  const handler = throttle(()=>{ repositionActionButtons(); }, 16);
+  window.addEventListener('scroll', handler, {passive:true});
+  window.addEventListener('resize', handler, {passive:true});
+  window.addEventListener('orientationchange', handler, {passive:true});
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', handler, {passive:true});
+}
+
+function ensureActionButtons(context){
+  if(activeView!=='week') { destroyActionButtons(); return; }
+  if(window.__actionBtns && document.body.contains(window.__actionBtns)){
+    window.__actionBtns.dataset.ctx = context;
+    renderActionButtons();
+    window.__actionBtns.classList.remove('selBtnHidden');
+    repositionActionButtons();
+    return;
+  }
+  const wrap = document.createElement('div'); wrap.className='selBtns'; wrap.id='actionBtns'; wrap.dataset.ctx=context;
+  document.body.appendChild(wrap);
+  window.__actionBtns = wrap;
+  renderActionButtons();
+  repositionActionButtons();
+  attachViewportRepositioners();
+}
+function renderActionButtons(){
+  const wrap=window.__actionBtns; if(!wrap) return;
+  const ctx=wrap.dataset.ctx;
+  wrap.innerHTML='';
+
+  const mk=(label, svg, onClick, isActive=false)=>{
+    const b=document.createElement('button'); b.className='neu-btn--sm'; b.setAttribute('aria-label', label);
+    b.innerHTML=svg;
+    if(isActive){ b.classList.add('ack'); }
+    b.addEventListener('pointerdown', ev=>{ ev.stopPropagation(); ev.preventDefault(); pulseSm(b); }, {capture:true});
+    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); ev.preventDefault(); onClick?.(b); }, {passive:false});
+    return b;
+  };
+
+  if(ctx==='block'){
+    const blk=blocks.find(b=>b.id===selectedBlockId);
+    const inPast = blk ? isBlockFullyPast(blk) : false;
+    const ongoing = blk ? isBlockOngoing(blk) : false;
+
+    // MOVE: hidden for completed blocks; visible otherwise
+    if(!inPast){
+      wrap.appendChild(mk('Drag', arrowsSVG(), ()=>{ toggleDragMode(); }, dragModeActive));
+    }
+    // COPY: always available (including completed)
+    wrap.appendChild(mk('Copy', copySVG(), ()=>{ toggleCopyMode(); }, copyModeActive));
+
+    // SETTINGS: always available; uses global pointer set in Part 2
+    wrap.appendChild(mk('Settings', gearSVG(), ()=>{
+      if (window.__openSettingsFS) {
+        window.__openSettingsFS();
+      } else {
+        toast('Settings will load after Part 2 is pasted.');
+      }
+    }));
+
+    // CLOSE
+    wrap.appendChild(mk('Close', xSVG(), ()=>{ deselectBlock(); }));
+  }else{
+    // Selector buttons: Settings (create) + Close
+    wrap.appendChild(mk('Settings', gearSVG(), ()=>{
+      if (window.__openSettingsFS) {
+        window.__openSettingsFS();
+      } else {
+        toast('Settings will load after Part 2 is pasted.');
+      }
+    }));
+    wrap.appendChild(mk('Close', xSVG(), ()=>{
+      endDrag('close'); snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons();
+    }));
+  }
+}
+function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
+function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
+
+/* Selection center rect */
+function selectionMidRect(){
+  if(selectedBlockId){
+    const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
+    const segs = segmentsForWeek(blk, getVisibleWeekStamp()); if(!segs.length) return null;
+    const [s,e]=segs[0]; const mid=s+(e-s)/2;
+    const dayIdx=Math.floor(mid/1440), minInDay=mid-dayIdx*1440;
+    const yTop = minutesToY(Math.max(0, minInDay-30)), yBot = minutesToY(Math.min(1440, minInDay+30));
+    const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+    const width = weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+    const top = weekGeom.rect.top + yTop, height=Math.max(1, yBot-yTop);
+    return new DOMRect(left, top, width, height);
+  }
+  if(!snake || !weekGeom) return null;
+  const visSt = getVisibleWeekStamp();
+  const segs = segmentsForWeek(snake, visSt);
+  if(segs.length===0) return null;
+  const [segStartAbs, segEndAbs] = segs[0];
+  const midAbs = segStartAbs + (segEndAbs - segStartAbs)/2;
+
+  const dayIdx = Math.floor(midAbs/1440);
+  const minInDay = midAbs - dayIdx*1440;
+  const yTop = minutesToY(Math.max(0, minInDay-30));
+  const yBot = minutesToY(Math.min(1440, minInDay+30));
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width = weekGeom.colX[dayIdx+1] - weekGeom.colX[dayIdx];
+  const top = weekGeom.rect.top + yTop;
+  const height = Math.max(1, yBot - yTop);
+  return new DOMRect(left, top, width, height);
+}
+
+/* ---------- DRAG/COPY GHOST ---------- */
+function deactivateModes(){
+  dragModeActive=false; copyModeActive=false;
+  removeGhost();
+  renderActionButtons();
+  repositionActionButtons();
+}
+function toggleDragMode(){
+  if(!selectedBlockId) return;
+  const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk) return;
+  if(isBlockFullyPast(blk)) return; // no move on completed
+  if(dragModeActive){
+    if(ghost && ghost.mode==='drag' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  copyModeActive=false;
+  createGhost('drag');
+  dragModeActive=true;
+  renderActionButtons();
+  repositionActionButtons();
+}
+function toggleCopyMode(){
+  if(!selectedBlockId) return;
+  if(copyModeActive){
+    if(ghost && ghost.mode==='copy' && ghost.valid){ commitGhost(); }
+    deactivateModes();
+    return;
+  }
+  dragModeActive=false;
+  createGhost('copy');
+  copyModeActive=true;
+  renderActionButtons();
+  repositionActionButtons();
+}
+function createGhost(mode){
+  removeGhost();
+  const blk=blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return;
+  ghost = {
+    mode,
+    srcBlockId: blk.id,
+    startAbs: ((blk.startAbs%WEEK_MIN)+WEEK_MIN)%WEEK_MIN,
+    dur: blk.dur,
+    valid: false
+  };
+  drawGhost();
+  repositionActionButtons();
+}
+function removeGhost(){
+  document.querySelector('.ghost')?.remove();
+  document.getElementById('ghostStampTop')?.remove();
+  document.getElementById('ghostStampBot')?.remove();
+  ghost=null;
+  repositionActionButtons();
+}
+function drawGhost(){
+  if(!ghost || !weekGeom) return;
+  const pos = absToRect(ghost.startAbs, ghost.dur);
+  let el = document.querySelector('.ghost');
+  if(!el){
+    el=document.createElement('div');
+    el.className='ghost invalid';
+    el.style.cursor='grab';
+    document.body.appendChild(el);
+
+    function clientXToDayIdx(x){
+      const rect = weekGeom.rect;
+      const relX = clamp(x - rect.left, 0, weekGeom.totalW);
+      for(let i=0;i<7;i++){
+        if(relX >= weekGeom.colX[i] && relX < weekGeom.colX[i+1]) return i;
+      }
+      return 0;
+    }
+    function clientYToMinutes(y){
+      const rect = weekGeom.rect;
+      const relY = clamp(y - rect.top, 0, weekGeom.totalH);
+      return (relY / weekGeom.totalH) * 1440;
+    }
+
+    function moveGhostCenterTo(clientX, clientY){
+      const dayIdx = clientXToDayIdx(clientX);
+      const minutesY = clientYToMinutes(clientY);
+
+      let startMinInDay = Math.round((minutesY - ghost.dur/2)/15)*15;
+      if(startMinInDay < 0) startMinInDay = 0;
+      if(startMinInDay + ghost.dur > 1440) startMinInDay = 1440 - ghost.dur;
+
+      const newStartAbs = dayIdx*1440 + startMinInDay;
+
+      const candidate={weekSt:getVisibleWeekStamp(), startAbs:newStartAbs, dur:ghost.dur};
+      const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
+      if(anyOverlapWithBlocks(candidate, ignoreId)){
+        ghost.valid=false;
+      }else{
+        ghost.startAbs=newStartAbs; ghost.valid=true;
+      }
+      updateGhost(el);
+    }
+
+    const onDown=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      el.setPointerCapture?.(e.pointerId);
+      el.style.cursor='grabbing';
+      moveGhostCenterTo(e.clientX, e.clientY);
+      repositionActionButtons();
+    };
+    const onMove=(e)=>{
+      if(!(e.buttons&1)) return;
+      e.preventDefault();
+      moveGhostCenterTo(e.clientX, e.clientY);
+      repositionActionButtons();
+    };
+    const onUp=()=>{
+      el.releasePointerCapture?.();
+      el.style.cursor='grab';
+      repositionActionButtons();
+    };
+
+    el.addEventListener('pointerdown', onDown, {passive:false});
+    el.addEventListener('pointermove', onMove, {passive:false});
+    el.addEventListener('pointerup', onUp, {passive:true});
+    el.addEventListener('pointercancel', onUp, {passive:true});
+  }
+
+  placeGhost(el, pos);
+  updateGhostValidity();
+  ensureGhostStamps();
+  updateGhostStamps();
+  repositionActionButtons();
+}
+function placeGhost(el, rect){
+  el.style.left = rect.left+'px';
+  el.style.top  = rect.top+'px';
+  el.style.width  = rect.width+'px';
+  el.style.height = rect.height+'px';
+}
+function absToRect(startAbs, dur){
+  const dayIdx = Math.floor(startAbs/1440);
+  const minInDay = startAbs - dayIdx*1440;
+  const topY  = minutesToY(minInDay);
+  const end   = Math.min(WEEK_MIN, startAbs + dur);
+  const endDayIdx=Math.floor(end/1440);
+  const endInDay = end - endDayIdx*1440;
+
+  const left = weekGeom.rect.left + weekGeom.colX[dayIdx];
+  const width= weekGeom.colX[dayIdx+1]-weekGeom.colX[dayIdx];
+  let height;
+  if(endDayIdx===dayIdx){
+    height = Math.max(1, minutesToY(endInDay) - topY);
+  }else{
+    height = Math.max(1, minutesToY(1440) - topY);
+  }
+  return {left, top: weekGeom.rect.top + topY, width, height};
+}
+function updateGhostValidity(){
+  if(!ghost) return;
+  const candidate={weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:ghost.dur};
+  const ignoreId = (ghost.mode==='drag') ? ghost.srcBlockId : null;
+  const overlap = anyOverlapWithBlocks(candidate, ignoreId);
+  ghost.valid = !overlap;
+  const el=document.querySelector('.ghost');
+  if(el){
+    el.classList.toggle('valid', ghost.valid);
+    el.classList.toggle('invalid', !ghost.valid);
+  }
+}
+function ensureGhostStamps(){
+  if(!document.getElementById('ghostStampTop')){
+    const t=document.createElement('div'); t.className='ghost-stamp'; t.id='ghostStampTop'; document.body.appendChild(t);
+  }
+  if(!document.getElementById('ghostStampBot')){
+    const b=document.createElement('div'); b.className='ghost-stamp'; b.id='ghostStampBot'; document.body.appendChild(b);
+  }
+}
+function updateGhostStamps(){
+  const t=document.getElementById('ghostStampTop');
+  const b=document.getElementById('ghostStampBot');
+  if(!ghost || !weekGeom || !t || !b) return;
+  const rect=absToRect(ghost.startAbs, ghost.dur);
+  const cx = rect.left + rect.width/2;
+  t.style.left = cx+'px';
+  t.style.top  = (rect.top - 22)+'px';
+  b.style.left = cx+'px';
+  b.style.top  = (rect.top + rect.height + 6)+'px';
+  t.textContent = HHMM(ghost.startAbs%1440);
+  b.textContent = HHMM((ghost.startAbs + ghost.dur)%1440);
+}
+function commitGhost(){
+  if(!ghost || !ghost.valid) return;
+  if(ghost.mode==='drag'){
+    const blk=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(blk){
+      if(isBlockFullyPast(blk)) return; // safety
+      blk.startAbs = ghost.startAbs;
+      blk.weekSt   = getVisibleWeekStamp();
+      persistBlocks().then(()=>{ drawBlocks(); const rect = absToRect(blk.startAbs, blk.dur); selectBlock(blk.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height}); applyPastOverlay(); });
+    }
+  }else if(ghost.mode==='copy'){
+    const src=blocks.find(b=>b.id===ghost.srcBlockId);
+    if(src){
+      const dup={ id:'b'+Math.random().toString(36).slice(2,9), weekSt:getVisibleWeekStamp(), startAbs:ghost.startAbs, dur:src.dur, catKey:src.catKey, note:src.note, privacy:src.privacy, notif:src.notif, occ:src.occ, catNameSnap:src.catNameSnap };
+      if(!anyOverlapWithBlocks(dup)){
+        blocks.push(dup);
+        persistBlocks().then(()=>{ drawBlocks(); const rect = absToRect(dup.startAbs, dup.dur); selectBlock(dup.id, {x:rect.left, y:rect.top, w:rect.width, h:rect.height}); applyPastOverlay(); });
+      }
+    }
+  }
+  removeGhost();
+}
+
+/* Toast */
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* SVG helpers */
+function pencilSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.06 6.19l3.75 3.75" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`; }
+function checkSVG(){ return `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function gearSVG(){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M12 2.8v2.4M12 18.8v2.4M4.7 4.7l1.7 1.7M17.6 17.6l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.7 19.3 6.4 17.6M17.6 6.4l1.7-1.7" 
+      fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+function xSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`; }
+function arrowsSVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M12 3l2.5 2.5L12 8 9.5 5.5 12 3z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 12l-2.5 2.5L16 12l2.5-2.5L21 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M12 21l-2.5-2.5L12 16l2.5 2.5L12 21z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 12l2.5-2.5L8 12l-2.5 2.5L3 12z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`; }
+function copySVG(){ return `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+</svg>`; }
+
+/* save/load */
+function snapshotState(){ return { activeView, visibleWeekFirst:+weekStart(new Date()) }; }
+async function saveAll(){ await storageSet(STATE_KEY, snapshotState()); await storageSet(SEL_KEY, snake); await persistBlocks(); await persistCategories(); }
+let saveTimer=null; function saveSoon(ms=200){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(()=>{}); }, ms); }
+async function persistBlocks(){ await storageSet(BLK_KEY, blocks); }
+async function loadBlocks(){ const v=await storageGet(BLK_KEY); if(Array.isArray(v)) blocks=v; }
+async function persistCategories(){ await storageSet(CAT_KEY, categories); }
+async function loadCategories(){ const v=await storageGet(CAT_KEY); if(Array.isArray(v)){ for(const c of v){ const target=categories.find(x=>x.key===c.key); if(target){ target.name=c.name; } } } }
+
+/* ---------------- PRESENT LENS ---------------- */
+function hardClearPresentLens(){
+  const lensHost = document.getElementById('lensHost');
+  if(lensHost) lensHost.innerHTML='';
+  if(presentLensGhost && overlayRoot?.contains(presentLensGhost)) presentLensGhost.remove();
+  presentLensEl=null; presentLensGhost=null;
+}
+function stopLensTimer(hardClear=false){
+  if(lensAlignTimeout){ clearTimeout(lensAlignTimeout); lensAlignTimeout=null; }
+  if(lensIntervalId){ clearInterval(lensIntervalId); lensIntervalId=null; }
+  lensSessionId=null;
+  if(hardClear) hardClearPresentLens();
+}
+function startLensTimer(){
+  stopLensTimer(true);
+  if(activeView!=='week') return;
+
+  lensSessionId = Symbol('lens-session');
+
+  updatePresentLens(true, lensSessionId);
+
+  const now = new Date();
+  const ms = now.getSeconds()*1000 + now.getMilliseconds();
+  const mins = now.getMinutes();
+  const next5 = (Math.floor(mins/5)+1)*5;
+  const wait = (((next5%60) - mins + 60)%60)*60000 - ms;
+  lensAlignTimeout = setTimeout(()=>{
+    updatePresentLens(true, lensSessionId);
+    lensIntervalId = setInterval(()=> updatePresentLens(false, lensSessionId), 5*60*1000);
+  }, Math.max(0, wait));
+}
+function updatePresentLens(forceRecreate=false, sessionToken=null){
+  if(activeView!=='week' || !weekGeom) return;
+  if(sessionToken && sessionToken !== lensSessionId) return;
+
+  const lensHost = document.getElementById('lensHost'); if(!lensHost) return;
+
+  const now = getNow();
+  const visibleStart = +weekStart(visibleWeekFirst);
+  const visibleEnd   = visibleStart + 7*DAY_MS;
+  const nowMs = +now;
+
+  if(!(nowMs >= visibleStart && nowMs < visibleEnd)){
+    hardClearPresentLens();
+    return;
+  }
+
+  const dayIdx = now.getDay();
+  const minsNow = now.getHours()*60 + now.getMinutes();
+  const startMin = Math.floor(minsNow/15)*15;
+  const endMin = Math.min(1440, startMin + 60);
+
+  const colLeft  = weekGeom.colX[dayIdx];
+  const colRight = weekGeom.colX[dayIdx+1];
+  const colWidth = (colRight - colLeft) - (dayIdx===6?1:0);
+  const topY  = minutesToY(startMin);
+  const botY  = minutesToY(endMin);
+  const height= Math.max(1, botY - topY);
+
+  if(!presentLensEl || forceRecreate){
+    lensHost.innerHTML = '';
+    presentLensEl = document.createElement('div');
+    presentLensEl.className='present-lens';
+    lensHost.appendChild(presentLensEl);
+  }
+  presentLensEl.style.left   = `${colLeft}px`;
+  presentLensEl.style.top    = `${topY}px`;
+  presentLensEl.style.width  = `${colWidth}px`;
+  presentLensEl.style.height = `${height}px`;
+
+  if(!presentLensGhost || !overlayRoot?.contains(presentLensGhost)){
+    presentLensGhost?.remove();
+    presentLensGhost = document.createElement('div');
+    presentLensGhost.className='glow-ghost';
+    presentLensGhost.dataset.role='lens-ghost';
+    ensureOverlay();
+    overlayRoot.appendChild(presentLensGhost);
+  }
+  presentLensGhost.style.left   = (weekGeom.rect.left + colLeft) + 'px';
+  presentLensGhost.style.top    = (weekGeom.rect.top  + topY) + 'px';
+  presentLensGhost.style.width  = colWidth + 'px';
+  presentLensGhost.style.height = height + 'px';
+}
+
+/* ------ PAST OVERLAY (navy, under blocks, over background) ------ */
+function applyPastOverlay(){
+  const canvas = document.getElementById('pastOverlay'); if(!canvas || !weekGeom) return;
+  const {totalW,totalH,colX,rowY,slotY} = weekGeom;
+  canvas.width = totalW; canvas.height = totalH;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,totalW,totalH);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--past-navy') || 'rgba(16,58,91,0.5)';
+
+  const now = getNow();
+  const visibleStart = +weekStart(visibleWeekFirst);
+  const visibleEnd   = visibleStart + 7*DAY_MS;
+  const nowMs = +now;
+
+  if(nowMs < visibleStart){
+    // Future week: no overlay
+    return;
+  } else if(nowMs >= visibleEnd){
+    // Previous weeks: cover all
+    ctx.fillRect(0,0,totalW,totalH);
+  } else {
+    // Current week: overlay minutes <= now tick
+    const dayIdx = now.getDay();
+    const minsNow = now.getHours()*60 + now.getMinutes();
+    // Fill full days before today
+    for(let d=0; d<dayIdx; d++){
+      const x=colX[d], w=colX[d+1]-colX[d];
+      const h=totalH;
+      ctx.fillRect(x,0,w,h);
+    }
+    // Fill today's portion up to minsNow (snapped to slotY grid)
+    const x=colX[dayIdx], w=colX[dayIdx+1]-colX[dayIdx];
+    const yBot = minutesToY(Math.min(1440, Math.max(0, minsNow)));
+    ctx.fillRect(x, 0, w, yBot);
+  }
+}
+
+/* throttle */
+function throttle(fn, ms){
+  let t=0, lastArgs=null;
+  return function(...args){
+    lastArgs=args;
+    if(!t){
+      t=setTimeout(()=>{ t=0; fn.apply(null,lastArgs); }, ms);
+    }
+  }
+}
+
+/* small UI pulse */
+function pulseSm(el){
+  el.classList.add('ack');
+  setTimeout(()=>el.classList.remove('ack'), 180);
+}
+
+/* init/render */
+async function init(){
+  try{
+    visibleWeekFirst = weekStart(new Date());
+    const savedSel = await storageGet(SEL_KEY); if(savedSel && typeof savedSel==='object'){ snake = savedSel; }
+    await loadBlocks();
+    await loadCategories();
+  }catch{}
+  render();
+  document.getElementById('btnExit').onclick = ()=>{ document.getElementById('fsVeil').style.display='none'; document.getElementById('fsPanel').style.display='none'; };
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='hidden'){
+      saveAll().catch(()=>{});
+      stopLensTimer(false);
+    }else{
+      if(activeView==='week'){ startLensTimer(); applyPastOverlay(); }
+    }
+  });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); stopLensTimer(false); });
+}
+function render(){
+  if(activeView==='week'){
+    buildWeekView();
+  } else if(activeView==='day' || activeView==='month' || activeView==='todo'){
+    screenEl.textContent=''; screenEl.innerHTML='';
+    screenEl.style.display='grid'; screenEl.style.placeItems='center';
+    screenEl.textContent='';
+    destroyActionButtons(); destroyOverlay();
+    endDrag('nav');
+    stopLensTimer(true);
+  } else {
+    showScreensaver();
+    destroyActionButtons(); destroyOverlay();
+    endDrag('nav');
+    stopLensTimer(true);
+  }
+}
+
+init();
+
+/* ===== Convenience seed (testing) ===== */
+if(!localStorage.getItem('chrono_w101_has_seed')){
+  (async ()=>{
+    await idbOpen();
+    const v = await storageGet(BLK_KEY);
+    if(!Array.isArray(v) || v.length===0){
+      const st = getVisibleWeekStamp();
+      blocks.push({id:'b'+Math.random().toString(36).slice(2,9), weekSt:st, startAbs: (1*1440)+ (60*9), dur:90, catKey:'work', catNameSnap:'Work'}); // Mon 09:00-10:30
+      blocks.push({id:'b'+Math.random().toString(36).slice(2,9), weekSt:st, startAbs: (3*1440)+ (60*14+30), dur:120, catKey:'exercise', catNameSnap:'Exercise'}); // Wed 14:30-16:30
+      await persistBlocks();
+    }
+    localStorage.setItem('chrono_w101_has_seed','1');
+  })();
+}
+
+/* ===== Service worker registration ===== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('SW registered', reg.scope))
+      .catch(err => console.error('SW registration failed', err));
+  });
+}
+
+/* Expose no-op fallback for settings in Part 1; Part 2 will set window.__openSettingsFS = openSettingsFS */
+window.__openSettingsFS = window.__openSettingsFS || null;
+
+</script>
+<script>
+/* =========================
+   W-101 â€” SETTINGS (FULL-SCREEN)
+   ========================= */
+
+(function(){
+
+  const fsPanel = document.getElementById('fsPanel');
+  const fsVeil  = document.getElementById('fsVeil');
+
+  // ===== Helpers: time/format/snap =====
+  function minToHM(min){ const h=Math.floor(min/60); const m=min%60; return {h,m}; }
+  function to12h(h){ const ampm = h>=12?'PM':'AM'; const hh = h%12||12; return {hh,ampm}; }
+  function fmtHMLabel(min){ const {h,m}=minToHM(((min%1440)+1440)%1440); const t12=to12h(h); return `${t12.hh}:${String(m).padStart(2,'0')} ${t12.ampm}`; }
+  function fmtBox(min, dayIdx){ return `${fmtHMLabel(min)} Â· ${SHORT_DOW[dayIdx]}`; }
+
+  function snap15(rawMin){
+    const m = ((Math.round(rawMin)|0)+1440)%1440;
+    const q = m%15;
+    if(q<=7) return m - q;
+    return m + (15 - q);
+  }
+
+  function findNearestFree(startAbs, dur, ignoreId=null){
+    // Search the current day (0..1440-dur) for a nearest 15-min aligned non-overlapping slot
+    const dayIdx = Math.floor(startAbs/1440);
+    const base = dayIdx*1440;
+    const target = clamp(startAbs, base, base+1440-dur);
+
+    const aligned = base + snap15(target-base);
+    const candidate = (st)=>({weekSt:getVisibleWeekStamp(), startAbs:st, dur});
+    const ok=(st)=>!anyOverlapWithBlocks(candidate(st), ignoreId);
+
+    if(ok(aligned)) return aligned;
+
+    // expand search radius in 15-min steps
+    const steps = Math.ceil(1440/15);
+    for(let i=1;i<=steps;i++){
+      const lo = aligned - i*15, hi = aligned + i*15;
+      if(lo>=base && ok(lo)) return lo;
+      if(hi<=base+1440-dur && ok(hi)) return hi;
+    }
+    return null; // no space in that day
+  }
+
+  function absForUI(blk){
+    // Return [dayIdx, startMin, endMin] for the segment in visible week (first segment)
+    const segs=segmentsForWeek(blk, getVisibleWeekStamp());
+    if(!segs.length) return [0,0,15];
+    const [s,e]=segs[0];
+    const dIdx=Math.floor(s/1440);
+    return [dIdx, s - dIdx*1440, e - dIdx*1440];
+  }
+
+  function isSelectionPastEnd(sel){
+    const endMs = sel.weekSt + (sel.startAbs+sel.dur)*60000;
+    return endMs <= Date.now();
+  }
+
+  function ensureNotPastEnd(startAbs, dur){
+    // for universal rule: new blocks cannot end in the past
+    const endMs = getVisibleWeekStamp() + (startAbs+dur)*60000;
+    return endMs > Date.now();
+  }
+
+  function buildNotePill(value=''){
+    const wrap = document.createElement('div');
+    wrap.className='pill';
+    wrap.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px; width:100%;">
+        <span class="icon-btn" aria-hidden="true">${pencilSVG()}</span>
+        <input id="noteInput" class="name-edit" maxlength="14" placeholder="Bank run Â· Dog walk Â· Gym" value="${(value||'').slice(0,14)}" style="flex:1; max-width:none;" />
+      </div>
+    `;
+    return wrap;
+  }
+
+  // ===== Category dropdown (with rename) =====
+  function wireCategoryUI(state){
+    const dot=document.getElementById('currentDot');
+    const nameSpan=document.getElementById('currentName');
+    const ddBtn=document.getElementById('toggleList');
+    const ddArea=document.getElementById('dropdownArea');
+    const ddList=document.getElementById('ddList');
+
+    function setCurrentCat(key){
+      state.catKey = key;
+      const cat = categories.find(c=>c.key===key) || categories[0];
+      dot.style.background = getCatColorValue(cat.key);
+      nameSpan.textContent = cat.name;
+    }
+
+    function totalsForWeek(){
+      const visSt=getVisibleWeekStamp();
+      const totals={};
+      for(const blk of blocks){
+        const segs=segmentsForWeek(blk, visSt);
+        for(const [sa,ea] of segs){
+          const mins=Math.max(0, ea-sa);
+          totals[blk.catKey]=(totals[blk.catKey]||0)+mins;
+        }
+      }
+      return totals;
+    }
+
+    function renderList(){
+      ddList.innerHTML='';
+      const totals=totalsForWeek();
+      for(const cat of categories){
+        const row=document.createElement('div'); row.className='row'; row.dataset.key=cat.key;
+
+        const left=document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='10px';
+        const dotEl=document.createElement('span'); dotEl.className='dot'; dotEl.style.background=getCatColorValue(cat.key);
+        const nameEl=document.createElement('span'); nameEl.className='name'; nameEl.textContent=cat.name;
+        left.appendChild(dotEl); left.appendChild(nameEl);
+
+        const amt=document.createElement('div'); amt.className='amt';
+        const minutes = totals[cat.key]||0; const h=Math.floor(minutes/60), m=minutes%60; amt.textContent=`${h}h ${m}m`;
+
+        const pen=document.createElement('button'); pen.className='icon-btn'; pen.innerHTML=pencilSVG(); pen.title='Rename';
+        pen.addEventListener('click', (e)=>{ e.stopPropagation(); beginInlineEdit(row, cat, nameEl); });
+
+        row.appendChild(left); row.appendChild(amt); row.appendChild(pen);
+
+        row.addEventListener('click', ()=>{ setCurrentCat(cat.key); ddArea.style.display='none'; });
+
+        ddList.appendChild(row);
+      }
+    }
+
+    function beginInlineEdit(row, cat, nameNode){
+      // Past blocks open read-only -> editing disabled if state.readOnly
+      if(state.readOnly) return;
+
+      const parent = nameNode.parentElement;
+      const input=document.createElement('input'); input.className='name-edit'; input.maxLength=14; input.value=cat.name;
+      parent.replaceChild(input, nameNode);
+
+      const saveBtn=document.createElement('button'); saveBtn.className='icon-btn'; saveBtn.innerHTML=checkSVG(); saveBtn.title='Save name';
+      const trailing = row.querySelector('.icon-btn:last-child');
+      trailing.replaceWith(saveBtn);
+
+      const commit=()=>{
+        const newName=input.value.trim();
+        if(!newName || newName===cat.name){ renderList(); setCurrentCat(state.catKey); return; }
+        if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
+          renderList(); setCurrentCat(state.catKey); return;
+        }
+        cat.name=newName;
+        persistCategories().then(()=>{ renderList(); setCurrentCat(state.catKey); });
+      };
+      saveBtn.onclick=(e)=>{ e.stopPropagation(); commit(); };
+      input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } if(e.key==='Escape'){ e.preventDefault(); renderList(); setCurrentCat(state.catKey); }});
+      setTimeout(()=>input.focus(),0);
+    }
+
+    ddBtn.onclick = ()=>{ ddArea.style.display = (ddArea.style.display==='none') ? 'block':'none'; };
+
+    setCurrentCat(state.catKey);
+    renderList();
+  }
+
+  // ===== Time Editor =====
+  function buildTimeEditor(state){
+    // state: {mode:'block'|'selection', dayIdx, startMin, endMin, readOnly, srcBlockId?}
+    const wrap = document.createElement('div');
+    wrap.style.padding='8px 14px';
+    wrap.style.display='grid';
+    wrap.style.gap='10px';
+
+    const line = document.createElement('div');
+    line.style.display='grid';
+    line.style.gridTemplateColumns='1fr 1fr';
+    line.style.gap='10px';
+
+    // From
+    const from = document.createElement('button');
+    from.className='btn';
+    from.id='fromBtn';
+    from.style.fontVariantNumeric='tabular-nums';
+    from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx);
+    from.disabled = state.readOnly || (state.mode==='block' && state.ongoing); // ongoing: start locked
+    from.addEventListener('click', ()=>{
+      // open native time picker via hidden input
+      const input=document.createElement('input');
+      input.type='time'; input.step='60'; // 1m granularity; we will snap in code to 15 min per spec
+      input.value = toTimeValue(state.startMin);
+      input.style.position='fixed'; input.style.left='-9999px';
+      document.body.appendChild(input);
+      input.addEventListener('change', ()=>{
+        let min = timeValueToMin(input.value);
+        min = snap15(min);
+        if(min < 0) min = 0; if(min>1425) min=1425;
+        const proposedStartAbs = state.dayIdx*1440 + min;
+        const dur = clamp(state.endMin - min, 15, 1440);
+        let newStartAbs = proposedStartAbs;
+
+        // prevent past end for new blocks, and for moving future/ongoing starts
+        const ignoreId = state.mode==='block' ? state.srcBlockId : null;
+        if(!ensureNotPastEnd(newStartAbs, dur)){
+          toast('No new blocks may end in the past.');
+          document.body.removeChild(input); return;
+        }
+
+        let snap = findNearestFree(newStartAbs, dur, ignoreId);
+        if(snap===null){ toast('No free 15-min slot.'); document.body.removeChild(input); return; }
+        state.startMin = snap - state.dayIdx*1440;
+        state.endMin   = state.startMin + dur;
+
+        from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx);
+        toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx);
+      }, {once:true});
+      input.click();
+      setTimeout(()=>{ document.body.removeChild(input); }, 0);
+    });
+
+    // Day toggles on From label (cycle)
+    from.addEventListener('contextmenu', (e)=>{ e.preventDefault(); if(state.readOnly || (state.mode==='block' && state.ongoing)) return; cycleDay(+1); });
+
+    // To
+    const toBtn = document.createElement('button');
+    toBtn.className='btn';
+    toBtn.id='toBtn';
+    toBtn.style.fontVariantNumeric='tabular-nums';
+    toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx);
+    toBtn.disabled = state.readOnly ? true : false;
+    toBtn.addEventListener('click', ()=>{
+      const input=document.createElement('input');
+      input.type='time'; input.step='60';
+      input.value = toTimeValue(state.endMin%1440);
+      input.style.position='fixed'; input.style.left='-9999px';
+      document.body.appendChild(input);
+      input.addEventListener('change', ()=>{
+        let min = timeValueToMin(input.value);
+        min = snap15(min);
+        if(min<=state.startMin) min = state.startMin + 15;
+        const dur = min - state.startMin;
+        const proposedAbs = state.dayIdx*1440 + state.startMin;
+
+        // ongoing: end must be > now
+        if(state.ongoing){
+          const endMs = getVisibleWeekStamp() + (state.dayIdx*1440 + min)*60000;
+          if(endMs <= Date.now()){ toast('Ongoing end must be after now.'); document.body.removeChild(input); return; }
+        }
+
+        if(!ensureNotPastEnd(proposedAbs, dur)){
+          toast('No new blocks may end in the past.');
+          document.body.removeChild(input); return;
+        }
+
+        // overlap prevention -> snap nearest free end by moving end or, if needed, shift start minimally
+        const ignoreId = state.mode==='block' ? state.srcBlockId : null;
+        const candidate={weekSt:getVisibleWeekStamp(), startAbs:state.dayIdx*1440 + state.startMin, dur};
+        if(anyOverlapWithBlocks(candidate, ignoreId)){
+          // try to expand end forward to nearest non-overlap
+          let tryDur = dur;
+          let moved=false;
+          for(let step=1; step<= (1440/15); step++){
+            tryDur = dur + step*15;
+            if(state.startMin + tryDur <= 1440){
+              const test={weekSt:getVisibleWeekStamp(), startAbs:state.dayIdx*1440 + state.startMin, dur:tryDur};
+              if(!anyOverlapWithBlocks(test, ignoreId)){ moved=true; break; }
+            }else break;
+          }
+          if(!moved){
+            toast('No free 15-min slot.');
+            document.body.removeChild(input); return;
+          }
+          state.endMin = state.startMin + tryDur;
+        }else{
+          state.endMin = min;
+        }
+
+        toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx);
+      }, {once:true});
+      input.click();
+      setTimeout(()=>{ document.body.removeChild(input); }, 0);
+    });
+
+    function cycleDay(delta){
+      let d = (state.dayIdx + delta + 7) % 7;
+      // keep time band same; find nearest free slot that preserves duration
+      const dur = state.endMin - state.startMin;
+      let startAbs = d*1440 + state.startMin;
+      const ignoreId = state.mode==='block' ? state.srcBlockId : null;
+      let snap = findNearestFree(startAbs, dur, ignoreId);
+      if(snap===null){ toast('No free 15-min slot.'); return; }
+      state.dayIdx = Math.floor(snap/1440);
+      state.startMin = snap - state.dayIdx*1440;
+      state.endMin = state.startMin + dur;
+      from.textContent = 'From: ' + fmtBox(state.startMin, state.dayIdx);
+      toBtn.textContent = 'To: ' + fmtBox(state.endMin%1440, state.dayIdx);
+    }
+
+    line.appendChild(from);
+    line.appendChild(toBtn);
+    wrap.appendChild(line);
+
+    return {root:wrap, getValues:()=>({dayIdx:state.dayIdx, startMin:state.startMin, endMin:state.endMin})};
+  }
+
+  function toTimeValue(min){ const h=Math.floor(min/60); const m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+  function timeValueToMin(val){ const [h,m]=val.split(':').map(n=>parseInt(n||'0',10)); return (h*60+m)%1440; }
+
+  // ===== Occurrence / Privacy / Notifications =====
+  function buildRadios(state){
+    const body = document.createElement('div');
+    body.style.display='grid';
+    body.style.gap='12px';
+    body.style.padding='8px 14px';
+
+    // Occurrence
+    const occWrap=document.createElement('div');
+    occWrap.innerHTML = `<div style="font-weight:800; margin-bottom:6px;">Occurrence</div>`;
+    const occList=document.createElement('div'); occList.style.display='grid'; occList.style.gap='6px';
+    const occOpts=[
+      {v:'recurring', label:'Recurring (weekly)', def:true},
+      {v:'once',      label:'Only today'},
+      {v:'next30',    label:'Next 30 days (weekly)'}
+    ];
+    const occName='occ_'+Math.random().toString(36).slice(2,7);
+    for(const o of occOpts){
+      const id=occName+'_'+o.v;
+      const row=document.createElement('label');
+      row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+      row.innerHTML=`<input type="radio" name="${occName}" id="${id}" value="${o.v}" ${state.occ===o.v || (!state.occ && o.def) ? 'checked':''} ${state.readOnly?'disabled':''}> <span>${o.label}</span>`;
+      occList.appendChild(row);
+    }
+    const occSum=document.createElement('div'); occSum.style.opacity='.8'; occSum.style.fontSize='14px'; occSum.style.fontWeight='700';
+    occWrap.appendChild(occList); occWrap.appendChild(occSum);
+    body.appendChild(occWrap);
+
+    function calcOccSummary(){
+      const sel = (occList.querySelector('input:checked')||{}).value || 'recurring';
+      // estimate future instances from selected time band
+      const {dayIdx,startMin,endMin}=state.timeGetter();
+      if(sel==='once'){ occSum.textContent='Will create 1 future instance (if in the future).'; return; }
+      const nowMs=Date.now(), visSt=getVisibleWeekStamp();
+      // Weâ€™ll look ahead 30 days for next30, otherwise show generic text
+      if(sel==='next30'){
+        let count=0;
+        for(let i=0;i<30;i++){
+          const d = addDays(visibleWeekFirst, i);
+          if(d.getDay()!==dayIdx) continue;
+          const startMs = +weekStart(d) + (dayIdx*1440+startMin)*60000 - (d.getDay()*1440*60000);
+          const endMs = +weekStart(d) + (dayIdx*1440+endMin)*60000 - (d.getDay()*1440*60000);
+          if(endMs>nowMs) count++;
+        }
+        occSum.textContent = `Will create ${count} future instance${count===1?'':'s'}.`;
+      }else{
+        occSum.textContent = `Repeats weekly going forward.`;
+      }
+    }
+
+    // Privacy
+    const prvWrap=document.createElement('div');
+    prvWrap.innerHTML = `<div style="font-weight:800; margin:10px 0 6px;">Privacy</div>`;
+    const prvList=document.createElement('div'); prvList.style.display='grid'; prvList.style.gap='6px';
+    const prvName='prv_'+Math.random().toString(36).slice(2,7);
+    const prvOpts=[
+      {v:'private', label:'Private (default)'},
+      {v:'shared',  label:'Shared'}
+    ];
+    for(const p of prvOpts){
+      const id=prvName+'_'+p.v;
+      const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+      row.innerHTML=`<input type="radio" name="${prvName}" id="${id}" value="${p.v}" ${ (state.privacy||'private')===p.v?'checked':'' } ${state.readOnly?'disabled':''}> <span>${p.label}</span>`;
+      prvList.appendChild(row);
+    }
+    prvWrap.appendChild(prvList);
+    body.appendChild(prvWrap);
+
+    // Notifications
+    const nWrap=document.createElement('div');
+    nWrap.innerHTML = `<div style="font-weight:800; margin:10px 0 6px;">Notifications (owner only)</div>`;
+    const scopeList=document.createElement('div'); scopeList.style.display='grid'; scopeList.style.gap='6px';
+    const scopeName='scope_'+Math.random().toString(36).slice(2,7);
+    const scopeOpts=[
+      {v:'recurring', label:'Recurring (default)'},
+      {v:'once',      label:'Only this time'},
+      {v:'off',       label:'Off'}
+    ];
+    for(const s of scopeOpts){
+      const id=scopeName+'_'+s.v;
+      const row=document.createElement('label'); row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+      row.innerHTML=`<input type="radio" name="${scopeName}" id="${id}" value="${s.v}" ${ ((state.notif?.scope)||'recurring')===s.v?'checked':'' } ${state.readOnly?'disabled':''}> <span>${s.label}</span>`;
+      scopeList.appendChild(row);
+    }
+    const timingSel=document.createElement('select');
+    timingSel.style.padding='8px 10px'; timingSel.style.borderRadius='10px';
+    timingSel.disabled = state.readOnly;
+    const timings=[15,30,45,60,1440];
+    timings.forEach(m=>{
+      const o=document.createElement('option');
+      o.value=String(m); o.textContent= m===1440 ? '24h before' : `${m}m before`;
+      if(((state.notif?.minutesBefore)||15)===m) o.selected=true;
+      timingSel.appendChild(o);
+    });
+
+    nWrap.appendChild(scopeList);
+    const timingRow=document.createElement('div'); timingRow.style.marginTop='6px';
+    timingRow.appendChild(timingSel);
+    nWrap.appendChild(timingRow);
+    body.appendChild(nWrap);
+
+    // Stats tab button
+    const statsBtn=document.createElement('button');
+    statsBtn.className='btn';
+    statsBtn.textContent='Open Stats';
+    statsBtn.style.marginTop='6px';
+    statsBtn.addEventListener('click', ()=> openStatsView(state.catKey));
+    body.appendChild(statsBtn);
+
+    // Wire
+    occList.addEventListener('change', calcOccSummary);
+    calcOccSummary();
+
+    return {
+      root: body,
+      getOcc: ()=> (occList.querySelector('input:checked')||{}).value || 'recurring',
+      getPrivacy: ()=> (prvList.querySelector('input:checked')||{}).value || 'private',
+      getNotif: ()=> ({ scope: (scopeList.querySelector('input:checked')||{}).value || 'recurring', minutesBefore: parseInt(timingSel.value||'15',10) }),
+      refreshOccSummary: calcOccSummary
+    };
+  }
+
+  // ===== Stats view =====
+  function openStatsView(catKey){
+    const cat = categories.find(c=>c.key===catKey) || categories[0];
+    const body = document.getElementById('fsBody');
+    body.innerHTML='';
+
+    const wrap=document.createElement('div');
+    wrap.style.padding='12px 14px';
+    wrap.innerHTML = `<div style="font-weight:900; margin-bottom:8px;">Stats â€” ${cat.name}</div>`;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStartMs = +weekStart(now);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+
+    function sumInRange(msStart, msEnd){
+      let total=0;
+      for(const b of blocks){
+        // Iterate visible-week projections across possible weeks touching this range
+        // Simplified: approximate by projecting block's absolute times within its original week
+        const segs = segmentsForWeek(b, getVisibleWeekStamp());
+        for(const [s,e] of segs){
+          const sMs = getVisibleWeekStamp() + s*60000;
+          const eMs = getVisibleWeekStamp() + e*60000;
+          const overlap = Math.max(0, Math.min(eMs, msEnd) - Math.max(sMs, msStart));
+          total += Math.floor(overlap/60000);
+        }
+      }
+      return total;
+    }
+
+    const mintoday = sumInRange(+todayStart, +todayStart + DAY_MS);
+    const minweek  = sumInRange(weekStartMs, weekStartMs + 7*DAY_MS);
+    const minmonth = sumInRange(+monthStart, +monthStart + 31*DAY_MS); // overcount safe for display
+    const minyear  = sumInRange(+yearStart, +yearStart + 366*DAY_MS);
+
+    const percOfWeek = Math.round((minweek/ (7*24*60)) * 100);
+
+    wrap.innerHTML += `
+      <div style="display:grid; gap:8px;">
+        <div><strong>Today:</strong> ${Math.floor(mintoday/60)}h ${mintoday%60}m</div>
+        <div><strong>This week:</strong> ${Math.floor(minweek/60)}h ${minweek%60}m</div>
+        <div><strong>This month:</strong> ${Math.floor(minmonth/60)}h ${minmonth%60}m</div>
+        <div><strong>This year:</strong> ${Math.floor(minyear/60)}h ${minyear%60}m</div>
+        <div><strong>% of week (this activity):</strong> ${percOfWeek}%</div>
+      </div>
+      <div style="margin-top:12px; opacity:.8;">Comparisons (prev/next periods) coming in W-102.</div>
+      <div style="margin-top:14px;"><button class="btn" id="statsExitBtn">Exit</button></div>
+    `;
+
+    body.appendChild(wrap);
+    document.getElementById('statsExitBtn').onclick = ()=>{
+      // Re-open settings root for current selection
+      if(typeof window.__openSettingsFS === 'function') window.__openSettingsFS();
+    };
+  }
+
+  // ===== OPEN Settings (block or selection) =====
+  function openSettingsFS(){
+    const head = fsPanel.querySelector('.fs-head');
+    const sub  = fsPanel.querySelector('.fs-sub');
+    const body = document.getElementById('fsBody');
+    const foot = fsPanel.querySelector('.fs-foot');
+
+    // Determine context
+    const hasBlock = !!selectedBlockId;
+    const ctx = {};
+    if(hasBlock){
+      const blk=blocks.find(b=>b.id===selectedBlockId);
+      if(!blk) return;
+      const [d, sMin, eMin] = absForUI(blk);
+      ctx.mode='block';
+      ctx.srcBlockId=blk.id;
+      ctx.catKey=blk.catKey;
+      ctx.note=blk.note||'';
+      ctx.privacy=blk.privacy||'private';
+      ctx.notif=blk.notif||{scope:'recurring', minutesBefore:15};
+      ctx.occ=blk.occ||'recurring';
+      ctx.readOnly = isBlockFullyPast(blk);  // completed -> read-only
+      ctx.ongoing  = isBlockOngoing(blk);
+      ctx.dayIdx=d; ctx.startMin=sMin; ctx.endMin=eMin;
+      ctx.timeGetter = ()=>({dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin});
+    }else if(snake){
+      ctx.mode='selection';
+      ctx.catKey = categories[0].key;
+      ctx.note='';
+      ctx.privacy='private';
+      ctx.notif={scope:'recurring', minutesBefore:15};
+      ctx.occ='recurring';
+      ctx.readOnly=false; ctx.ongoing=false;
+      const dayIdx = Math.floor(snake.startAbs/1440);
+      const startMin = snake.startAbs - dayIdx*1440;
+      const endMin = startMin + snake.dur;
+      ctx.dayIdx=dayIdx; ctx.startMin=startMin; ctx.endMin=endMin;
+      ctx.timeGetter = ()=>({dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin});
+    }else{
+      toast('Select a block or make a selection first.');
+      return;
+    }
+
+    // Build UI
+    fsPanel.classList.toggle('ro', !!ctx.readOnly);
+    fsVeil.style.display='block';
+    fsPanel.style.display='grid';
+    head.textContent='Settings';
+
+    // Category current pill + dropdown
+    document.getElementById('currentName').textContent='';
+    document.getElementById('dropdownArea').style.display='none';
+
+    wireCategoryUI(ctx);
+
+    // Body content
+    body.innerHTML='';
+    // Note field
+    body.appendChild(buildNotePill(ctx.note||''));
+
+    // Time Editor
+    const timeUI = buildTimeEditor({mode:ctx.mode, dayIdx:ctx.dayIdx, startMin:ctx.startMin, endMin:ctx.endMin, readOnly:ctx.readOnly || (ctx.mode==='block' && isBlockFullyPast(blocks.find(b=>b.id===ctx.srcBlockId)||{})), ongoing:ctx.ongoing, srcBlockId:ctx.srcBlockId});
+    body.appendChild(timeUI.root);
+
+    // Occ/Privacy/Notif
+    const optionsUI = buildRadios({occ:ctx.occ, privacy:ctx.privacy, notif:ctx.notif, readOnly:ctx.readOnly, catKey:ctx.catKey, timeGetter:()=>timeUI.getValues()});
+    body.appendChild(optionsUI.root);
+
+    // FOOT buttons
+    const btnExit=document.getElementById('btnExit');
+    const btnSave=document.getElementById('btnSave');
+    const btnDelete=document.getElementById('btnDelete');
+
+    btnExit.onclick = ()=>{ fsVeil.style.display='none'; fsPanel.style.display='none'; };
+
+    btnDelete.disabled = ctx.readOnly; // completed blocks immutable
+    btnDelete.onclick = ()=>{
+      if(ctx.readOnly) return;
+      if(ctx.mode==='block'){
+        const idx=blocks.findIndex(b=>b.id===ctx.srcBlockId);
+        if(idx>=0){ blocks.splice(idx,1); persistBlocks().then(()=>{ fsVeil.style.display='none'; fsPanel.style.display='none'; selectedBlockId=null; destroyActionButtons(); clearBlockOutline(); drawBlocks(); applyPastOverlay(); }); }
+      }else{
+        // selection: just dismiss selection
+        snake=null; storageSet(SEL_KEY,null);
+        fsVeil.style.display='none'; fsPanel.style.display='none';
+        drawSnake(); destroyActionButtons();
+      }
+    };
+
+    btnSave.disabled = false;
+    btnSave.onclick = ()=>{
+      // Read current UI values (respect read-only)
+      const catKey = ctx.readOnly ? ctx.catKey : (ctx.catKey = (document.getElementById('currentName').textContent ? categories.find(c=>c.name===document.getElementById('currentName').textContent)?.key : ctx.catKey) || ctx.catKey);
+      const noteVal = ctx.readOnly ? (ctx.note||'') : (document.getElementById('noteInput')?.value||'').slice(0,14);
+      const tvals = timeUI.getValues();
+      const occVal = ctx.readOnly ? ctx.occ : optionsUI.getOcc();
+      const prvVal = ctx.readOnly ? ctx.privacy : optionsUI.getPrivacy();
+      const notifVal = ctx.readOnly ? (ctx.notif||{scope:'recurring',minutesBefore:15}) : optionsUI.getNotif();
+
+      // Past immutability
+      if(ctx.mode==='block' && ctx.readOnly){
+        fsVeil.style.display='none'; fsPanel.style.display='none';
+        return;
+      }
+
+      // Build candidate(s)
+      const startAbs = tvals.dayIdx*1440 + tvals.startMin;
+      const dur = clamp(tvals.endMin - tvals.startMin, 15, 1440);
+
+      // Universal past rule
+      if(!ensureNotPastEnd(startAbs, dur)){
+        toast('No new blocks may end in the past.');
+        return;
+      }
+
+      const ignoreId = ctx.mode==='block' ? ctx.srcBlockId : null;
+      const slot = findNearestFree(startAbs, dur, ignoreId);
+      if(slot===null){ toast('No free 15-min slot.'); return; }
+
+      if(ctx.mode==='selection'){
+        // create according to occurrence
+        const instances = [];
+        if(occVal==='once'){
+          instances.push({weekSt:getVisibleWeekStamp(), startAbs:slot, dur});
+        }else if(occVal==='next30'){
+          const nowMs = Date.now();
+          for(let i=0;i<30;i++){
+            const wd = addDays(visibleWeekFirst, i);
+            const wst = +weekStart(wd);
+            const abs = tvals.dayIdx*1440 + tvals.startMin;
+            const endMs = wst + (tvals.dayIdx*1440 + tvals.endMin)*60000;
+            if(endMs>nowMs){
+              // check overlap on that week's canvas
+              const cand={weekSt:wst, startAbs:abs, dur};
+              if(!anyOverlapWithBlocks(cand, null)){
+                instances.push(cand);
+              }
+            }
+          }
+        }else{ // recurring
+          // Create one for this visible week if future
+          const endMs = getVisibleWeekStamp() + (tvals.dayIdx*1440 + tvals.endMin)*60000;
+          if(endMs>Date.now()){
+            instances.push({weekSt:getVisibleWeekStamp(), startAbs:slot, dur});
+          }
+        }
+
+        for(const inst of instances){
+          blocks.push({ id:'b'+Math.random().toString(36).slice(2,9),
+            weekSt:inst.weekSt, startAbs:inst.startAbs, dur:inst.dur,
+            catKey, note:noteVal, privacy:prvVal, notif:notifVal, occ:occVal,
+            catNameSnap: (categories.find(c=>c.key===catKey)?.name || 'Activity')
+          });
+        }
+        persistBlocks().then(()=>{ snake=null; storageSet(SEL_KEY,null); drawSnake(); destroyActionButtons(); drawBlocks(); applyPastOverlay(); });
+        fsVeil.style.display='none'; fsPanel.style.display='none';
+      }else{
+        // block update (future or ongoing only)
+        const blk=blocks.find(b=>b.id===ctx.srcBlockId);
+        if(!blk) return;
+        // Apply temporal constraints:
+        if(isBlockOngoing(blk)){
+          // Only end can change; start locked
+          const [d0, s0, _e0] = absForUI(blk);
+          const lockedStartAbs = d0*1440 + s0;
+          let newDur = dur;
+          if((getVisibleWeekStamp() + (tvals.dayIdx*1440 + tvals.endMin)*60000) <= Date.now()){
+            toast('Ongoing end must be after now.');
+            return;
+          }
+          const cand={weekSt:getVisibleWeekStamp(), startAbs:lockedStartAbs, dur:newDur};
+          if(anyOverlapWithBlocks(cand, blk.id)){
+            const slot2 = findNearestFree(lockedStartAbs, newDur, blk.id);
+            if(slot2===null || slot2!==lockedStartAbs){ toast('No free 15-min slot.'); return; }
+          }
+          // Commit
+          blk.dur = newDur;
+        }else{
+          // Future block: allow start & end changes
+          blk.startAbs = slot;
+          blk.weekSt   = getVisibleWeekStamp();
+          blk.dur      = dur;
+        }
+        blk.catKey = catKey;
+        blk.note   = noteVal;
+        blk.privacy= prvVal;
+        blk.notif  = notifVal;
+        blk.occ    = occVal;
+        if(!blk.catNameSnap) blk.catNameSnap = (categories.find(c=>c.key===catKey)?.name || 'Activity');
+
+        persistBlocks().then(()=>{ drawBlocks(); applyPastOverlay(); });
+        fsVeil.style.display='none'; fsPanel.style.display='none';
+      }
+    };
+
+  } // end openSettingsFS
+
+  // Expose for Part 1 action buttons
+  window.__openSettingsFS = openSettingsFS;
+
+})();
+</body>
+</html>
