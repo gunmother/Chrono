@@ -1,4 +1,4 @@
-<!-- W-100 START (blocks squared; menu auto-avoids ghost during move/copy) -->
+<!-- W-99 START (full build, ghost drag fixed) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,6 +29,30 @@
     --handle-gap:12px;
     --handle-height-mult:1.75;
     --stamp-h:26px;
+
+    /* 4x4 palette (exact swatches) */
+    --swatch-1:#f7d9d8; --swatch-2:#d9eef4; --swatch-3:#c7e2dc; --swatch-4:#f6e48f;
+    --swatch-5:#eb7d7b; --swatch-6:#4aa0d6; --swatch-7:#4ea282; --swatch-8:#e9b627;
+    --swatch-9:#db3b3b; --swatch-10:#1e6fb2; --swatch-11:#1c7a44; --swatch-12:#d49c14;
+    --swatch-13:#7f1d2d; --swatch-14:#103a5b; --swatch-15:#0f3c32; --swatch-16:#bf7716;
+
+    /* Category → color mapping */
+    --c-work:       var(--swatch-9);
+    --c-school:     var(--swatch-5);
+    --c-commute:    var(--swatch-12);
+    --c-chores:     var(--swatch-16);
+    --c-errands:    var(--swatch-8);
+    --c-meal:       var(--swatch-4);
+    --c-hygiene:    var(--swatch-1);
+    --c-childcare:  var(--swatch-11);
+    --c-selfcare:   var(--swatch-7);
+    --c-exercise:   var(--swatch-15);
+    --c-family:     var(--swatch-2);
+    --c-hobbies:    var(--swatch-7);
+    --c-projects:   var(--swatch-6);
+    --c-rnr:        var(--swatch-10);
+    --c-freetime:   var(--swatch-12);
+    --c-sleep:      var(--swatch-14);
   }
 
   html,body{
@@ -224,17 +248,16 @@
   .btn-warn{ color:#d83a3a; }
   .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); }
 
-  /* ===== Blocks — SQUARE corners (no rounding) ===== */
+  /* Blocks */
   .blk{
-    position:absolute; border-radius:0;   /* square corners */
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    position:absolute; border-radius:10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
     cursor:pointer;
   }
 
-  /* Ghost — SQUARE corners */
+  /* Ghost */
   .ghost{
-    position:fixed; z-index:30; pointer-events:auto; border-radius:0; /* square corners */
-    opacity:.5; /* 50% per spec */
+    position:fixed; z-index:30; pointer-events:auto; border-radius:10px;
+    opacity:.5; /* always 50% per spec */
     box-shadow: inset 0 0 0 2px rgba(0,0,0,.1);
     touch-action:none;
   }
@@ -250,7 +273,7 @@
 </head>
 <body>
   <main class="app">
-    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-100</section>
+    <section id="screen" aria-live="polite" aria-label="Content area">Chrono W-99</section>
 
     <nav class="controls" role="group" aria-label="Primary views">
       <button class="neu-btn" aria-label="Day view (blank)" aria-pressed="false" data-view="day" title="Day">
@@ -304,9 +327,10 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* Chrono W-100 = W-99 +:
-   A) Blocks/ghost square corners (no rounding)
-   B) Action buttons auto-avoid ghost while dragging/copying
+/* Chrono W-99 — full build; includes:
+   1) Top/bottom timestamp chips on selected blocks
+   2) Top/bottom timestamp chips on ghost during drag/copy
+   3) Ghost grabs from center; draggable vertically & horizontally
 */
 
 const screenEl = document.getElementById('screen');
@@ -393,24 +417,6 @@ let categories = [
   {key:'sleep',     name:'Sleep',      color:'var(--c-sleep)'},
 ];
 
-/* swatches & mapping retained */
-document.documentElement.style.setProperty('--c-work','#db3b3b');
-document.documentElement.style.setProperty('--c-school','#eb7d7b');
-document.documentElement.style.setProperty('--c-commute','#d49c14');
-document.documentElement.style.setProperty('--c-chores','#bf7716');
-document.documentElement.style.setProperty('--c-errands','#e9b627');
-document.documentElement.style.setProperty('--c-meal','#f6e48f');
-document.documentElement.style.setProperty('--c-hygiene','#f7d9d8');
-document.documentElement.style.setProperty('--c-childcare','#1c7a44');
-document.documentElement.style.setProperty('--c-selfcare','#4ea282');
-document.documentElement.style.setProperty('--c-exercise','#0f3c32');
-document.documentElement.style.setProperty('--c-family','#d9eef4');
-document.documentElement.style.setProperty('--c-hobbies','#4ea282');
-document.documentElement.style.setProperty('--c-projects','#4aa0d6');
-document.documentElement.style.setProperty('--c-rnr','#1e6fb2');
-document.documentElement.style.setProperty('--c-freetime','#d49c14');
-document.documentElement.style.setProperty('--c-sleep','#103a5b');
-
 /* flags & timers */
 let dragging = false;
 let rafPending = false;
@@ -425,10 +431,11 @@ let dragBlockUntil=0;
 let ghost = null; // {mode:'drag'|'copy', srcBlockId, startAbs, dur, valid}
 let dragModeActive=false, copyModeActive=false;
 
-/* ===== NAV BUTTONS ===== */
+/* ===== NAV BUTTONS (robust per-button binding) ===== */
 buttons.forEach(btn=>{
   btn.addEventListener('click', (e)=>{
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     const v = btn.dataset.view;
 
     const wasPressed = btn.classList.contains('is-pressed');
@@ -459,7 +466,7 @@ function ensureOverlay(){ if(overlayRoot && document.body.contains(overlayRoot))
 function destroyOverlay(){ overlayRoot?.remove(); overlayRoot=null; }
 
 /* screensaver */
-function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-100</div></div>`; }
+function showScreensaver(){ screenEl.innerHTML = `<div class="screensaver"><div class="wm">Chrono W-99</div></div>`; }
 
 /* --- Week View --- */
 function buildWeekView(){
@@ -773,7 +780,7 @@ function startSnakeDrag(ev, side){
     snake.startAbs = newStart;
     snake.dur      = newDur;
 
-    if(!rafPending){ rafPending = true; requestAnimationFrame(()=>{ rafPending=false; drawSnake(); repositionActionButtons(); }); }
+    if(!rafPending){ rafPending = true; requestAnimationFrame(()=>{ rafPending=false; drawSnake(); }); }
   };
 
   const up=(e)=>{ endDrag('up', e); };
@@ -806,7 +813,6 @@ function endDrag(reason, ev){
   }
   dragBlockUntil = Date.now() + 120;
   drawSnake();
-  repositionActionButtons();
   saveSoon(80);
 }
 
@@ -992,7 +998,7 @@ function drawBlockSegment(blk, dayIdx, startMin, endMin){
   host.appendChild(rectEl);
 
   if(selectedBlockId===blk.id){
-    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height, segMeta={dayIdx, startMin, endMin});
+    outlineRect(weekGeom.rect.left+colLeft, weekGeom.rect.top+topY, colWidth, height, {dayIdx, startMin, endMin});
   }
 }
 function outlineRect(absLeft, absTop, w, h, segMeta=null){
@@ -1009,7 +1015,7 @@ function outlineRect(absLeft, absTop, w, h, segMeta=null){
   outline.style.position='absolute'; outline.style.inset='0';
   group.appendChild(outline);
 
-  /* timestamp chips for selected block */
+  /* W-99: add timestamp chips at top/bottom of selected block */
   try{
     const blk=blocks.find(b=>b.id===selectedBlockId);
     if(blk){
@@ -1113,7 +1119,6 @@ function renderActionButtons(){
 function destroyActionButtons(){ if(window.__actionBtns){ window.__actionBtns.remove(); window.__actionBtns=null; } }
 function hideActionButtons(){ if(window.__actionBtns) window.__actionBtns.classList.add('selBtnHidden'); }
 
-/* Selection center rect (used for default button position) */
 function selectionMidRect(){
   if(selectedBlockId){
     const blk = blocks.find(b=>b.id===selectedBlockId); if(!blk || !weekGeom) return null;
@@ -1144,62 +1149,21 @@ function selectionMidRect(){
   const height = Math.max(1, yBot - yTop);
   return new DOMRect(left, top, width, height);
 }
-
-/* ====== Action buttons auto-avoid ghost ====== */
-function getGhostRect(){
-  if(!ghost || !weekGeom) return null;
-  const g = absToRect(ghost.startAbs, ghost.dur);
-  return new DOMRect(g.left, g.top, g.width, g.height);
-}
-
 function repositionActionButtons(){
   const pair = window.__actionBtns; if(!pair){ return; }
-  const selR = selectionMidRect();
-  if(!selR){ hideActionButtons(); return; }
+  const r = selectionMidRect();
+  if(!r){ hideActionButtons(); return; }
   pair.classList.remove('selBtnHidden');
 
-  const margin=8, btnW=44, btnGap=8;
-  const count = pair.childElementCount||2;
-  const totalH=(44* count) + (btnGap*(count-1));
+  const margin=8, btnW=44, totalH=(44* (pair.childElementCount||2)) + (8*((pair.childElementCount||2)-1));
+  let preferRight = (window.innerWidth - r.right) >= r.left;
+  let left = (preferRight ? r.right + margin : r.left - margin - btnW);
+  if(left < margin){ left = r.right + margin; }
+  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, r.left - margin - btnW); }
 
-  // default side based on selection
-  let preferRight = (window.innerWidth - selR.right) >= selR.left;
-  let left = (preferRight ? selR.right + margin : selR.left - margin - btnW);
-  if(left < margin){ left = selR.right + margin; }
-  if(left + btnW > window.innerWidth - margin){ left = Math.max(margin, selR.left - margin - btnW); }
-
-  let top  = selR.top + (selR.height/2) - (totalH/2);
+  let top  = r.top + (r.height/2) - (totalH/2);
   if(top + totalH > window.innerHeight - margin){ top = Math.max(margin, window.innerHeight - margin - totalH); }
   if(top < margin) top = margin;
-
-  // If ghost is active, ensure buttons don't overlap ghost rect
-  const gRect = getGhostRect();
-  if(gRect){
-    const overlap = !(left+btnW < gRect.left-4 || left > gRect.right+4 || top+totalH < gRect.top-4 || top > gRect.bottom+4);
-    if(overlap){
-      // Try opposite side of ghost
-      const spaceLeft  = gRect.left - margin - btnW;
-      const spaceRight = window.innerWidth - (gRect.right + margin + btnW);
-      if(spaceRight >= spaceLeft && gRect.right + margin + btnW <= window.innerWidth - margin){
-        left = gRect.right + margin;
-        top  = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH);
-      }else if(spaceLeft >= 0){
-        left = Math.max(margin, gRect.left - margin - btnW);
-        top  = clamp(gRect.top + (gRect.height/2) - (totalH/2), margin, window.innerHeight - margin - totalH);
-      }else{
-        // If no horizontal room, park above or below ghost
-        const spaceAbove = gRect.top - margin - totalH;
-        const spaceBelow = window.innerHeight - (gRect.bottom + margin + totalH);
-        if(spaceBelow >= spaceAbove && gRect.bottom + margin + totalH <= window.innerHeight - margin){
-          top  = gRect.bottom + margin;
-          left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW);
-        }else{
-          top  = Math.max(margin, gRect.top - margin - totalH);
-          left = clamp(selR.right + margin, margin, window.innerWidth - margin - btnW);
-        }
-      }
-    }
-  }
 
   pair.style.left = `${Math.round(left)}px`;
   pair.style.top  = `${Math.round(top)}px`;
@@ -1307,6 +1271,7 @@ function openSettingsSheet(fromBlockId=null){
       const newName=input.value.trim();
       if(!newName || newName===cat.name){ renderDropdownList(); return; }
       if(categories.some(c=>c.key!==cat.key && c.name.toLowerCase()===newName.toLowerCase())){
+        // no toasts yet; revert silently
         renderDropdownList(); return;
       }
       cat.name=newName;
@@ -1374,7 +1339,6 @@ function deactivateModes(){
   dragModeActive=false; copyModeActive=false;
   removeGhost();
   renderActionButtons();
-  repositionActionButtons();
 }
 function toggleDragMode(){
   if(!selectedBlockId) return;
@@ -1387,7 +1351,6 @@ function toggleDragMode(){
   createGhost('drag');
   dragModeActive=true;
   renderActionButtons();
-  repositionActionButtons();
 }
 function toggleCopyMode(){
   if(!selectedBlockId) return;
@@ -1400,7 +1363,6 @@ function toggleCopyMode(){
   createGhost('copy');
   copyModeActive=true;
   renderActionButtons();
-  repositionActionButtons();
 }
 function createGhost(mode){
   removeGhost();
@@ -1413,14 +1375,12 @@ function createGhost(mode){
     valid: false
   };
   drawGhost();
-  repositionActionButtons();
 }
 function removeGhost(){
   document.querySelector('.ghost')?.remove();
   document.getElementById('ghostStampTop')?.remove();
   document.getElementById('ghostStampBot')?.remove();
   ghost=null;
-  repositionActionButtons();
 }
 function drawGhost(){
   if(!ghost || !weekGeom) return;
@@ -1435,6 +1395,7 @@ function drawGhost(){
     // Drag state
     let dragging=false;
 
+    // Helpers: map pointer → day index & Y minutes
     function clientXToDayIdx(x){
       const rect = weekGeom.rect;
       const relX = clamp(x - rect.left, 0, weekGeom.totalW);
@@ -1453,7 +1414,9 @@ function drawGhost(){
       const dayIdx = clientXToDayIdx(clientX);
       const minutesY = clientYToMinutes(clientY);
 
+      // center under finger: start = minutesY - dur/2
       let startMinInDay = Math.round((minutesY - ghost.dur/2)/15)*15;
+      // clamp to stay within the chosen day column
       if(startMinInDay < 0) startMinInDay = 0;
       if(startMinInDay + ghost.dur > 1440) startMinInDay = 1440 - ghost.dur;
 
@@ -1473,21 +1436,20 @@ function drawGhost(){
       e.preventDefault(); e.stopPropagation();
       dragging=true; el.setPointerCapture?.(e.pointerId);
       el.style.cursor='grabbing';
+      // Center on the finger immediately
       moveGhostCenterTo(e.clientX, e.clientY);
-      repositionActionButtons();
     };
     const onMove=(e)=>{
       if(!dragging) return;
       e.preventDefault();
       moveGhostCenterTo(e.clientX, e.clientY);
-      repositionActionButtons();   // live avoidance while moving
     };
     const onUp=()=>{
       dragging=false; el.releasePointerCapture?.();
       el.style.cursor='grab';
-      repositionActionButtons();
     };
 
+    // Listen on the element (not window) once we have the capture
     el.addEventListener('pointerdown', onDown, {passive:false});
     el.addEventListener('pointermove', onMove, {passive:false});
     el.addEventListener('pointerup', onUp, {passive:true});
@@ -1498,7 +1460,6 @@ function drawGhost(){
   updateGhostValidity();
   ensureGhostStamps();
   updateGhostStamps();
-  repositionActionButtons();
 }
 function placeGhost(el, rect){
   el.style.left = rect.left+'px';
@@ -1591,7 +1552,8 @@ function commitGhost(){
       }
     }
   }
-  removeGhost(); // also triggers repositionActionButtons
+  // keep stamps visible on selection; remove ghost UI
+  removeGhost();
 }
 
 /* Toast (placeholder - not used now) */
@@ -1727,12 +1689,6 @@ function throttle(fn, ms){
   }
 }
 
-/* small UI pulse */
-function pulseSm(el){
-  el.classList.add('ack');
-  setTimeout(()=>el.classList.remove('ack'), 180);
-}
-
 /* init/render */
 async function init(){
   try{
@@ -1772,7 +1728,7 @@ function render(){
 
 init();
 
-/* ===== Convenience seed (testing) ===== */
+/* ===== Convenience: seed a couple blocks if storage empty (for testing) ===== */
 if(!localStorage.getItem('chrono_has_seed')){
   (async ()=>{
     await idbOpen();
@@ -1801,4 +1757,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
-<!-- W-100 EOF -->
+<!-- W-99 EOF -->
