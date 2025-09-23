@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Chrono W-102b</title>
+<title>Chrono W-102 â€” Single Build</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000" />
 <style>
@@ -249,16 +250,14 @@
   .btn-primary{ background:var(--pressed-navy); color:var(--icon-active); }
   .fs-panel.ro .btn, .fs-panel.ro input, .fs-panel.ro select, .fs-panel.ro .icon-btn{ opacity:.55; pointer-events:none; }
 
-/* === W-102p â€” Salvage2: minimal layering only, no layout === */
+/* W-102 Single Build â€” minimal layering only (no layout changes) */
 .grid .blockHost { z-index:10 !important; }
 .grid #pastOverlay, .grid .pastOverlay { z-index:20 !important; opacity:0.75 !important; pointer-events:none !important; }
 .grid .mask      { z-index:30 !important; }
 .grid .lensHost  { z-index:40 !important; }
 .grid .selHost   { z-index:50 !important; }
-/* Keep Exit active in read-only settings */
 .fs-panel.ro #btnExit{ pointer-events:auto !important; opacity:1 !important; cursor:pointer !important; }
-/* ====================================== */
-
+</style>
 </head>
 <body>
   <main class="app">
@@ -313,10 +312,10 @@
     </nav>
   </main>
 
-  <!-- Toast -->
+  
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- FULL-SCREEN SETTINGS scaffolding (content & logic wired in Part 2) -->
+  
   <div id="fsVeil" class="fs-veil" aria-hidden="true"></div>
   <section id="fsPanel" class="fs-panel" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="fs-head">Settings</div>
@@ -522,7 +521,7 @@ function buildWeekView(){
       <div class="grid-area">
         <div class="top-row week" id="dowPills"></div>
         <div class="grid" id="weekGrid" aria-label="Weekly grid" role="grid">
-          <!-- Past overlay is UNDER blocks but ABOVE background -->
+          
           <canvas class="pastOverlay" id="pastOverlay"></canvas>
           <div class="blockHost" id="blockHost"></div>
           <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
@@ -1744,9 +1743,7 @@ if(!localStorage.getItem('chrono_w101_has_seed')){
 /* ===== Service worker registration ===== */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => console.log('SW registered', reg.scope))
-      .catch(err => console.error('SW registration failed', err));
+    navigator.serviceWorker.register('./service-worker.js').then(()=>{}).catch(()=>{});
   });
 }
 
@@ -1754,6 +1751,7 @@ if ('serviceWorker' in navigator) {
 window.__openSettingsFS = window.__openSettingsFS || null;
 
 </script>
+
 <script>
 /* =========================
    W-101 â€” SETTINGS (FULL-SCREEN)
@@ -2439,5 +2437,6 @@ window.__openSettingsFS = window.__openSettingsFS || null;
   window.__openSettingsFS = openSettingsFS;
 
 })();
+</script>
 </body>
 </html>
