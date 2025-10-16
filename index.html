@@ -3,1104 +3,1117 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Betterly — Week (intuitive scheduling, non-overriding, overnight, real scopes)</title>
+<title>Chrono</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+
 <style>
   :root{
-    --bg:#54585F;
-    --uiw:360px; --toph:28px; --centerh:496px; --dockh:92px;
-    --gapTop:12px; --gapBottom:12px;
+    --r-lg:12px; --r-pill:999px;
+    --border:#bdbdbd; --grid-line:#e1e1e1;
+    --ink:#222; --bg:#fff; --chart-bg:#f3f3f3;
 
-    --surface:#F4F6FB; --border:#D1D7E0; --text:#0F172A;
-
-    --font:"Google Sans","Roboto","Arial",system-ui,-apple-system,"Segoe UI",sans-serif;
-    --screenPad:12px; --dot:6px;
-
-    --grid-margin:16px;
     --hour-col:56px;
-    --label-size:11px;
-    --date-size:18px;
-    --dow-h:16px;
+    --dow-h:32px;
+    --label-size:12px;
+    --btn:60px;
 
-    --task-col-gap:16px;
-    --task-row-gap:10px;
-    --task-height:46px;
-    --task-maxw:560px;
+    --panelW:520px;
+    --slot-gap:8px;
+    --icon-btn:36px;
+    --row-min-h:36px;
   }
 
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
   *{box-sizing:border-box}
 
-  .menu-panel{position:fixed;left:50%;transform:translateX(-50%);top:var(--groupTop,0px);
-    width:var(--uiw);height:var(--toph);background:var(--surface);border:1px solid var(--border);
-    border-radius:14px;box-shadow:0 10px 24px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.22);
-    display:flex;align-items:center;justify-content:center;z-index:30}
-  .menu-handle{height:100%;width:100%;display:flex;align-items:center;justify-content:center}
-  .dot{width:var(--dot);height:var(--dot);border-radius:50%;background:#9AA6B4;margin:0 calc(var(--dot)/2.2)}
+  .app{
+    width:clamp(320px, 96vw, 520px);
+    height:calc(100svh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+    margin: max(16px, env(safe-area-inset-top)) auto;
+    display:grid; grid-template-rows: 1fr auto; gap:12px; padding:0 12px;
+  }
 
-  .center-pane{position:fixed;left:50%;transform:translateX(-50%);
-    top:calc(var(--groupTop,0px) + var(--toph) + var(--gapTop));
-    width:var(--uiw);height:var(--centerh);background:var(--surface);border-radius:18px;
-    box-shadow:0 10px 24px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.22);z-index:10;overflow:hidden}
-  .center-pane::before,.center-pane::after{content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none}
-  .center-pane::before{border-top:1px solid #C4CCDA;border-left:1px solid #C4CCDA}
-  .center-pane::after{border-bottom:1px solid #FFF;border-right:1px solid #FFF}
+  #screen{
+    border:1px solid var(--border);
+    border-radius:var(--r-lg);
+    background:#fff;
+    position:relative; overflow:hidden; min-height:420px;
+  }
 
-  .bottom-dock{position:fixed;left:50%;transform:translateX(-50%);
-    top:calc(100vh - var(--groupBottomOffset,0px) - var(--dockh));
-    width:min(calc(var(--uiw) - 8px), calc(100vw - var(--screenPad)*2 - 8px));
-    height:var(--dockh);background:var(--surface);border:1px solid var(--border);border-bottom:none;
-    border-radius:12px 12px 0 0;box-shadow:0 10px 24px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.22);z-index:20}
+  .controls{ display:flex; justify-content:space-between; align-items:center; }
+  .btn{
+    width:var(--btn); height:var(--btn); border-radius:50%;
+    border:1px solid var(--border); background:#fff; color:#000;
+    display:grid; place-items:center; cursor:pointer; padding:0;
+  }
+  .btn[aria-pressed="true"]{ background:#e6e6e6; }
 
-  .wrap{position:absolute;inset:0;display:flex;flex-direction:column;padding:var(--grid-margin)}
-  .header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin-bottom:8px}
-  .tri{color:#9AA6B4;font-size:calc(var(--label-size)*.9);line-height:1;text-align:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  .tri.left{justify-self:end;margin-right:6px}.tri.right{justify-self:start;margin-left:6px}
-  .title{text-align:center;font-weight:700;font-size:var(--date-size);color:#0F172A;letter-spacing:.2px}
-  .content{position:relative;flex:1;overflow:visible}
+  .icon{ width:60%; height:60% }
+  .icon *{ fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
 
-  .hours{position:absolute;top:var(--dow-h);bottom:0;left:0;width:var(--hour-col);pointer-events:none}
-  .hour-stamp{position:absolute;left:8px;transform:translateY(-50%);font-size:var(--label-size);color:#334155;opacity:.95;white-space:nowrap}
-  .dow-labels{position:absolute;top:0;left:var(--hour-col);right:0;height:var(--dow-h);display:grid;grid-template-columns:repeat(7,1fr);align-items:center;pointer-events:none}
-  .dow-label{font-size:calc(var(--label-size)*0.95); color:#364152; text-align:center; font-weight:600; letter-spacing:.2px}
+  .wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto 1fr; min-width:0 }
+  .head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--grid-line) }
+  .title{ text-align:center; font-weight:800; font-size:16px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 
-  #weekGrid{position:absolute;top:var(--dow-h);left:var(--hour-col);right:0;bottom:0;overflow:hidden;background:#E3E7EE}
-  #blocksLayer{position:absolute;inset:0}
-  .blk{position:absolute;border-radius:0}
-  #maskSVG{position:absolute;inset:0;pointer-events:none;shape-rendering:crispEdges}
+  .grid-area{ position:relative; overflow:hidden }
+  .hours{ position:absolute; top:var(--dow-h); bottom:0; left:0; width:var(--hour-col); pointer-events:none; z-index:0 }
+  .hour-stamp{ position:absolute; left:8px; transform:translateY(-50%); font-size:var(--label-size); color:#444; opacity:.95; white-space:nowrap }
 
-  /* Magnifier pill (slightly taller than 1 hour) */
-  #nowMagnify{position:absolute;pointer-events:none;z-index:3;border:2px solid #0EA5E9;border-radius:999px;
-    background:rgba(255,255,255,0.18); backdrop-filter:saturate(120%) brightness(1.05); display:none}
+  .top-row{ position:absolute; top:0; left:var(--hour-col); right:0; height:var(--dow-h); display:grid; align-items:center; min-width:0 }
+  .top-row.week{ grid-template-columns:repeat(7,1fr); column-gap:8px; padding:0 6px }
+  .top-row.day{ grid-template-columns:1fr; padding:0 4px }
 
-  /* ===== 2×8 overlay ===== */
-  #taskOverlay{position:fixed;inset:0;z-index:100;display:none;background:transparent}
-  #taskOverlay .backdrop{position:absolute;inset:0}
-  #taskOverlay .container{
+  .day-pill{ justify-self:center; border:none; padding:0 2px; text-align:center; font-size:clamp(10px, 1.9vw, 12px); background:transparent; color:#000; white-space:nowrap }
+
+  .grid{
+    position:absolute; top:var(--dow-h); left:var(--hour-col); right:0; bottom:0;
+    background:var(--chart-bg);
+    border-left:1px solid var(--grid-line); border-right:1px solid var(--grid-line);
+    z-index:0;
+  }
+  .blocks{ position:absolute; inset:0; z-index:1 }
+  .blk{ position:absolute; border:1px solid var(--border) }
+  .mask{ position:absolute; inset:0; pointer-events:none; shape-rendering:crispEdges; z-index:2 }
+  .now{ position:absolute; border:2px solid #0EA5E9; border-radius:999px; background:rgba(0,0,0,.03); display:none; pointer-events:none; z-index:3 }
+
+  .chev{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer; font-weight:900; min-width:44px }
+  .chev:disabled{ opacity:.5; cursor:not-allowed }
+
+  /* Month */
+  .month-wrap{ position:absolute; inset:0; display:grid; grid-template-rows:auto auto 1fr }
+  .month-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:6px 10px 0 10px; gap:6px; font-size:12px; letter-spacing:0.05em; color:#444 }
+  .month-dow span{ text-align:center }
+  .month-grid{ height:100%; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:6px; padding:10px; }
+  .mcell{ border:1px solid var(--grid-line); border-radius:8px; padding:6px; font-size:12px; background:#fff; display:flex; align-items:flex-start; justify-content:flex-start }
+  .mcell.today{ outline:2px solid #0EA5E9; outline-offset:1px }
+  .mcell.muted{ color:#9c9c9c }
+
+  /* Task stack overlay */
+  #taskOverlay{ position:fixed; inset:0; display:none; z-index:60 }
+  #taskOverlay::before{ content:""; position:absolute; inset:0; background:rgba(0,0,0,.25); }
+  #taskOverlay .stack{
+    position:fixed; left:50%; transform:translateX(-50%);
+    width:min(96vw, var(--panelW));
+    display:grid; grid-auto-rows:var(--row-min-h); grid-template-columns:1fr;
+    gap:8px; padding:0; pointer-events:auto; overflow:hidden; background:transparent;
+  }
+  .taskRow{
+    border:1px solid var(--border); border-radius:12px; background:#ffffff;
+    display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 10px;
+    min-height:var(--row-min-h); cursor:pointer;
+  }
+  .taskRow .dot{ width:14px; height:14px; border-radius:50%; border:1px solid #777 }
+  .taskRow .name{ font-weight:800; overflow:hidden; white-space:nowrap; text-overflow:ellipsis }
+  .taskRow .dur{ font-variant-numeric:tabular-nums; }
+
+  /* Settings editor */
+  #settingsOverlay{ position:fixed; inset:0; display:none; z-index:80 }
+  #settingsOverlay .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
+  .card{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(calc(var(--uiw) - 40px), var(--task-maxw));
-    display:grid; grid-template-columns:1fr 1fr;
-    grid-auto-rows: var(--task-height);
-    column-gap:var(--task-col-gap); row-gap:var(--task-row-gap);
-    padding:4px;
+    width:min(96vw, var(--panelW)); max-height:min(92vh, 760px);
+    background:#fff; border:1px solid var(--border); border-radius:14px;
+    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
   }
-  .task-btn{
-    position:relative; display:block; height:100%;
-    border:2px solid rgba(0,0,0,.20); border-radius:16px;
-    padding:0 16px 0 42px;
-    background:#ffffff;
-    box-shadow:0 12px 24px rgba(0,0,0,.24),0 6px 12px rgba(0,0,0,.18),0 1px 0 rgba(255,255,255,.6) inset;
-    -webkit-tap-highlight-color:transparent; user-select:none;
-    opacity:0; transform:translateY(8px) scale(.98);
-    transition:transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-    cursor:pointer; overflow:hidden;
+  .ed-head{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--grid-line) }
+  .ed-title{ font-weight:900; white-space:nowrap }
+  .in{ padding:8px 10px; border:1px solid var(--border); border-radius:10px; font:inherit; width:100% }
+  .ed-body{ padding:10px; overflow:auto; display:grid; gap:10px; min-width:0 }
+  .dayRow{ border:1px solid var(--grid-line); border-radius:10px; padding:10px; display:grid; gap:10px; min-width:0 }
+  .dayHead{ display:flex; justify-content:space-between; align-items:center; background:#fff;
+    border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-weight:800 }
+  .slots{ display:grid; gap:10px; min-width:0 }
+
+  .slot{
+    display:grid; gap: var(--slot-gap);
+    grid-template-columns: 1fr 1fr var(--icon-btn) var(--icon-btn);
+    grid-template-areas:
+      "start end mic del"
+      "selrow selrow selrow selrow";
+    align-items:center; width:100%;
   }
-  .task-btn:active{ transform:translateY(1px) scale(.985);
-    box-shadow:0 10px 20px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.2),0 1px 0 rgba(255,255,255,.6) inset}
-  .task-dot{position:absolute; left:12px; top:50%; transform:translateY(-50%);
-    width:16px; height:16px; border-radius:50%; box-shadow:0 0 0 1px rgba(0,0,0,.25) inset}
+  .slot .start{ grid-area:start; position:relative }
+  .slot .end{ grid-area:end; position:relative }
+  .slot .mic{ grid-area:mic }
+  .slot .trash{ grid-area:del }
 
-  .task-label{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:90%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    font-size:15px; font-weight:900; letter-spacing:.25px; color:#000;
+  .slot .selrow{
+    grid-area:selrow;
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:6px;
+    align-items:center;
   }
-  .task-label .dur{opacity:.7; font-weight:800; margin-left:.35em}
-
-  @keyframes slideFadeIn{from{opacity:0; transform:translateY(10px) scale(.98)} to{opacity:1; transform:translateY(0) scale(1)}}
-  @keyframes slideFadeOut{from{opacity:1; transform:translateY(0) scale(1)} to{opacity:0; transform:translateY(10px) scale(.98)}}
-  #taskOverlay.show .task-btn{animation:slideFadeIn 220ms ease-out both}
-  #taskOverlay.hide .task-btn{animation:slideFadeOut 180ms ease-in both}
-
-  /* ===== Settings ===== */
-  #settingsOverlay{position:fixed; inset:0; z-index:140; display:none; background:rgba(16,23,40,.35); backdrop-filter:blur(6px);}
-  #settingsOverlay.show .ws-card{animation:ws-in 180ms ease-out both}
-  #settingsOverlay.hide .ws-card{animation:ws-out 150ms ease-in both}
-
-  .ws-card{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(92vw, 520px); max-width:92vw; max-height:min(86vh, 680px);
-    display:flex; flex-direction:column; background:#fff; border-radius:18px; border:4px solid #E6EBF2;
-    box-shadow:0 20px 46px rgba(0,0,0,.28), 0 6px 14px rgba(0,0,0,.22); overflow:hidden}
-  .ws-head{display:flex; align-items:center; gap:10px; padding:12px 14px; background:#F7F9FC; border-bottom:1px solid #E6EBF2}
-  .ws-title{display:flex; align-items:center; gap:8px; flex:1}
-  .ws-title input{flex:1; min-width:0; padding:8px 10px; border:1px solid #D7DFEA; border-radius:10px; font-weight:800}
-  .ws-title small{color:#64748B}
-
-  .ws-body{padding:14px; display:grid; gap:16px; overflow-y:auto; overflow-x:hidden; min-width:0}
-  .ws-row{display:grid; gap:10px; min-width:0}
-  .ws-label{font-size:12px; color:#475569}
-  .ws-inline{display:flex; align-items:center; gap:10px; min-width:0; flex-wrap:wrap}
-  .swatch{width:22px; height:22px; border-radius:50%; box-shadow:0 0 0 1px rgba(0,0,0,.08) inset}
-
-  .scope-trigger{display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #E6EBF2; border-radius:12px; background:#FBFDFF; cursor:pointer; user-select:none}
-  .scope-trigger .chev{font-size:12px; opacity:.7}
-  .scope-pop{position:relative}
-  .scope-list{position:absolute; top:6px; left:0; right:auto; z-index:2; background:#fff; border:1px solid #E6EBF2; border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,.18); padding:6px; display:none; min-width:200px}
-  .scope-opt{padding:8px 10px; border-radius:10px; cursor:pointer}
-  .scope-opt[aria-selected="true"]{background:#E8F0FB}
-  .scope-opt[aria-disabled="true"]{opacity:.5; cursor:not-allowed}
-
-  #wsDays{display:grid; row-gap:18px;}
-  .day-row{border:1px solid #E6EBF2; border-radius:12px; padding:10px; display:grid; gap:12px; min-width:0; background:#FBFDFF}
-  .day-header{display:flex; align-items:center; justify-content:space-between; gap:8px}
-  .day-header div{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .slots{display:grid; gap:12px; min-width:0}
-  .slot{display:grid; grid-template-columns:1fr 1fr 36px; gap:12px; align-items:center; min-width:0}
-  .slot input[type="time"]{min-width:0; width:100%; padding:11px 12px; border:1px solid #D7DFEA; border-radius:10px; font:inherit; background:#F6F8FB}
-  .slot .del{width:36px; height:36px; border:none; border-radius:8px; background:#F1F5F9; display:grid; place-items:center; cursor:pointer}
-  .slot .del:hover{background:#E8EDF4}
-  .addSlot{width:36px; height:36px; border:none; border-radius:8px; background:#E8F0FB; display:grid; place-items:center; cursor:pointer}
-  .overnight{font-size:10px; color:#0284C7; font-weight:800; padding:2px 6px; background:#E0F2FE; border-radius:999px}
-  .clipNote{font-size:10px; color:#64748B; padding-left:2px}
-  .day-row.disabled{opacity:.6}
-  .ws-foot{padding:10px; border-top:1px solid #E6EBF2; display:flex; gap:10px; justify-content:flex-end; background:#F9FBFE; flex-wrap:wrap}
-  .btn{padding:10px 14px; border:none; border-radius:12px; font-weight:700; cursor:pointer}
-  .btn.discard{background:#EEF2F7; color:#0F172A}
-  .btn.discard:hover{background:#E6EBF2}
-  .btn.save{background:#0EA5E9; color:#fff}
-  .btn.save:hover{background:#0284C7}
-
-  .palette{display:grid; gap:10px; min-width:0}
-  .paletteHead{display:flex; align-items:center; gap:10px}
-  .paletteHead .editColor{border:none; background:#EFF6FF; padding:6px 10px; border-radius:10px; cursor:pointer}
-  .square-wrap{position:relative; width:100%; aspect-ratio:5/3; max-height:220px}
-  canvas#svCanvas{position:absolute; inset:0; border-radius:10px; display:block}
-  .knob{position:absolute; width:16px; height:16px; border:2px solid #fff; border-radius:50%;
-    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 0 8px rgba(0,0,0,.35); transform:translate(-50%, -50%); pointer-events:none}
-  .hueRow{display:flex; align-items:center; gap:10px}
-  .hue{appearance:none; width:100%; height:12px; border-radius:6px; outline:none; border:1px solid #CBD5E1; background:linear-gradient(90deg, red, #ff0, #0f0, #0ff, #00f, #f0f, red)}
-  .num{width:64px; text-align:right; color:#475569; font-size:12px}
-
-  @keyframes ws-in{from{opacity:0; transform:translate(-50%,-48%) scale(.98)} to{opacity:1; transform:translate(-50%,-50%) scale(1)}}
-  @keyframes ws-out{from{opacity:1; transform:translate(-50%,-50%) scale(1)} to{opacity:0; transform:translate(-50%,-48%) scale(.98)}}
-
-  @media (max-width:360px){
-    .ws-head,.ws-body,.ws-foot{padding-left:12px;padding-right:12px}
-    .square-wrap{aspect-ratio:4/3}
+  .select{
+    -webkit-appearance:none; appearance:none;
+    padding:6px 8px;
+    border:1px solid var(--border); border-radius:10px; background:#fff; font:inherit;
+    font-size:13px; line-height:1.2; width:100%;
+    white-space:nowrap; overflow:visible; text-overflow:clip;
   }
+
+  .iconBtn{
+    width:var(--icon-btn); height:var(--icon-btn); display:grid; place-items:center;
+    border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; line-height:1
+  }
+
+  .addRow{ display:flex; }
+  .addBtn{ border:1px solid var(--border); border-radius:8px; background:#fff; padding:8px 10px; cursor:pointer; font-weight:700 }
+
+  .ed-foot{ padding:10px; border-top:1px solid var(--grid-line); display:flex; gap:10px; justify-content:space-between }
+  .btnText{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:10px 14px; font-weight:800; cursor:pointer; min-width:96px; text-align:center }
+
+  /* Day initials badges next to inputs (only for cross-midnight) */
+  .dayTag{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:11px; padding:2px 6px; border-radius:8px; background:#f1f1f1; color:#333; border:1px solid #d6d6d6;
+    pointer-events:none;
+  }
+
+  /* Day “screensaver” watermark */
+  .watermark{ opacity:.25; font-weight:900; letter-spacing:.08em; font-size:12px; }
+
 </style>
 </head>
 <body>
+  <main class="app">
+    <section id="screen" aria-live="polite" aria-label="Content area"></section>
 
-<section class="menu-panel" aria-hidden="true">
-  <div class="menu-handle"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-</section>
+    <nav class="controls" role="group" aria-label="Primary views">
+      <button class="btn" aria-label="Day view" aria-pressed="false" data-view="day" title="Day">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2"  x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="5"  y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="17" y1="7"  x2="19" y2="5"/>
+          <line x1="7"  y1="17" x2="5"  y2="19"/>
+          <line x1="7"  y1="7"  x2="5"  y2="5"/>
+          <line x1="17" y1="17" x2="19" y2="19"/>
+        </svg>
+      </button>
 
-<section class="center-pane" id="center">
-  <div class="wrap" id="weekWrap">
-    <div class="header">
-      <div class="tri left" id="prevWeekBtn">▲</div>
-      <div class="title" id="weekTitle">—</div>
-      <div class="tri right" id="nextWeekBtn">▼</div>
-    </div>
+      <button class="btn" aria-label="Week view" aria-pressed="false" data-view="week" title="Week">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <line x1="6" y1="10" x2="6" y2="18"/>
+          <line x1="8" y1="10" x2="8" y2="18"/>
+          <line x1="10" y1="10" x2="10" y2="18"/>
+          <line x1="12" y1="10" x2="12" y2="18"/>
+          <line x1="14" y1="10" x2="14" y2="18"/>
+          <line x1="16" y1="10" x2="16" y2="18"/>
+          <line x1="18" y1="10" x2="18" y2="18"/>
+        </svg>
+      </button>
 
-    <div class="content" id="weekContent">
-      <div class="dow-labels" id="dowLabels"></div>
+      <button class="btn" aria-label="Month view" aria-pressed="false" data-view="month" title="Month">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <circle cx="7"  cy="11" r="0.7"/><circle cx="11" cy="11" r="0.7"/><circle cx="15" cy="11" r="0.7"/><circle cx="19" cy="11" r="0.7"/>
+          <circle cx="7"  cy="14" r="0.7"/><circle cx="11" cy="14" r="0.7"/><circle cx="15" cy="14" r="0.7"/><circle cx="19" cy="14" r="0.7"/>
+          <circle cx="7"  cy="17" r="0.7"/><circle cx="11" cy="17" r="0.7"/><circle cx="15" cy="17" r="0.7"/><circle cx="19" cy="17" r="0.7"/>
+        </svg>
+      </button>
 
-      <div id="weekGrid" aria-label="Weekly grid">
-        <div id="blocksLayer"></div>
-        <svg id="maskSVG" aria-hidden="true"></svg>
-        <div id="nowMagnify" aria-hidden="true"></div>
+      <button class="btn" aria-label="To-Do list" aria-pressed="false" data-view="todo" title="To-Do">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <line x1="4" y1="8" x2="20" y2="8"/>
+          <polyline points="7,14 10,17 17,10"/>
+        </svg>
+      </button>
+    </nav>
+  </main>
+
+  <!-- Task picker overlay -->
+  <div id="taskOverlay" aria-hidden="true"></div>
+
+  <!-- Settings editor -->
+  <div id="settingsOverlay" aria-hidden="true">
+    <div class="backdrop"></div>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+      <div class="ed-head">
+        <div class="ed-title" id="edTitle">Edit</div>
+        <input id="edName" class="in" placeholder="Name (14 max)" maxlength="14"/>
+        <input id="edColor" type="color" class="in" style="width:54px;padding:0;height:36px"/>
       </div>
-
-      <div class="hours" id="weekHours"></div>
+      <div class="ed-body" id="edBody"></div>
+      <div class="ed-foot">
+        <button id="edCancel" class="btnText">Cancel</button>
+        <button id="edSave" class="btnText">Save</button>
+      </div>
     </div>
   </div>
-</section>
-
-<nav class="bottom-dock" aria-hidden="true"></nav>
-
-<!-- 2×8 task overlay -->
-<div id="taskOverlay" aria-hidden="true">
-  <div class="backdrop"></div>
-  <div class="container" id="taskContainer"></div>
-</div>
-
-<!-- Settings modal -->
-<div id="settingsOverlay" aria-modal="true" role="dialog">
-  <div class="ws-card" role="document">
-    <div class="ws-head">
-      <div class="ws-title">
-        <input id="titleInput" maxlength="14" aria-label="Item name (max 14)"/>
-        <small id="titleCount">0/14</small>
-      </div>
-    </div>
-
-    <div class="ws-body">
-      <div class="ws-row">
-        <div class="ws-label">Legend color</div>
-        <div class="ws-inline paletteHead">
-          <div class="swatch" id="legendSwatch"></div>
-          <span id="hexPreview" style="font-variant-numeric:tabular-nums;color:#64748B"></span>
-          <button id="editColorBtn" class="editColor" aria-expanded="false" aria-controls="colorPalette">Edit color</button>
-        </div>
-        <div id="colorPalette" class="palette" style="display:none">
-          <div class="square-wrap" id="svWrap">
-            <canvas id="svCanvas"></canvas>
-            <div class="knob" id="svKnob" style="left:100%;top:0%"></div>
-          </div>
-          <div class="hueRow">
-            <span class="ws-label">Hue</span>
-            <input type="range" id="hue" class="hue" min="0" max="360" value="0"/>
-            <span class="num" id="hVal">0</span>
-          </div>
-          <div class="hueRow">
-            <span class="ws-label">HEX</span>
-            <input id="hex" style="flex:1; padding:8px 10px; border:1px solid #D7DFEA; border-radius:8px; font:inherit" value="#ff0000" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Scope dropdown -->
-      <div class="ws-row">
-        <div class="ws-label">Applies to</div>
-        <div class="scope-pop">
-          <div id="scopeSelect" class="scope-trigger" role="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="scopeList">
-            <strong id="scopeSelLabel">Recurring</strong><span class="chev">▼</span>
-          </div>
-          <div id="scopeList" class="scope-list" role="listbox" tabindex="-1" aria-label="Choose scope">
-            <div class="scope-opt" role="option" data-val="today">Today</div>
-            <div class="scope-opt" role="option" data-val="week">This week</div>
-            <div class="scope-opt" role="option" data-val="month">This month</div>
-            <div class="scope-opt" role="option" data-val="recurring" aria-selected="true">Recurring</div>
-          </div>
-        </div>
-        <div class="scope-hint" id="scopeHint" style="font-size:11px; color:#64748B"></div>
-      </div>
-
-      <div class="ws-row">
-        <div class="ws-label">Weekly schedule (up to 4 time ranges per day)</div>
-        <div id="wsDays"></div>
-      </div>
-    </div>
-
-    <div class="ws-foot">
-      <button class="btn discard" id="discardBtn">Discard</button>
-      <button class="btn save" id="saveBtn">Save</button>
-    </div>
-  </div>
-</div>
 
 <script>
-(()=>{
-  /* ===== Layout ===== */
-  const UI_W=360, H16=640, H20=800, AS_MIN=16/9, AS_MAX=20/9;
-  const TOP_H=28, CENTER_H=496, DOCK_H=92, MIN_GAP=12;
+console.info('Chrono build r20');
 
-  const set=(k,v)=>document.documentElement.style.setProperty(k,v);
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const lerp=(a,b,t)=>a+(b-a)*t;
+/* ---------- Core / State ---------- */
+const screenEl = document.getElementById('screen');
+const buttons = [...document.querySelectorAll('.btn')];
 
-  function layout(){
-    const vw=innerWidth, vh=innerHeight, A=vh/vw;
-    const T=clamp(A, AS_MIN, AS_MAX);
-    const Ht=lerp(H16, H20, (T-AS_MIN)/(AS_MAX-AS_MIN));
-    const free=Ht-(TOP_H+CENTER_H+DOCK_H);
-    const gap=Math.max(MIN_GAP, free/2);
-    const needed=TOP_H+gap+CENTER_H+gap+DOOCK_H;
+let activeView = null;               // starts blank
+let activeDayISO = toISO(new Date());
+let visibleWeekFirst = weekStart(new Date());
+
+const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const ORD = (n)=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+
+function toISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function fromISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekStart(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const dow=x.getDay(); x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; }
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function round15(min){ return Math.round(min/15)*15; }
+function isoWeekKey(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+function monthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`; }
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+/* ---------- Tasks ---------- */
+let TASKS = [
+  {key:'work',      label:'Work',        color:'#d33c36', hard:false},
+  {key:'commute',   label:'Commute',     color:'#e86a13', hard:false},
+  {key:'chores',    label:'Chores',      color:'#3b41c5', hard:false},
+  {key:'errands',   label:'Errands',     color:'#1d8f2e', hard:false},
+  {key:'meals',     label:'Meal Time',   color:'#e0b21b', hard:false},
+  {key:'hygiene',   label:'Hygiene',     color:'#0ea5e9', hard:false},
+  {key:'selfcare',  label:'Self Care',   color:'#888888', hard:false},
+  {key:'exercise',  label:'Exercise',    color:'#1db954', hard:false},
+  {key:'family',    label:'Family Time', color:'#e3326b', hard:false},
+  {key:'hobbies',   label:'Hobbies',     color:'#f39c12', hard:false},
+  {key:'projects',  label:'Projects',    color:'#6a5acd', hard:false},
+  {key:'school',    label:'School',      color:'#3269e6', hard:true},
+  {key:'relax',     label:'Relaxation',  color:'#24c3d6', hard:false},
+  {key:'free',      label:'Free Time',   color:'#a4a4a4', hard:false},
+  {key:'childcare', label:'Child Care',  color:'#7a5c2e', hard:false},
+  {key:'sleep',     label:'Sleep',       color:'#6aa6ff', hard:false}
+];
+const COLORS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
+const LABELS = ()=>Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
+
+/* ---------- Data stores ---------- */
+const SLOTS_PER_DAY=96; // 15-min
+let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+/* EXACT[taskKey][day] = [{startMin,endMin,scope,weekKey?,monthKey?,reminderOffsetMin?,flexibility}] */
+const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])]));
+const ORDER = { recurring:{} }; let SAVE_SEQ = 1;
+const MAX_RANGES_PER_DAY=6;
+
+/* ---------- Width sync ---------- */
+new ResizeObserver(()=> {
+  const w = screenEl.getBoundingClientRect().width;
+  document.documentElement.style.setProperty('--panelW', Math.max(320, Math.floor(w))+'px');
+}).observe(screenEl);
+
+/* ---------- Storage (IndexedDB + fallback) ---------- */
+const DB_NAME = 'chronoDB';
+const DB_VERSION = 6;
+let dbPromise = null;
+let STORAGE_MODE = 'idb';
+
+function idbSupported(){ try { return !!(window.indexedDB); } catch { return false; } }
+function idbOpen(){
+  if (!idbSupported()){ STORAGE_MODE='ls'; return Promise.resolve(null); }
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if (!db.objectStoreNames.contains('kv')){
+        db.createObjectStore('kv', { keyPath: 'k' });
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+  return dbPromise.catch(err=>{ STORAGE_MODE='ls'; console.warn('IndexedDB failed, using localStorage:', err); return null; });
+}
+async function storageSet(key, value){
+  if (STORAGE_MODE==='ls'){
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
   }
-})();
-</script>
-<script>
-(()=>{
-  /* fix typo in layout (split to keep code readable) */
-  const UI_W=360, H16=640, H20=800, AS_MIN=16/9, AS_MAX=20/9;
-  const TOP_H=28, CENTER_H=496, DOCK_H=92, MIN_GAP=12;
-  const set=(k,v)=>document.documentElement.style.setProperty(k,v);
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const lerp=(a,b,t)=>a+(b-a)*t;
-
-  function layout(){
-    const vw=innerWidth, vh=innerHeight, A=vh/vw;
-    const T=Math.max(AS_MIN, Math.min(AS_MAX, A));
-    const Ht=lerp(H16, H20, (T-AS_MIN)/(AS_MAX-AS_MIN));
-    const free=Ht-(TOP_H+CENTER_H+DOCK_H);
-    const gap=Math.max(MIN_GAP, free/2);
-    const needed=TOP_H+gap+CENTER_H+gap+DOCK_H;
-    const s=Math.min(vw/UI_W, vh/needed);
-
-    set('--uiw', (UI_W*s)+'px');
-    set('--toph', (TOP_H*s)+'px');
-    set('--centerh', (CENTER_H*s)+'px');
-    set('--dockh', (DOCK_H*s)+'px');
-    set('--gapTop', (gap*s)+'px');
-    set('--gapBottom', (gap*s)+'px');
-    set('--dot', Math.max(4, 6*s)+'px');
-    set('--screenPad', Math.round(12*s)+'px');
-
-    set('--grid-margin', (16*s)+'px');
-    set('--hour-col', (56*s)+'px');
-    set('--label-size', (11*s)+'px');
-    set('--date-size', (18*s)+'px');
-    set('--dow-h', (16*s)+'px');
-
-    buildWeek();
+  const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageSet(key, value); }
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readwrite');
+    tx.objectStore('kv').put({k:key, v:value});
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function storageGet(key){
+  if (STORAGE_MODE==='ls'){
+    const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined;
   }
-  addEventListener('resize', ()=>requestAnimationFrame(layout), {passive:true});
+  const db = await idbOpen();
+  if (!db){ STORAGE_MODE='ls'; return storageGet(key); }
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction('kv','readonly');
+    const req = tx.objectStore('kv').get(key);
+    req.onsuccess = ()=>resolve(req.result? req.result.v : undefined);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+function snapshotState(){ return { TASKS, EXACT, ORDER, SAVE_SEQ, activeDayISO }; }
+function hydrateState(snap){
+  try{
+    if(!snap || typeof snap!=='object') return;
+    if (Array.isArray(snap.TASKS)) TASKS = snap.TASKS.map(t=>({key:String(t.key), label:String(t.label), color:String(t.color), hard:!!t.hard}));
+    if (snap.EXACT){
+      for (const k of Object.keys(EXACT)){
+        if (snap.EXACT[k] && Array.isArray(snap.EXACT[k]) && snap.EXACT[k].length===7){
+          EXACT[k] = snap.EXACT[k].map(dayArr => Array.isArray(dayArr) ? dayArr.map(r => ({
+            startMin: Number(r.startMin)||0,
+            endMin: Number(r.endMin)||0,
+            scope: r.scope || 'recurring',
+            weekKey: r.weekKey || undefined,
+            monthKey: r.monthKey || undefined,
+            reminderOffsetMin: (typeof r.reminderOffsetMin==='number') ? r.reminderOffsetMin : undefined,
+            flexibility: r.flexibility || 'firm'
+          })) : []);
+        }
+      }
+    }
+    if (snap.ORDER && typeof snap.ORDER==='object') Object.assign(ORDER, snap.ORDER);
+    if (typeof snap.SAVE_SEQ === 'number') SAVE_SEQ = snap.SAVE_SEQ;
+    if (typeof snap.activeDayISO === 'string') activeDayISO = snap.activeDayISO;
+  }catch(e){ console.warn('Hydrate failed:', e); }
+}
+async function saveAll(){
+  const snap = snapshotState();
+  await storageSet('lastGood', snap);
+  await storageSet('state', snap);
+}
+let saveTimer=null;
+function saveSoon(ms=600){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ saveAll().catch(e=>console.error('Save error:', e)); }, ms); }
 
-  /* ===== DOM ===== */
-  const weekTitle=document.getElementById('weekTitle');
-  const dowLabels=document.getElementById('dowLabels');
-  const weekHours=document.getElementById('weekHours');
-  const weekGrid=document.getElementById('weekGrid');
-  const blocksLayer=document.getElementById('blocksLayer');
-  const nowMagnify=document.getElementById('nowMagnify');
+/* ---------- Controls ---------- */
+document.querySelector('.controls').addEventListener('click', e=>{
+  const b=e.target.closest('.btn'); if(!b) return;
+  const v=b.dataset.view;
+  if(activeView===v){
+    activeView=null; buttons.forEach(x=>x.setAttribute('aria-pressed','false')); screenEl.innerHTML='';
+  }else{
+    activeView=v; buttons.forEach(x=>x.setAttribute('aria-pressed', String(x===b))); render();
+  }
+  saveSoon(200);
+});
 
-  document.getElementById('prevWeekBtn').addEventListener('click', ()=>{ setWeek(-1); buildWeek(); });
-  document.getElementById('nextWeekBtn').addEventListener('click', ()=>{ setWeek(+1); buildWeek(); });
+/* ---------- Week View ---------- */
+function buildWeekView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head">
+        <button id="prevWeekBtn" class="chev" aria-label="Previous week">◀</button>
+        <div class="title" id="weekTitle"></div>
+        <button id="nextWeekBtn" class="chev" aria-label="Next week">▶</button>
+      </div>
 
-  /* ===== Task model ===== */
-  const TASKS = [
-    {key:'work',      label:'Work',           color:'#D33C36', hard:true},
-    {key:'commute',   label:'Commute',        color:'#E86A13', hard:true},
-    {key:'chores',    label:'Chores',         color:'#3B41C5', hard:true},
-    {key:'errands',   label:'Errands',        color:'#1D8F2E', hard:true},
-    {key:'meals',     label:'Meal Time',      color:'#E0B21B'},
-    {key:'hygiene',   label:'Hygiene',        color:'#0EA5E9'},
-    {key:'selfcare',  label:'Self care',      color:'#A3A3A3'},
-    {key:'exercise',  label:'Exercise',       color:'#1DB954'},
-    {key:'family',    label:'Family Time',    color:'#E3326B'},
-    {key:'hobbies',   label:'Hobbies',        color:'#F39C12'},
-    {key:'leisure',   label:'Leisure',        color:'#6B5B95'},
-    {key:'school',    label:'School',         color:'#3269E6', hard:true},
-    {key:'relax',     label:'Relaxation',     color:'#24C3D6'},
-    {key:'free',      label:'Free Time',      color:'#77C043'}, // user-schedulable; NOT the default filler
-    {key:'routines',  label:'Routines',       color:'#7A5C2E'},
-    {key:'sleep',     label:'Sleep',          color:'#6AA6FF'}
-  ];
-  const COLORS = Object.fromEntries(TASKS.map(t=>[t.key,t.color]));
-  const LABELS = Object.fromEntries(TASKS.map(t=>[t.key,t.label]));
+      <div class="grid-area">
+        <div class="top-row week" id="dowPills"></div>
+        <div class="grid" id="weekGrid">
+          <div class="blocks" id="blocksLayer"></div>
+          <svg class="mask" id="maskSVG" aria-hidden="true"></svg>
+          <div class="now" id="nowMagnify" aria-hidden="true"></div>
+        </div>
+        <div class="hours" id="weekHours"></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('prevWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst,-7); repaintWeek(); saveSoon(200); };
+  document.getElementById('nextWeekBtn').onclick = ()=>{ visibleWeekFirst=addDays(visibleWeekFirst, 7); repaintWeek(); saveSoon(200); };
+  document.getElementById('weekGrid').addEventListener('click', openTaskStack);
 
-  /* ===== Data stores ===== */
-  const SLOTS_PER_DAY=96; // 15-min slots
-  let allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null)); // rendered week (null = unused)
-  const EXACT = Object.fromEntries(TASKS.map(t=>[t.key, Array.from({length:7},()=>[])])); // recurring template
-  const EXCEPTIONS = { byDate:{}, byWeek:{}, byMonth:{} }; // overrides
-  const LAST_SCOPE = {}; // taskKey -> 'today'|'week'|'month'|'recurring'
-  let SAVE_SEQ = 1;      // sequence counter for ordering (first writer wins)
-  const ORDER = {        // per-horizon save order (taskKey -> seq)
-    recurring:{},
-    week:{},   // keyed by weekKey inside; see ORDER.week[wkKey]
-    month:{}   // keyed by monthKey inside; see ORDER.month[moKey]
+  repaintWeek();
+  new ResizeObserver(repaintWeek).observe(document.getElementById('weekGrid'));
+}
+
+function repaintWeek(){
+  const first=visibleWeekFirst, last=addDays(first,6);
+  const m=new Intl.DateTimeFormat(undefined,{month:'short'});
+  const title = (first.getFullYear()===last.getFullYear())
+    ? (first.getMonth()===last.getMonth()
+        ? `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`
+        : `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`)
+    : `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
+  document.getElementById('weekTitle').textContent = title;
+
+  const pills=document.getElementById('dowPills'); pills.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=addDays(first,i);
+    const pill=document.createElement('div');
+    pill.className='day-pill';
+    pill.textContent = `${SHORT_DOW[i]}, ${d.getDate()}`;
+    pills.appendChild(pill);
+  }
+
+  const gh=document.getElementById('weekHours'); gh.innerHTML='';
+  const gridEl = document.getElementById('weekGrid');
+  const geom=computeGeometry(gridEl, 7);
+  for(let i=0;i<24;i++){
+    const el=document.createElement('div'); el.className='hour-stamp';
+    el.textContent = `${String(i).padStart(2,'0')}:00`;
+    el.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
+    gh.appendChild(el);
+  }
+
+  rebuildSlots();
+  paintBlocksWeek(geom);
+  buildMask(geom, 7);
+  paintNowMagnifier(geom);
+}
+
+function computeGeometry(gridEl, cols){
+  const r=gridEl.getBoundingClientRect();
+  const totalW=Math.max(0, Math.round(r.width));
+  const totalH=Math.max(0, Math.round(r.height));
+  const colWBase=Math.floor(totalW/cols), extraW=totalW-colWBase*cols;
+  const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
+  const colW=[], colX=[0]; for(let c=0;c<cols;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
+  const rowH=[], rowY=[0]; for(let i=0;i<24;i++){ const h=rowHBase+(i<extraH?1:0); rowH.push(h); rowY.push(rowY[i]+h); }
+  const slotY=[0];
+  for(let hr=0;hr<24;hr++){
+    const h=rowH[hr]; const base=Math.floor(h/4); let rem=h-base*4;
+    const parts=[base,base,base,base]; for(let k=0;k<rem;k++) parts[k]+=1;
+    for(let q=0;q<4;q++) slotY.push(slotY[slotY.length-1]+parts[q]);
+  }
+  return {totalW,totalH,colW,colX,rowH,rowY,slotY};
+}
+
+function buildMask(geom, cols){
+  const svg=document.getElementById(activeView==='day'?'dayMask':'maskSVG'); svg.innerHTML='';
+  const { totalW, totalH, colX, rowY } = geom;
+  if(totalW<=0 || totalH<=0) return;
+  svg.setAttribute('width', totalW);
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.setAttribute('preserveAspectRatio','none');
+
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs');
+  const sym=document.createElementNS(NS,'symbol');
+  sym.setAttribute('id','tile900x300');
+  sym.setAttribute('viewBox','0 0 900 300');
+  sym.setAttribute('preserveAspectRatio','none');
+
+  const surface='rgba(255,255,255,0.55)';
+  const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
+  const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
+
+  sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24));
+  sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
+  sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
+  sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
+
+  defs.appendChild(sym); svg.appendChild(defs);
+
+  for(let rI=0;rI<24;rI++){
+    for(let cI=0;cI<cols;cI++){
+      const use=document.createElementNS(NS,'use');
+      use.setAttribute('href','#tile900x300');
+      use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]);
+      use.setAttribute('width',colX[cI+1]-colX[cI]);
+      use.setAttribute('height',rowY[rI+1]-rowY[rI]);
+      svg.appendChild(use);
+    }
+  }
+}
+
+/* Scope filter */
+function inScopeForDate(r, date){
+  const sc = r.scope || 'recurring';
+  if (sc === 'recurring') return true;
+  if (sc === 'week')     return r.weekKey === isoWeekKey(date);
+  if (sc === 'month')    return r.monthKey === monthKey(date);
+  return false;
+}
+
+/* ---------- Slots (carryover both directions per visible week) ---------- */
+function rebuildSlots(){
+  allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
+  const keys = Object.keys(EXACT).sort((a,b)=>(ORDER.recurring[a]??1e9)-(ORDER.recurring[b]??1e9));
+
+  const clampFill = (dayIdx, startSlot, endSlot, key, isFirm) => {
+    const a = Math.max(0, Math.min(96, startSlot));
+    const b = Math.max(0, Math.min(96, endSlot));
+    for(let s=a; s<b; s++){
+      const existing = allSlots[dayIdx][s];
+      if(!existing){ allSlots[dayIdx][s] = key; continue; }
+      const existingFirm = isExistingFirmAtSlot(existing, dayIdx, s);
+      if(isFirm && !existingFirm) allSlots[dayIdx][s] = key;
+    }
   };
 
-  /* ===== Week navigation state ===== */
-  let weekOffset=0;            // 0 = current week
-  let visibleWeekFirst=null;   // Date (Sun 00:00) of visible week
-  let magTimer=null;
-
-  /* ===== Utilities ===== */
-  const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const SHORT_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-  function fmtDate(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
-  function fmtMonthKey(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); return `${y}-${m}`; }
-  function fmtWeekKey(firstDate){ return fmtDate(firstDate); }
-
-  function round15(min){ return Math.round(min/15)*15; }
-  function minsToSlot(min){ return Math.max(0, Math.min(96, Math.round(min/15))); }
-
-  /* ===== Geometry, paint, mask ===== */
-  function mergeDay(day){ const segs=[]; let i=0; while(i<SLOTS_PER_DAY){ const c=day[i]; let j=i+1; while(j<SLOTS_PER_DAY && day[j]===c) j++; segs.push({cat:c,startSlot:i,len:j-i}); i=j;} return segs; }
-
-  function computeGeometry(){
-    const r=weekGrid.getBoundingClientRect();
-    const totalW=Math.round(r.width), totalH=Math.round(r.height);
-    const colWBase=Math.floor(totalW/7), extraW=totalW-colWBase*7;
-    const rowHBase=Math.floor(totalH/24), extraH=totalH-rowHBase*24;
-    const colW=[], colX=[0]; for(let c=0;c<7;c++){ const w=colWBase+(c<extraW?1:0); colW.push(w); colX.push(colX[c]+w); }
-    const rowH=[], rowY=[0]; for(let rI=0;rI<24;rI++){ const h=rowHBase+(rI<extraH?1:0); rowH.push(h); rowY.push(rowY[rI]+h); }
-    const slotHeightsPerHour=[]; for(let hr=0; hr<24; hr++){ const h=rowH[hr], base=Math.floor(h/4), extra=h-base*4; const parts=[base,base,base,base]; const start=hr%4; for(let k=0;k<extra;k++) parts[(start+k)%4]+=1; slotHeightsPerHour.push(parts); }
-    const slotY=[0]; for(let hr=0; hr<24; hr++){ for(let q=0; q<4; q++) slotY.push(slotY[slotY.length-1]+slotHeightsPerHour[hr][q]); }
-    return {totalW,totalH,colW,colX,rowH,rowY,slotY};
-  }
-
-  function paintBlocks(slots, geom){
-    const { colX, slotY } = geom;
-    blocksLayer.innerHTML='';
+  // Fill from current day ranges
+  for(const key of keys){
     for(let d=0; d<7; d++){
-      const segs=mergeDay(slots[d]);
-      segs.forEach(seg=>{
-        if(!seg.cat) return; // only owned slots render
-        const left=colX[d], right=colX[d+1];
-        const top=slotY[seg.startSlot], bottom=slotY[seg.startSlot+seg.len];
-        const div=document.createElement('div'); div.className='blk';
-        div.style.background = COLORS[seg.cat] || '#E8EEF6';
-        div.style.left=left+'px'; div.style.top=top+'px';
-        div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
-        div.style.height=(bottom-top)+'px';
-        blocksLayer.appendChild(div);
-      });
-    }
-  }
+      const dateDay = addDays(visibleWeekFirst, d);
+      const ranges = (EXACT[key][d]||[]).filter(r=>inScopeForDate(r, dateDay));
+      for(const r of ranges){
+        const isFirm = (r.flexibility||'firm')==='firm';
+        const s = (r.startMin|0), e = (r.endMin|0);
+        const endAbs = (e <= s ? e + 1440 : e);
 
-  function buildMask(geom){
-    const svg=document.getElementById('maskSVG'); svg.innerHTML='';
-    const surface=getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()||'#F4F6F9';
-    const { totalW, totalH, colW, colX, rowH, rowY } = geom;
-    svg.setAttribute('width', totalW); svg.setAttribute('height', totalH);
-    svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`); svg.setAttribute('preserveAspectRatio','none');
-    const NS='http://www.w3.org/2000/svg';
-    const defs=document.createElementNS(NS,'defs'); const sym=document.createElementNS(NS,'symbol');
-    sym.setAttribute('id','tile'); sym.setAttribute('viewBox','0 0 900 300'); sym.setAttribute('preserveAspectRatio','none');
-    const r=(x,y,w,h)=>{const e=document.createElementNS(NS,'rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',surface); return e;};
-    const p=(pts)=>{const e=document.createElementNS(NS,'polygon'); e.setAttribute('points',pts); e.setAttribute('fill',surface); return e;};
-    sym.appendChild(r(0,0,900,24)); sym.appendChild(r(0,276,900,24)); sym.appendChild(r(0,0,24,300)); sym.appendChild(r(876,0,24,300));
-    sym.appendChild(r(24,69,852,24)); sym.appendChild(r(24,138,852,24)); sym.appendChild(r(24,207,852,24));
-    sym.appendChild(p('23,23 61,23 23,61')); sym.appendChild(p('877,23 839,23 877,61')); sym.appendChild(p('23,277 61,277 23,239')); sym.appendChild(p('877,277 839,277 877,239'));
-    defs.appendChild(sym); svg.appendChild(defs);
-    for(let rI=0;rI<24;rI++){ for(let cI=0;cI<7;cI++){ const use=document.createElementNS(NS,'use'); use.setAttribute('href','#tile'); use.setAttribute('x',colX[cI]); use.setAttribute('y',rowY[rI]); use.setAttribute('width',colW[cI]); use.setAttribute('height',rowH[rI]); svg.appendChild(use); } }
-  }
-
-  function formatWeekTitle(first,last){
-    const m=new Intl.DateTimeFormat(undefined,{month:'short'});
-    if(first.getFullYear()===last.getFullYear()){
-      if(first.getMonth()===last.getMonth()){
-        return `${m.format(first)} ${first.getDate()} – ${last.getDate()}, ${first.getFullYear()}`;
-      }
-      return `${m.format(first)} ${first.getDate()} – ${m.format(last)} ${last.getDate()}, ${first.getFullYear()}`;
-    }
-    return `${m.format(first)} ${first.getDate()}, ${first.getFullYear()} – ${m.format(last)} ${last.getDate()}, ${last.getFullYear()}`;
-  }
-
-  function setWeek(delta=0){
-    weekOffset+=delta;
-    const today=new Date();
-    const first=new Date(today); first.setDate(today.getDate()-today.getDay()+weekOffset*7); first.setHours(0,0,0,0);
-    const last=new Date(first); last.setDate(first.getDate()+6);
-    visibleWeekFirst = first;
-    weekTitle.textContent = formatWeekTitle(first,last);
-  }
-
-  /* ===== Magnifier (current week only, slightly taller than 1 hour) ===== */
-  function renderMagnifier(geom){
-    // Show only if "today" is inside visible week (not just weekOffset===0)
-    const today=startOfDay(new Date());
-    const visStart=startOfDay(visibleWeekFirst);
-    const visEnd=startOfDay(addDays(visibleWeekFirst,6));
-    if(today < visStart || today > visEnd){
-      nowMagnify.style.display='none';
-      if(magTimer){ clearTimeout(magTimer); magTimer=null; }
-      return;
-    }
-    const { colW, colX, rowY, totalH } = geom;
-    const now=new Date(); const dow=now.getDay(); const minutes=now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
-    const hour=Math.floor(minutes/60);
-    const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
-    const extra = Math.min(10, Math.floor(hourH*0.25)); // a tad taller
-    const top = Math.max(0, Math.min(totalH - (hourH+extra), hourTop - Math.floor(extra/2)));
-    const height = Math.min(totalH - top, hourH + extra);
-    const left=colX[dow]; const width=(dow===6)?Math.max(0,colW[dow]-1):colW[dow];
-    nowMagnify.style.left=left+'px'; nowMagnify.style.top=top+'px';
-    nowMagnify.style.width=width+'px'; nowMagnify.style.height=height+'px';
-    nowMagnify.style.display='block';
-    if(magTimer) clearTimeout(magTimer);
-    magTimer=setTimeout(()=>renderMagnifier(computeGeometry()), 10000);
-  }
-
-  /* ===== Build visible week ===== */
-  function buildWeek(){
-    if(!visibleWeekFirst) setWeek(0);
-    const names=SHORT_DOW; dowLabels.innerHTML=''; names.forEach(n=>{const el=document.createElement('div'); el.className='dow-label'; el.textContent=n; dowLabels.appendChild(el);});
-    const geom=computeGeometry();
-    weekHours.innerHTML='';
-    for(let i=0;i<24;i++){
-      const d=document.createElement('div'); d.className='hour-stamp';
-      d.textContent=String(i).padStart(2,'0')+':00';
-      d.style.top=((geom.rowY[i]+geom.rowY[i+1])/2)+'px';
-      weekHours.appendChild(d);
-    }
-    rebuildSlotsForVisibleWeek();
-    paintBlocks(allSlots, geom); buildMask(geom); renderMagnifier(geom);
-  }
-
-  /* ===== Effective exact for a task in visible week (exceptions precedence) ===== */
-  function deepCopyExact(ex){ return ex.map(dayArr => dayArr.map(r => ({startMin:r.startMin,endMin:r.endMin}))); }
-
-  function getEffectiveExactForTask(taskKey){
-    // Start with recurring template
-    let eff = deepCopyExact(EXACT[taskKey]);
-    const wkKey = fmtWeekKey(visibleWeekFirst);
-    const moKey = fmtMonthKey(visibleWeekFirst);
-    const weekOverride = EXCEPTIONS.byWeek[wkKey]?.[taskKey];
-    const monthOverride = EXCEPTIONS.byMonth[moKey]?.[taskKey];
-    if(monthOverride) eff = deepCopyExact(monthOverride);
-    if(weekOverride)  eff = deepCopyExact(weekOverride);
-    // Day-specific overrides replace per-day
-    for(let d=0; d<7; d++){
-      const dateKey = fmtDate(addDays(visibleWeekFirst,d));
-      const dayOverride = EXCEPTIONS.byDate[dateKey]?.[taskKey];
-      if(dayOverride) eff[d] = dayOverride.map(r=>({startMin:r.startMin,endMin:r.endMin}));
-    }
-    return eff;
-  }
-
-  /* ===== Apply ranges to slots (no overwrite) ===== */
-  function applyRangesToSlots(cat, exact){
-    for(let d=0; d<7; d++){
-      (exact[d]||[]).forEach(R=>{
-        let a=round15(R.startMin), b=round15(R.endMin);
-        if(b===a){ return; } // ignore zero
-        if(b>a){
-          let sa=minsToSlot(a), sb=minsToSlot(b);
-          for(let s=sa; s<sb; s++) if(allSlots[d][s]===null) allSlots[d][s]=cat;
-        } else {
-          // overnight split (current day to 24:00)
-          let sa=minsToSlot(a), sb=minsToSlot(24*60);
-          for(let s=sa; s<sb; s++) if(allSlots[d][s]===null) allSlots[d][s]=cat;
-          const dn=(d+1)%7;
-          let sa2=minsToSlot(0), sb2=minsToSlot(b);
-          if(dn>=0 && dn<7){ for(let s=sa2; s<sb2; s++) if(allSlots[dn][s]===null) allSlots[dn][s]=cat; }
+        const todayStart = s;
+        const todayEnd   = Math.min(endAbs, 1440);
+        if(todayEnd > todayStart){
+          clampFill(d, Math.floor(todayStart/15), Math.floor(todayEnd/15), key, isFirm);
         }
+
+        const spill = endAbs - 1440;
+        if(spill > 0 && d+1 <= 6){
+          clampFill(d+1, 0, Math.floor(Math.min(spill,1440)/15), key, isFirm);
+        }
+      }
+    }
+  }
+
+  // ALSO: pull in previous-day spillovers (so Sunday can show Saturday→Sunday)
+  for(const key of keys){
+    for(let d=0; d<7; d++){
+      const prevDayIdx = (d===0? 6 : d-1);
+      const prevDate   = addDays(visibleWeekFirst, d-1); // NOTE: for d=0 this is last week's Saturday
+      const prevRanges = (EXACT[key][prevDayIdx]||[]).filter(r=>{
+        // only cross-midnight ranges spilling into this day
+        return (r.endMin|0) < (r.startMin|0) && inScopeForDate(r, prevDate);
       });
+      for(const r of prevRanges){
+        const isFirm = (r.flexibility||'firm')==='firm';
+        const spillEnd = Math.min(r.endMin|0, 1440);
+        if (spillEnd > 0){
+          clampFill(d, 0, Math.floor(spillEnd/15), key, isFirm);
+        }
+      }
     }
   }
+}
 
-  /* ===== Rebuild rendered week respecting first-writer-wins ===== */
-  function rebuildSlotsForVisibleWeek(){
-    allSlots = Array.from({length:7}, ()=>Array(SLOTS_PER_DAY).fill(null));
-    // Determine per-horizon order sequences to enforce non-overriding paint
-    const wkKey = fmtWeekKey(visibleWeekFirst);
-    const moKey = fmtMonthKey(visibleWeekFirst);
-    const seqForTask = (taskKey)=>{
-      // choose smallest sequence where defined (oldest wins)
-      const seqs=[ORDER.week[wkKey]?.[taskKey], ORDER.month[moKey]?.[taskKey], ORDER.recurring?.[taskKey]];
-      return seqs.filter(x=>typeof x==='number').sort((a,b)=>a-b)[0] ?? 1e9; // large for never saved
-    };
-    // Paint tasks in ascending sequence (earlier edits claim first)
-    const ordered = [...TASKS.map(t=>t.key)].sort((a,b)=>seqForTask(a)-seqForTask(b));
-    for(const key of ordered){
-      const eff = getEffectiveExactForTask(key);
-      applyRangesToSlots(key, eff);
+function isExistingFirmAtSlot(key, dayIdx, slotIdx){
+  // Check same-day firm
+  const dateDay  = addDays(visibleWeekFirst, dayIdx);
+  const owned = (EXACT[key][dayIdx]||[]).filter(r=>inScopeForDate(r, dateDay));
+  for(const r of owned){
+    if((r.flexibility||'firm')==='firm'){
+      const a=Math.floor((r.startMin|0)/15), b=Math.floor((r.endMin|0)/15);
+      if((r.endMin|0) > (r.startMin|0)){ if(slotIdx>=a && slotIdx<b) return true; }
+      else{ if(slotIdx>=a && slotIdx<96) return true; }
     }
   }
+  // Check previous-day spill firm (using true previous date)
+  const prevDate = addDays(visibleWeekFirst, dayIdx-1);
+  const prevIdx  = (dayIdx===0? 6 : dayIdx-1);
+  const prev = (EXACT[key][prevIdx]||[]).filter(r=>inScopeForDate(r, prevDate) && (r.endMin|0) < (r.startMin|0));
+  for(const r of prev){
+    if((r.flexibility||'firm')==='firm'){
+      const b=Math.floor((r.endMin|0)/15);
+      if(slotIdx>=0 && slotIdx<b) return true;
+    }
+  }
+  return false;
+}
 
-  /* ===== Tap vs Swipe on week (tap-delay/arming) ===== */
-  (function enableTapSwipe(){
-    const el=document.getElementById('weekContent');
-    let y0=0,t0=0,moved=false; const THRESH=26, SPEED=0.22;
-    function start(e){ moved=false; y0=('touches'in e)?e.touches[0].clientY:e.clientY; t0=performance.now(); }
-    function move(e){ const y1=('touches'in e)?e.touches[0].clientY:e.clientY; if(Math.abs(y1-y0)>6) moved=true; }
-    function end(e){
-      const y1=('changedTouches'in e)?e.changedTouches[0].clientY:e.clientY; const dy=y1-y0; const dt=Math.max(1,performance.now()-t0);
-      const v=Math.abs(dy)/dt;
-      if(Math.abs(dy)>THRESH && v>SPEED){
-        setWeek(dy<0 ? +1 : -1);
-        buildWeek();
+/* ---------- Paint week ---------- */
+function paintBlocksWeek(geom){
+  const layer=document.getElementById('blocksLayer'); layer.innerHTML='';
+  const colors=COLORS();
+  const {colX, slotY} = geom;
+
+  for(let d=0; d<7; d++){
+    let s=0;
+    while(s<SLOTS_PER_DAY){
+      const key=allSlots[d][s];
+      if(!key){ s++; continue; }
+      let e=s+1; while(e<SLOTS_PER_DAY && allSlots[d][e]===key) e++;
+      const left=colX[d], right=colX[d+1];
+      const top=slotY[s], bottom=slotY[e];
+      const div=document.createElement('div'); div.className='blk';
+      div.style.left=left+'px'; div.style.top=top+'px';
+      div.style.width=Math.max(0,(d===6?right-left-1:right-left))+'px';
+      div.style.height=(bottom-top)+'px';
+      div.style.background = colors[key] || '#ddd';
+      div.title = LABELS()[key];
+      layer.appendChild(div);
+      s=e;
+    }
+  }
+}
+
+function paintNowMagnifier(geom){
+  const nowEl=document.getElementById('nowMagnify');
+  const today=new Date(); const visStart=visibleWeekFirst; const visEnd=addDays(visStart,6);
+  if(+startOfDay(today) < +startOfDay(visStart) || +startOfDay(today) > +startOfDay(visEnd)){
+    nowEl.style.display='none'; return;
+  }
+  const {colX,rowY} = geom;
+  const dow=today.getDay(); const mins=today.getHours()*60 + today.getMinutes();
+  const hour=Math.floor(mins/60);
+  const hourTop=rowY[hour]; const hourH=rowY[hour+1]-rowY[hour];
+  const extra=Math.min(10, Math.floor(hourH*0.25));
+  const top=Math.max(0, hourTop - Math.floor(extra/2));
+  const height=Math.max(2, hourH + extra);
+  nowEl.style.left=colX[dow]+'px';
+  nowEl.style.top=top+'px';
+  nowEl.style.width=(colX[dow+1]-colX[dow] - (dow===6?1:0))+'px';
+  nowEl.style.height=height+'px';
+  nowEl.style.display='block';
+}
+
+/* ---------- Day View (blank + version) ---------- */
+function buildDayView(){
+  screenEl.innerHTML = `
+    <div class="wrap">
+      <div class="head"><div></div><div class="title">Day</div><div></div></div>
+      <div class="grid-area" style="display:grid;place-items:center;color:#666">
+        <div class="watermark">Chrono build r20</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- Month View ---------- */
+function buildMonthView(){
+  const base = new Date(); // reset to current month on entry
+  activeDayISO = toISO(base);
+
+  const first = new Date(base.getFullYear(), base.getMonth(), 1);
+  const last  = new Date(base.getFullYear(), base.getMonth()+1, 0);
+  const label = first.toLocaleDateString(undefined,{month:'long', year:'numeric'});
+
+  screenEl.innerHTML = `
+    <div class="month-wrap">
+      <div class="head">
+        <button id="prevMon" class="chev" aria-label="Prev month">◀</button>
+        <div class="title">${label}</div>
+        <button id="nextMon" class="chev" aria-label="Next month">▶</button>
+      </div>
+      <div class="month-dow" aria-hidden="false">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="month-grid" id="monthGrid"></div>
+    </div>
+  `;
+  document.getElementById('prevMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()-1, 1)); buildMonthView(); saveSoon(200); };
+  document.getElementById('nextMon').onclick=()=>{ activeDayISO = toISO(new Date(base.getFullYear(), base.getMonth()+1, 1)); buildMonthView(); saveSoon(200); };
+
+  const g=document.getElementById('monthGrid'); g.innerHTML='';
+  const firstWeekday = first.getDay();
+  const prevLast = new Date(base.getFullYear(), base.getMonth(), 0).getDate();
+  for(let i=firstWeekday-1;i>=0;i--){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=(prevLast - i); g.appendChild(el); }
+  for(let day=1; day<=last.getDate(); day++){
+    const tile=document.createElement('div'); tile.className='mcell'; tile.textContent=day;
+    const iso = toISO(new Date(base.getFullYear(), base.getMonth(), day));
+    if(iso===toISO(new Date())) tile.classList.add('today');
+    g.appendChild(tile);
+  }
+  const used = firstWeekday + last.getDate();
+  const rem = (Math.ceil(used/7)*7) - used;
+  for(let i=1;i<=rem;i++){ const el=document.createElement('div'); el.className='mcell muted'; el.textContent=i; g.appendChild(el); }
+}
+
+/* ---------- Task picker (centered, non-scroll) ---------- */
+const overlay=document.getElementById('taskOverlay');
+
+function openTaskStack(){
+  overlay.innerHTML='';
+  const stack=document.createElement('div'); stack.className='stack';
+
+  const grid = document.getElementById('weekGrid');
+  const r = grid.getBoundingClientRect();
+
+  const N = 16;
+  const G = 8;
+  const margin = 6;
+  const avail = Math.max(120, r.height - margin*2);
+  const rowH = Math.max(30, Math.floor((avail - (N-1)*G) / N));
+  const used = N*rowH + (N-1)*G;
+  const topPad = Math.max(margin, Math.floor((r.height - used)/2));
+
+  document.documentElement.style.setProperty('--row-min-h', rowH+'px');
+
+  stack.style.top    = (r.top + topPad) + 'px';
+  stack.style.height = used + 'px';
+
+  const totals = weeklyTotals();
+  for(const t of TASKS){
+    const row=document.createElement('button'); row.className='taskRow'; row.dataset.key=t.key;
+    row.innerHTML = `<span class="dot" style="background:${t.color}"></span>
+                     <span class="name">${t.label}</span>
+                     <span class="dur">${formatDecimalHours(totals[t.key]||0)}</span>`;
+    row.addEventListener('click', ()=>openEditor(t));
+    stack.appendChild(row);
+  }
+  overlay.appendChild(stack);
+  overlay.style.display='block';
+}
+overlay.addEventListener('click',(e)=>{ if(e.target===overlay) overlay.style.display='none'; });
+
+function weeklyTotals(){
+  rebuildSlots();
+  const out=Object.fromEntries(TASKS.map(t=>[t.key,0]));
+  for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ const k=allSlots[d][s]; if(!k) continue; out[k]+=15; } }
+  return out;
+}
+function formatDecimalHours(min){ if(min<=0) return ''; if(min<60) return `${min} m`; const h=min/60; const q=Math.round(h*4)/4; const as=(Math.round(q*100)%100===0)?String(Math.round(q)):String(q); return `${as}H`; }
+
+/* ---------- Editor ---------- */
+const edOverlay=document.getElementById('settingsOverlay');
+const edBody=document.getElementById('edBody');
+const edTitle=document.getElementById('edTitle');
+const edName=document.getElementById('edName');
+const edColor=document.getElementById('edColor');
+
+document.getElementById('edCancel').addEventListener('click', ()=>{
+  const sure = confirm('Discard edits?');
+  if(!sure) return;
+  edOverlay.style.display='none';
+});
+
+function openEditor(task){
+  overlay.style.display='none';
+
+  const saveBtn = document.getElementById('edSave');
+  saveBtn.onclick = null;
+
+  const t = TASKS.find(x=>x.key===task.key);
+  const sessionDraft = {
+    key: t.key, label: t.label, color: toHex(t.color),
+    week: EXACT[t.key].map(dayArr => dayArr.map(r => ({
+      startMin:r.startMin, endMin:r.endMin,
+      scope: r.scope || 'recurring',
+      weekKey: r.weekKey, monthKey: r.monthKey,
+      reminderOffsetMin: r.reminderOffsetMin ?? undefined,
+      flexibility: r.flexibility || 'firm'
+    })))
+  };
+  edTitle.textContent = `Edit: ${t.label}`;
+  edName.value = t.label; edColor.value = toHex(t.color);
+  buildEditorDays(sessionDraft);
+  edOverlay.style.display='block';
+
+  saveBtn.onclick = async () => {
+    try {
+      await persistEditor(sessionDraft);
+      edOverlay.style.display='none';
+      if(activeView==='week') repaintWeek();
+      if(activeView==='day')  buildDayView();
+      await saveAll();
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Save failed: ' + (err && err.message ? err.message : String(err)));
+    }
+  };
+}
+
+function buildEditorDays(sessionDraft){
+  edBody.innerHTML='';
+  const first=visibleWeekFirst;
+
+  for(let d=0; d<7; d++){
+    const theDate = addDays(first, d);
+    const dayLabel = `${DAY_NAMES[d]}, ${theDate.toLocaleDateString(undefined,{month:'long'})} ${ORD(theDate.getDate())}`;
+
+    const wrap=document.createElement('div'); wrap.className='dayRow'; wrap.dataset.day=d;
+
+    const head=document.createElement('div'); head.className='dayHead';
+    head.innerHTML = `<span>${dayLabel}</span><span></span>`;
+    wrap.appendChild(head);
+
+    const slots=document.createElement('div'); slots.className='slots'; wrap.appendChild(slots);
+
+    const addRow=document.createElement('div'); addRow.className='addRow';
+    const addBtn=document.createElement('button'); addBtn.className='addBtn'; addBtn.type='button'; addBtn.textContent='Create new';
+    addBtn.addEventListener('click', ()=>{
+      if(slots.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return;
+      const row = addSlotRow(slots, d, null, null, false, null, sessionDraft);
+      if(row){ row.querySelector('.start').focus(); }
+      updateAddButtonState(slots, addBtn);
+    });
+    addRow.appendChild(addBtn); wrap.appendChild(addRow);
+
+    (sessionDraft.week[d]||[]).forEach(r=>{
+      addSlotRow(slots, d, r.startMin, r.endMin, true, r, sessionDraft);
+    });
+
+    updateAddButtonState(slots, addBtn);
+    edBody.appendChild(wrap);
+  }
+}
+function updateAddButtonState(slotsEl, btnEl){
+  const count = slotsEl.querySelectorAll('.slot').length;
+  btnEl.style.display = (count >= MAX_RANGES_PER_DAY) ? 'none' : 'inline-block';
+}
+
+function offsetToOpt(min){ const map = {5:'5m',10:'10m',15:'15m',30:'30m',60:'1h',1440:'24h'}; return map[min] || 'off'; }
+function optToOffset(val){
+  if(val==='5m') return 5; if(val==='10m') return 10; if(val==='15m') return 15;
+  if(val==='30m') return 30; if(val==='1h') return 60; if(val==='24h') return 1440;
+  return undefined;
+}
+
+function addSlotRow(slotsEl, dayIndex, startMin=null, endMin=null, preexisting=false, existingMeta=null, sessionDraft=null){
+  if(slotsEl.querySelectorAll('.slot').length >= MAX_RANGES_PER_DAY) return null;
+
+  const defaultStart = 12*60; // 12:00
+  const defaultEnd   = 0;     // 00:00 (interpreted as next-day when start > end)
+
+  const row=document.createElement('div'); row.className='slot';
+  if (!preexisting) row.dataset.pristine = '1';
+
+  const scopeVal  = existingMeta?.scope || 'recurring';
+  const remindVal = (existingMeta?.reminderOffsetMin!=null) ? offsetToOpt(existingMeta.reminderOffsetMin) : 'off';
+  const flexVal   = existingMeta?.flexibility || 'firm'; // default Firm
+
+  row.innerHTML = `
+    <div class="start">
+      <input type="time" class="in start" step="900" autocomplete="off" inputmode="numeric">
+      <span class="dayTag startTag" style="display:none"></span>
+    </div>
+    <div class="end">
+      <input type="time" class="in end"   step="900" autocomplete="off" inputmode="numeric">
+      <span class="dayTag endTag" style="display:none"></span>
+    </div>
+    <button class="iconBtn mic"   title="Speak time" aria-label="Microphone">🎤</button>
+    <button class="iconBtn trash" title="Delete" aria-label="Delete">🗑️</button>
+
+    <div class="selrow">
+      <select class="select scope" title="Scope">
+        <option value="recurring"${scopeVal==='recurring'?' selected':''}>Recurring</option>
+        <option value="week"${scopeVal==='week'?' selected':''}>This week</option>
+        <option value="month"${scopeVal==='month'?' selected':''}>This month</option>
+      </select>
+
+      <select class="select remind" title="Set reminder">
+        <option value="off"${remindVal==='off'?' selected':''}>Set reminder</option>
+        <option value="5m"${remindVal==='5m'?' selected':''}>5 minutes</option>
+        <option value="10m"${remindVal==='10m'?' selected':''}>10 minutes</option>
+        <option value="15m"${remindVal==='15m'?' selected':''}>15 minutes</option>
+        <option value="30m"${remindVal==='30m'?' selected':''}>30 minutes</option>
+        <option value="1h"${remindVal==='1h'?' selected':''}>1 hour</option>
+        <option value="24h"${remindVal==='24h'?' selected':''}>24 hours</option>
+      </select>
+
+      <select class="select flex" title="Flexibility">
+        <option value="firm"${flexVal==='firm'?' selected':''}>Firm</option>
+        <option value="flexible"${flexVal==='flexible'?' selected':''}>Flexible</option>
+      </select>
+    </div>
+  `;
+
+  const startInp = row.querySelector('input.start');
+  const endInp   = row.querySelector('input.end');
+  const startTag = row.querySelector('.startTag');
+  const endTag   = row.querySelector('.endTag');
+
+  if (startMin == null) { startInp.value = toHHMM(defaultStart); } else { startInp.value = toHHMM(startMin); }
+  if (endMin == null)   { endInp.value   = toHHMM(defaultEnd);   } else { endInp.value   = toHHMM(endMin);   }
+
+  function refreshDayTags(){
+    const sVal=startInp.value, eVal=endInp.value;
+    if(!sVal || !eVal){ startTag.style.display='none'; endTag.style.display='none'; return; }
+    const s=toMin(sVal), e=toMin(eVal);
+    if (e > s){
+      startTag.style.display='none';
+      endTag.style.display='none';
+    } else if (e < s){
+      // Cross-midnight: show DOW initials (e.g., Sat → Sun)
+      const startDow = SHORT_DOW[dayIndex];
+      const endDow   = SHORT_DOW[(dayIndex+1)%7];
+      startTag.textContent = startDow;
+      endTag.textContent   = endDow;
+      startTag.style.display='inline-block';
+      endTag.style.display  ='inline-block';
+    }
+  }
+  refreshDayTags();
+
+  row.querySelector('.mic').addEventListener('click', async ()=>{
+    const sample = 'Say: "9:00 AM to 5:00 PM"';
+    let text = '';
+    if('webkitSpeechRecognition' in window){
+      try{
+        const rec = new webkitSpeechRecognition(); rec.lang='en-US'; rec.interimResults=false; rec.continuous=false;
+        alert(sample);
+        text = await new Promise((resolve,reject)=>{
+          rec.onresult = e=>resolve(e.results[0][0].transcript);
+          rec.onerror = e=>reject(e.error);
+          rec.onend = ()=>{};
+          rec.start(); setTimeout(()=>{ try{rec.stop();}catch{} }, 4500);
+        });
+      }catch{ text = prompt(sample) || ''; }
+    }else{ text = prompt(sample) || ''; }
+    const parsed=parseSpokenRange(text);
+    if(parsed){ startInp.value=toHHMM(parsed.s); endInp.value=toHHMM(parsed.e); row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); }
+  });
+
+  row.querySelector('.trash').addEventListener('click', ()=>{
+    row.remove();
+    const btn = row.closest('.dayRow').querySelector('.addBtn');
+    updateAddButtonState(slotsEl, btn);
+  });
+
+  function isRowComplete(r){
+    const s=r.querySelector('input.start').value;
+    const e=r.querySelector('input.end').value;
+    return !!(s && e);
+  }
+
+  function validateImmediate(){
+    if (row.dataset.pristine==='1' || !isRowComplete(row)) return;
+
+    const sVal=startInp.value, eVal=endInp.value;
+    let sMin = round15(toMin(sVal)), eMin = round15(toMin(eVal));
+    if(sMin===eMin) return;
+
+    // Avoid same-activity overlap within this owner day (consider cross-midnight as 24:00)
+    const rows=[...slotsEl.querySelectorAll('.slot')].filter(r=>r!==row);
+    for(const rr of rows){
+      const s2=round15(toMin(rr.querySelector('input.start').value||'')); const e2=round15(toMin(rr.querySelector('input.end').value||''));
+      if(!Number.isFinite(s2) || !Number.isFinite(e2) || s2===e2) continue;
+
+      const a1=sMin, a2=(eMin>sMin)?eMin:24*60;
+      const b1=s2,   b2=(e2>s2)?e2:24*60;
+
+      if (a1 < b2 && b1 < a2){
+        alert('Double booking not allowed for the same activity on this day.');
+        startInp.value=''; endInp.value=''; row.dataset.pristine='1';
+        refreshDayTags();
         return;
       }
-      if(!moved) showTasks(); // open overlay only; item click is a second action
-    }
-    el.addEventListener('touchstart', start, {passive:true}); el.addEventListener('touchmove', move, {passive:true}); el.addEventListener('touchend', end, {passive:true});
-    el.addEventListener('pointerdown', start); el.addEventListener('pointermove', move); el.addEventListener('pointerup', end);
-  })();
-
-  /* ===== Durations (for currently visible week) ===== */
-  function totalMinutesForVisibleWeek(key){
-    let count=0;
-    for(let d=0; d<7; d++){ for(let s=0; s<SLOTS_PER_DAY; s++){ if(allSlots[d][s]===key) count++; } }
-    return count*15;
-  }
-  function formatMinutes(min){
-    if(min<=0) return '';
-    if(min<60) return `${min}m`;
-    if(min%60===0) return `${Math.round(min/60)}h`;
-    const hours=Math.floor(min/60);
-    const rem=min - hours*60;
-    const q=rem/15; const map={1:'.25',2:'.5',3:'.75'};
-    return `${hours}${map[q]||''}h`;
-  }
-
-  /* ===== Overlay ===== */
-  const overlay=document.getElementById('taskOverlay');
-  const container=document.getElementById('taskContainer');
-  let overlayArmed=false;
-
-  function buildTasks(){
-    container.innerHTML='';
-    TASKS.forEach((t,i)=>{
-      const btn=document.createElement('button');
-      btn.className='task-btn'; btn.dataset.key=t.key; btn.style.animationDelay=(i*20)+'ms';
-      const dur=formatMinutes(totalMinutesForVisibleWeek(t.key));
-      const durHTML = dur ? `<span class="dur">· ${dur}</span>` : '';
-      btn.innerHTML = `<span class="task-dot" style="background:${COLORS[t.key]}"></span>
-                       <span class="task-label"><span class="name">${LABELS[t.key]}</span>${durHTML}</span>`;
-      btn.addEventListener('click', ()=>{ if(!overlayArmed) return; openSettings(t.key); });
-      container.appendChild(btn);
-    });
-  }
-  function refreshOneTaskButton(key){
-    if(overlay.style.display!=='block') return;
-    const btn=document.querySelector(`.task-btn[data-key="${key}"]`);
-    if(!btn) return;
-    const nameSpan=btn.querySelector('.name');
-    const dot=btn.querySelector('.task-dot');
-    if(nameSpan) nameSpan.textContent = LABELS[key];
-    if(dot) dot.style.background = COLORS[key];
-    const label=btn.querySelector('.task-label');
-    const oldDur=label.querySelector('.dur'); if(oldDur) oldDur.remove();
-    const dur=formatMinutes(totalMinutesForVisibleWeek(key));
-    if(dur){ const span=document.createElement('span'); span.className='dur'; span.textContent=`· ${dur}`; label.appendChild(span); }
-  }
-
-  function showTasks(){
-    buildTasks();
-    overlay.classList.remove('hide'); overlay.classList.add('show'); overlay.style.display='block';
-    overlayArmed=false;
-    setTimeout(()=>{ overlayArmed=true; }, 250);
-  }
-  function hideTasks(){
-    overlay.classList.remove('show'); overlay.classList.add('hide');
-    [...container.children].forEach((c,i)=>c.style.animationDelay = ((container.children.length-1-i)*18)+'ms');
-    setTimeout(()=>{ overlay.style.display='none'; }, 220);
-  }
-  overlay.querySelector('.backdrop').addEventListener('click', hideTasks);
-
-  /* ===== Settings (name, color, schedule, scope dropdown) ===== */
-  const settingsOverlay=document.getElementById('settingsOverlay');
-  const legendSwatch=document.getElementById('legendSwatch');
-  const hexPreview=document.getElementById('hexPreview');
-  const svCanvas=document.getElementById('svCanvas');
-  const svWrap=document.getElementById('svWrap');
-  const svKnob=document.getElementById('svKnob');
-  const hue=document.getElementById('hue');
-  const hVal=document.getElementById('hVal');
-  const hexField=document.getElementById('hex');
-  const wsDays=document.getElementById('wsDays');
-  const titleInput=document.getElementById('titleInput');
-  const titleCount=document.getElementById('titleCount');
-  const scopeSelect=document.getElementById('scopeSelect');
-  const scopeList=document.getElementById('scopeList');
-  const scopeSelLabel=document.getElementById('scopeSelLabel');
-  const scopeHint=document.getElementById('scopeHint');
-
-  let currentKey='work';
-  let color={h:0,s:1,v:1};
-
-  function togglePalette(open){
-    const pal=document.getElementById('colorPalette');
-    const btn=document.getElementById('editColorBtn');
-    if(open===undefined) open = pal.style.display==='none';
-    pal.style.display = open ? 'grid' : 'none';
-    btn.setAttribute('aria-expanded', open?'true':'false');
-    if(open){ // lazy layout
-      resizeSV(); drawSV(); placeKnob();
-      setTimeout(()=>hexField.focus(), 0);
-    } else {
-      scopeSelect.focus();
     }
   }
-  document.getElementById('editColorBtn').addEventListener('click', ()=>togglePalette());
 
-  function openSettings(key){
-    currentKey=key;
-    titleInput.value = LABELS[key] || '';
-    titleCount.textContent = `${titleInput.value.length}/14`;
-    const rgb = parseCSSColor(COLORS[key]) || {r:211,g:60,b:54};
-    color = rgbToHsv(rgb.r,rgb.g,rgb.b);
-    legendSwatch.style.background = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
-    hexPreview.textContent = rgbToHex(rgb.r,rgb.g,rgb.b).toUpperCase();
-    hexField.value = rgbToHex(rgb.r,rgb.g,rgb.b);
-    document.getElementById('colorPalette').style.display='none';
-    document.getElementById('editColorBtn').setAttribute('aria-expanded','false');
+  startInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
+  endInp.addEventListener('change', ()=>{ row.dataset.pristine='0'; validateImmediate(); refreshDayTags(); });
 
-    // Scope selection
-    const active = activeScopeForTask(currentKey);
-    const preferred = LAST_SCOPE[currentKey] || active;
-    setScope(preferred);
-    buildDaysFromExact(getExactForScope(currentKey, preferred));
+  slotsEl.appendChild(row);
+  return row;
+}
 
-    settingsOverlay.classList.remove('hide'); settingsOverlay.classList.add('show'); settingsOverlay.style.display='block';
-  }
-  function closeSettings(){ settingsOverlay.classList.remove('show'); settingsOverlay.classList.add('hide'); setTimeout(()=>{ settingsOverlay.style.display='none'; }, 170); }
-  document.getElementById('discardBtn').addEventListener('click', closeSettings);
+async function persistEditor(sessionDraft){
+  const key = sessionDraft.key;
+  const t = TASKS.find(x=>x.key===key);
+  t.label = (document.getElementById('edName').value||'').slice(0,14) || t.label;
+  t.color = document.getElementById('edColor').value || t.color;
 
-  // Scope dropdown wiring
-  scopeSelect.addEventListener('click', ()=>{
-    const open = scopeList.style.display!=='block';
-    scopeList.style.display = open ? 'block' : 'none';
-    scopeSelect.setAttribute('aria-expanded', open?'true':'false');
-    if(open) scopeList.focus();
-  });
-  document.addEventListener('click', (e)=>{
-    if(!settingsOverlay.contains(e.target)) return;
-    if(!scopeSelect.contains(e.target) && !scopeList.contains(e.target)){
-      scopeList.style.display='none'; scopeSelect.setAttribute('aria-expanded','false');
+  const week = Array.from({length:7},()=>[]);
+  edBody.querySelectorAll('.dayRow').forEach((wrap,d)=>{
+    const dayDate = addDays(visibleWeekFirst, d);
+    const rows=[...wrap.querySelectorAll('.slot')].slice(0,MAX_RANGES_PER_DAY);
+
+    const tmp=[];
+    for(const row of rows){
+      const sVal=row.querySelector('input.start').value;
+      const eVal=row.querySelector('input.end').value;
+      if(!sVal || !eVal) continue;
+
+      let sMin = round15(toMin(sVal));
+      let eMin = round15(toMin(eVal));
+      if (sMin === eMin) continue;
+
+      const scope = row.querySelector('.scope').value;
+      const remindVal = row.querySelector('.remind').value;
+      const reminderOffsetMin = optToOffset(remindVal);
+      const flexibility = row.querySelector('.flex').value || 'firm';
+
+      const rec = { startMin: sMin, endMin: eMin, scope, flexibility };
+      if(scope==='week')  rec.weekKey  = isoWeekKey(dayDate);
+      if(scope==='month') rec.monthKey = monthKey(dayDate);
+      if(reminderOffsetMin!=null) rec.reminderOffsetMin = reminderOffsetMin;
+
+      tmp.push(rec);
     }
-  });
-  scopeList.addEventListener('click', (e)=>{
-    const opt=e.target.closest('.scope-opt'); if(!opt) return;
-    const val=opt.dataset.val;
-    if(opt.getAttribute('aria-disabled')==='true') return;
-    setScope(val);
-    // reload editor from chosen scope
-    buildDaysFromExact(getExactForScope(currentKey, val));
-    scopeList.style.display='none'; scopeSelect.setAttribute('aria-expanded','false');
+
+    tmp.sort((A,B)=>A.startMin-B.startMin);
+    const merged=[];
+    for(const r of tmp){
+      if(!merged.length){ merged.push({...r}); continue; }
+      const L=merged[merged.length-1];
+      const sameMeta = (L.scope===r.scope) && (L.weekKey===r.weekKey) && (L.monthKey===r.monthKey) &&
+                       ((L.flexibility||'firm')===(r.flexibility||'firm')) &&
+                       ((L.reminderOffsetMin??null)===(r.reminderOffsetMin??null));
+      if(sameMeta && L.endMin>L.startMin && r.endMin>r.startMin && L.endMin===r.startMin){
+        L.endMin=r.endMin;
+      }else{
+        merged.push({...r});
+      }
+    }
+    week[d] = merged.slice(0,MAX_RANGES_PER_DAY);
   });
 
-  function setScope(val){
-    scopeSelLabel.textContent = ({today:'Today',week:'This week',month:'This month',recurring:'Recurring'})[val]||'Recurring';
-    [...scopeList.querySelectorAll('.scope-opt')].forEach(o=>{
-      o.setAttribute('aria-selected', o.dataset.val===val ? 'true' : 'false');
-    });
-    const today=new Date(); const visStart=startOfDay(visibleWeekFirst), visEnd=startOfDay(addDays(visibleWeekFirst,6));
-    const isCurrentWeek = startOfDay(today) >= visStart && startOfDay(today) <= visEnd;
-    const todayOpt = scopeList.querySelector('.scope-opt[data-val="today"]');
-    if(todayOpt) todayOpt.setAttribute('aria-disabled', isCurrentWeek?'false':'true');
+  // Commit
+  EXACT[key] = week;
+  ORDER.recurring[key] = ORDER.recurring[key] || (SAVE_SEQ++);
+  saveSoon(200);
+}
 
-    updateScopeUI(val);
+/* ---------- Speech parse & utils ---------- */
+function parseSpokenRange(s){
+  if(!s) return null;
+  const m=s.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if(!m) return null;
+  const sH=Number(m[1]), sM=Number(m[2]||0), sA=(m[3]||'').toLowerCase();
+  const eH=Number(m[4]), eM=Number(m[5]||0), eA=(m[6]||'').toLowerCase();
+  const to24=(h,m,ap)=>{ let H=h%12; if(ap==='pm') H+=12; if(ap==='' && h===12) H=12; return H*60+m; };
+  const sMin = to24(sH,sM,sA);
+  const eMin = to24(eH,eM,eA);
+  return {s:sMin, e:eMin};
+}
+
+function toHHMM(min){ const m=((min%1440)+1440)%1440; const h=Math.floor(m/60), mm=(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; }
+function toMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return (h*60+m)|0; }
+function toHex(c){ const s=String(c).trim(); if(/^#([0-9a-f]{6})$/i.test(s)) return s;
+  const m=s.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i); if(m){ const r=+m[1],g=+m[2],b=+m[3]; return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); } return '#999999'; }
+
+/* ---------- Init & render ---------- */
+async function init(){
+  try{ hydrateState(await storageGet('state')); }catch(e){ console.warn('Load failed:', e); }
+  visibleWeekFirst = weekStart(new Date());
+  activeDayISO = toISO(new Date());
+  render();
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAll().catch(e=>console.error('Save error:', e)); });
+  window.addEventListener('beforeunload', ()=>{ saveAll().catch(()=>{}); });
+}
+function render(){
+  if(activeView==='week'){
+    visibleWeekFirst = weekStart(new Date());  // reset to current week on entry
+    buildWeekView();
+  } else if(activeView==='day'){
+    activeDayISO = toISO(new Date());          // sync to today
+    buildDayView();
+  } else if(activeView==='month'){
+    activeDayISO = toISO(new Date());          // reset to current month on entry
+    buildMonthView();
+  } else {
+    screenEl.innerHTML='';
   }
-  function getScope(){
-    return ({'Today':'today','This week':'week','This month':'month','Recurring':'recurring'})[scopeSelLabel.textContent] || 'recurring';
-  }
-  function updateScopeUI(scopeVal){
-    const scope = scopeVal || getScope();
-    const {index, date} = getTodayTargetInVisibleWeek();
-    const dateFmt = date.toLocaleDateString(undefined,{month:'short', day:'numeric', year:'numeric'});
-    scopeHint.textContent = scope==='today' ? `for ${DAY_NAMES[index]}, ${dateFmt}` :
-                            scope==='week' ? `week of ${fmtDate(visibleWeekFirst)}` :
-                            scope==='month' ? `for ${fmtMonthKey(visibleWeekFirst)}` : 'applies every week';
-
-    wsDays.querySelectorAll('.day-row').forEach((row,i)=>{
-      const disabled = (scope==='today' && i!==index);
-      row.classList.toggle('disabled', disabled);
-      row.querySelectorAll('input,button').forEach(el=>{
-        if(el.classList.contains('del') || el.classList.contains('addSlot') || el.type==='time'){
-          el.disabled = disabled;
-        }
-      });
-    });
-  }
-
-  function getTodayTargetInVisibleWeek(){
-    const today=new Date(); today.setHours(0,0,0,0);
-    const visStart=startOfDay(visibleWeekFirst);
-    const isCurrentWeek = today>=visStart && today<=startOfDay(addDays(visStart,6));
-    if(isCurrentWeek){ return {date:today, index:today.getDay()}; }
-    return {date:new Date(visStart), index:0};
-  }
-
-  function activeScopeForTask(taskKey){
-    const wkKey = fmtWeekKey(visibleWeekFirst);
-    const moKey = fmtMonthKey(visibleWeekFirst);
-    const today = new Date(); today.setHours(0,0,0,0);
-    const todayKey = fmtDate(today);
-
-    if(EXCEPTIONS.byDate[todayKey]?.[taskKey]) return 'today';
-    if(EXCEPTIONS.byWeek[wkKey]?.[taskKey]) return 'week';
-    if(EXCEPTIONS.byMonth[moKey]?.[taskKey]) return 'month';
-    return 'recurring';
-  }
-
-  function getExactForScope(taskKey, scope){
-    if(scope==='recurring') return deepCopyExact(EXACT[taskKey]);
-
-    if(scope==='week'){
-      const wkKey = fmtWeekKey(visibleWeekFirst);
-      const set = EXCEPTIONS.byWeek[wkKey]?.[taskKey];
-      if(set) return deepCopyExact(set);
-      return deepCopyExact(EXACT[taskKey]);
-    }
-
-    if(scope==='month'){
-      const moKey = fmtMonthKey(visibleWeekFirst);
-      const set = EXCEPTIONS.byMonth[moKey]?.[taskKey];
-      if(set) return deepCopyExact(set);
-      return deepCopyExact(EXACT[taskKey]);
-    }
-
-    // today
-    const out = Array.from({length:7},()=>[]);
-    const {index} = getTodayTargetInVisibleWeek();
-    const dateKey = fmtDate(addDays(visibleWeekFirst, index));
-    const set = EXCEPTIONS.byDate[dateKey]?.[taskKey];
-    if(set){
-      out[index] = set.map(r=>({startMin:r.startMin,endMin:r.endMin}));
-    } else {
-      const eff = getEffectiveExactForTask(taskKey);
-      out[index] = eff[index].map(r=>({startMin:r.startMin,endMin:r.endMin}));
-    }
-    return out;
-  }
-
-  document.getElementById('saveBtn').addEventListener('click', ()=>{
-    const newName=titleInput.value.trim(); if(newName){ LABELS[currentKey]=newName; }
-    const hex = rgbToHex(...Object.values(hsvToRgb(color.h,color.s,color.v))); COLORS[currentKey]=hex;
-
-    const scope = getScope();
-    LAST_SCOPE[currentKey] = scope;
-
-    // collect, normalize, clip, persist
-    const clipResult = collectNormalizeAndClip(scope, currentKey);
-
-    // persist per scope
-    if(scope==='recurring'){
-      EXACT[currentKey] = clipResult.week; // 7-day template
-      ORDER.recurring[currentKey] = ORDER.recurring[currentKey] || (SAVE_SEQ++);
-    } else if(scope==='week'){
-      const wkKey = fmtWeekKey(visibleWeekFirst);
-      EXCEPTIONS.byWeek[wkKey] = EXCEPTIONS.byWeek[wkKey] || {};
-      EXCEPTIONS.byWeek[wkKey][currentKey] = clipResult.week;
-      ORDER.week[wkKey] = ORDER.week[wkKey] || {};
-      ORDER.week[wkKey][currentKey] = ORDER.week[wkKey][currentKey] || (SAVE_SEQ++);
-    } else if(scope==='month'){
-      const moKey = fmtMonthKey(visibleWeekFirst);
-      EXCEPTIONS.byMonth[moKey] = EXCEPTIONS.byMonth[moKey] || {};
-      EXCEPTIONS.byMonth[moKey][currentKey] = clipResult.week;
-      ORDER.month[moKey] = ORDER.month[moKey] || {};
-      ORDER.month[moKey][currentKey] = ORDER.month[moKey][currentKey] || (SAVE_SEQ++);
-    } else { // today
-      const {date, index} = getTodayTargetInVisibleWeek();
-      const dateKey = fmtDate(date);
-      const nextKey = fmtDate(addDays(date,1));
-      const todayRanges = clipResult.week[index] || [];
-      const spillRanges = clipResult.spillNextDay || [];
-
-      // replace, not append
-      if(todayRanges.length){
-        EXCEPTIONS.byDate[dateKey] = EXCEPTIONS.byDate[dateKey] || {};
-        EXCEPTIONS.byDate[dateKey][currentKey] = todayRanges;
-      } else if(EXCEPTIONS.byDate[dateKey]?.[currentKey]){
-        delete EXCEPTIONS.byDate[dateKey][currentKey];
-        if(Object.keys(EXCEPTIONS.byDate[dateKey]).length===0) delete EXCEPTIONS.byDate[dateKey];
-      }
-
-      if(spillRanges.length){
-        EXCEPTIONS.byDate[nextKey] = EXCEPTIONS.byDate[nextKey] || {};
-        EXCEPTIONS.byDate[nextKey][currentKey] = spillRanges;
-      } else if(EXCEPTIONS.byDate[nextKey]?.[currentKey]){
-        delete EXCEPTIONS.byDate[nextKey][currentKey];
-        if(Object.keys(EXCEPTIONS.byDate[nextKey]).length===0) delete EXCEPTIONS.byDate[nextKey];
-      }
-    }
-
-    // Rebuild visuals and reflect saved values back into UI
-    buildWeek();
-    buildTasks(); // refresh overlay durations/name/color
-    reflectSavedIntoEditor(scope, currentKey, clipResult);
-
-    closeSettings();
-  });
-
-  function reflectSavedIntoEditor(scope, key, clipResult){
-    // When reopened next time, data loads from stores. Here we just ensure overlay button shows right name/color
-    refreshOneTaskButton(key);
-  }
-
-  titleInput.addEventListener('input', ()=>{
-    if(titleInput.value.length>14) titleInput.value=titleInput.value.slice(0,14);
-    titleCount.textContent=`${titleInput.value.length}/14`;
-  });
-
-  /* ===== Days UI ===== */
-  function buildDaysFromExact(exact){
-    wsDays.innerHTML='';
-    for(let d=0; d<7; d++){
-      const wrap=document.createElement('div'); wrap.className='day-row'; wrap.dataset.day=d;
-      wrap.innerHTML = `
-        <div class="day-header">
-          <div class="ws-title" style="font-weight:800;display:flex;align-items:center;gap:8px">
-            ${DAY_NAMES[d]} <span class="overnight" style="display:none">→ next day</span> <span class="clipNote"></span>
-          </div>
-          <button class="addSlot" title="Add range">+</button>
-        </div>
-        <div class="slots"></div>`;
-      const slots=wrap.querySelector('.slots'); const addBtn=wrap.querySelector('.addSlot');
-      function addSlot(startMin=9*60, endMin=12*60){
-        if(slots.children.length>=4) return;
-        const row=document.createElement('div'); row.className='slot';
-        const sv=minsToHHMM(startMin), ev=minsToHHMM(endMin);
-        row.innerHTML = `<input type="time" step="60" value="${sv}"><input type="time" step="60" value="${ev}"><button class="del" title="Remove">🗑️</button>`;
-        const [a,b]=row.querySelectorAll('input');
-        const badge=wrap.querySelector('.overnight');
-        function updateBadge(){
-          const [sh,sm]=a.value.split(':').map(Number);
-          const [eh,em]=b.value.split(':').map(Number);
-          const isOver = (eh*60+em) < (sh*60+sm);
-          badge.style.display = isOver ? 'inline-block' : (Array.from(slots.children).some(c=>{
-            const [ax,bx]=c.querySelectorAll('input');
-            const [sh2,sm2]=ax.value.split(':').map(Number);
-            const [eh2,em2]=bx.value.split(':').map(Number);
-            return (eh2*60+eh2) < (sh2*60+sm2);
-          }) ? 'inline-block' : 'none');
-        }
-        a.addEventListener('input', updateBadge);
-        b.addEventListener('input', updateBadge);
-        row.querySelector('.del').addEventListener('click', ()=>{ row.remove(); updateBadge(); });
-        slots.appendChild(row);
-        updateBadge();
-      }
-      (exact[d]||[]).forEach(r=>addSlot(r.startMin, r.endMin));
-      addBtn.addEventListener('click', ()=>addSlot());
-      wsDays.appendChild(wrap);
-    }
-    updateScopeUI(); // respect disabled state for "today"
-  }
-
-  function minsToHHMM(m){ const h=Math.floor(m/60), mm=String(m%60).padStart(2,'0'); return `${String(h).padStart(2,'0')}:${mm}`; }
-
-  /* ===== Collect + Normalize + Clip ===== */
-  function ensureSevenDays(arr){
-    if (!Array.isArray(arr)) return Array.from({length:7},()=>[]);
-    return Array.from({length:7}, (_,i)=>Array.isArray(arr[i]) ? arr[i] : []);
-  }
-
-  function collectNormalizeAndClip(scope, taskKey){
-    // Collect intended ranges from UI
-    const collected = Array.from({length:7},()=>[]);
-    wsDays.querySelectorAll('.day-row').forEach((row,d)=>{
-      if(row.classList.contains('disabled')) return;
-      const slots=[...row.querySelectorAll('.slot')];
-      slots.forEach(s=>{
-        const [a,b]=s.querySelectorAll('input');
-        const [sh,sm]=a.value.split(':').map(Number);
-        const [eh,em]=b.value.split(':').map(Number);
-        collected[d].push({startMin:sh*60+sm, endMin:eh*60+em});
-      });
-    });
-
-    // Normalize: overnight split THEN 15-min rounding
-    const normalized = Array.from({length:7},()=>[]);
-    let hasOvernight=false;
-    for(let d=0; d<7; d++){
-      for(const r of collected[d]){
-        let s=r.startMin, e=r.endMin;
-        if(e> s){
-          s=round15(s); e=round15(e);
-          if(e>s) normalized[d].push({startMin:s,endMin:e});
-        } else if(e< s){ // overnight
-          hasOvernight=true;
-          let s1=round15(s), e1=round15(24*60); if(e1>s1) normalized[d].push({startMin:s1,endMin:e1});
-          let s2=round15(0), e2=round15(e);
-          const dn=(d+1)%7; if(e2>s2) normalized[dn].push({startMin:s2,endMin:e2});
-        } // equal -> drop
-      }
-    }
-
-    // Build occupancy map for visible week; treat current task's own slots as free to allow self-edit
-    const occupancy = buildOccupancyMapForVisibleWeek(taskKey);
-
-    // Clip: keep only empty(null) or owned-by-self slots
-    const clipped = Array.from({length:7},()=>[]);
-    for(let d=0; d<7; d++){
-      // mark slots requested
-      const req = Array(SLOTS_PER_DAY).fill(false);
-      for(const r of normalized[d]){
-        const a=minsToSlot(r.startMin), b=minsToSlot(r.endMin);
-        for(let s=a; s<b; s++) req[s]=true;
-      }
-      // walk and create runs where occupancy allows (null or self)
-      let s=0;
-      while(s<SLOTS_PER_DAY){
-        // advance to next candidate slot
-        while(s<SLOTS_PER_DAY && (!req[s] || !(occupancy[d][s]===null || occupancy[d][s]===taskKey))) s++;
-        if(s>=SLOTS_PER_DAY) break;
-        let e=s+1;
-        while(e<SLOTS_PER_DAY && req[e] && (occupancy[d][e]===null || occupancy[d][e]===taskKey)) e++;
-        // push run
-        const startMin=s*15, endMin=e*15;
-        if(endMin>startMin) clipped[d].push({startMin:startMin, endMin:endMin});
-        s=e+0;
-      }
-      // Merge adjacent runs
-      clipped[d].sort((A,B)=>A.startMin-B.startMin);
-      const merged=[];
-      for(const r of clipped[d]){
-        if(!merged.length) merged.push(r);
-        else{
-          const last=merged[merged.length-1];
-          if(r.startMin<=last.endMin) last.endMin=Math.max(last.endMin,r.endMin);
-          else merged.push(r);
-        }
-      }
-      // Enforce max 4/day
-      if(merged.length>4) merged.length=4;
-      clipped[d]=merged;
-    }
-
-    // Special for Today: if overnight existed, collect spill for the actual tomorrow of device
-    let spillNextDay=[];
-    if(scope==='today' && hasOvernight){
-      const {index}=getTodayTargetInVisibleWeek();
-      const dn=(index+1)%7;
-      spillNextDay = clipped[dn] || [];
-    }
-
-    return { week:ensureSevenDays(clipped), spillNextDay };
-  }
-
-  function buildOccupancyMapForVisibleWeek(excludeTaskKey){
-    // Build effective week for all tasks; mark owner per slot (first-writer wins per our ORDER when rebuildSlots runs)
-    const occ = Array.from({length:7},()=>Array(SLOTS_PER_DAY).fill(null));
-    // We fill occupancy in the same order as rebuildSlotsForVisibleWeek paints (earliest saves first),
-    // but we ignore excludeTaskKey (treat its existing claims as free so it can move them).
-    const wkKey = fmtWeekKey(visibleWeekFirst);
-    const moKey = fmtMonthKey(visibleWeekFirst);
-    const seqForTask = (taskKey)=>{
-      const seqs=[ORDER.week[wkKey]?.[taskKey], ORDER.month[moKey]?.[taskKey], ORDER.recurring?.[taskKey]];
-      return seqs.filter(x=>typeof x==='number').sort((a,b)=>a-b)[0] ?? 1e9;
-    };
-    const ordered = [...TASKS.map(t=>t.key)].sort((a,b)=>seqForTask(a)-seqForTask(b));
-    for(const key of ordered){
-      if(key===excludeTaskKey) continue;
-      const eff = getEffectiveExactForTask(key);
-      for(let d=0; d<7; d++){
-        for(const r of eff[d]){
-          let a=minsToSlot(round15(r.startMin)), b=minsToSlot(round15(r.endMin));
-          if(b===a) continue;
-          if(b>a){
-            for(let s=a; s<b; s++) if(occ[d][s]===null) occ[d][s]=key;
-          }else{
-            for(let s=a; s<96; s++) if(occ[d][s]===null) occ[d][s]=key;
-            const dn=(d+1)%7;
-            for(let s=0; s<b; s++) if(occ[dn][s]===null) occ[dn][s]=key;
-          }
-        }
-      }
-    }
-    return occ;
-  }
-
-  /* ===== HSV picker ===== */
-  const svCtx=svCanvas.getContext('2d');
-  function resizeSV(){ const dpr=window.devicePixelRatio||1; const r=svWrap.getBoundingClientRect();
-    svCanvas.width=Math.round(r.width*dpr); svCanvas.height=Math.round(r.height*dpr);
-    svCanvas.style.width=r.width+'px'; svCanvas.style.height=r.height+'px'; drawSV(); placeKnob(); }
-  new ResizeObserver(resizeSV).observe(svWrap);
-
-  function drawSV(){ const w=svCanvas.width, h=svCanvas.height; const pure=hsvToCss(color.h,1,1);
-    svCtx.clearRect(0,0,w,h); svCtx.fillStyle=pure; svCtx.fillRect(0,0,w,h);
-    const gW=svCtx.createLinearGradient(0,0,w,0); gW.addColorStop(0,'#fff'); gW.addColorStop(1,'rgba(255,255,255,0)'); svCtx.fillStyle=gW; svCtx.fillRect(0,0,w,h);
-    const gB=svCtx.createLinearGradient(0,0,0,h); gB.addColorStop(0,'rgba(0,0,0,0)'); gB.addColorStop(1,'#000'); svCtx.fillStyle=gB; svCtx.fillRect(0,0,w,h); }
-  function placeKnob(){ const r=svWrap.getBoundingClientRect(); svKnob.style.left=(color.s*r.width)+'px'; svKnob.style.top=((1-color.v)*r.height)+'px'; }
-  function syncUIFromHSV(){ hue.value=Math.round(color.h); hVal.textContent=hue.value; const css=hsvToCss(color.h,color.s,color.v); const hex=rgbToHex(...Object.values(hsvToRgb(color.h,color.s,color.v)));
-    legendSwatch.style.background=css; hexPreview.textContent=hex.toUpperCase(); hexField.value=hex; drawSV(); placeKnob(); }
-  hue.addEventListener('input', e=>{ color.h=Number(e.target.value); hVal.textContent=e.target.value; drawSV(); const hex=rgbToHex(...Object.values(hsvToRgb(color.h,color.s,color.v))); legendSwatch.style.background=hsvToCss(color.h,color.s,color.v); hexPreview.textContent=hex.toUpperCase(); hexField.value=hex; });
-  function setSVFromEvent(ev){ const r=svWrap.getBoundingClientRect(); const cx=('touches'in ev)?ev.touches[0].clientX:ev.clientX; const cy=('touches'in ev)?ev.touches[0].clientY:e.clientY;
-    const x=clamp(cx-r.left,0,r.width), y=clamp(cy-r.top,0,r.height); color.s=x/r.width; color.v=1-y/r.height; placeKnob();
-    const hex=rgbToHex(...Object.values(hsvToRgb(color.h,color.s,color.v))); legendSwatch.style.background=hsvToCss(color.h,color.s,color.v); hexPreview.textContent=hex.toUpperCase(); hexField.value=hex; }
-  svWrap.addEventListener('mousedown',(e)=>{ setSVFromEvent(e); window.addEventListener('mousemove', setSVFromEvent); });
-  window.addEventListener('mouseup',()=>window.removeEventListener('mousemove', setSVFromEvent));
-  svWrap.addEventListener('touchstart', setSVFromEvent, {passive:true}); svWrap.addEventListener('touchmove', setSVFromEvent, {passive:true});
-  hexField.addEventListener('change', ()=>{ const c=parseCSSColor(hexField.value); if(!c) return; color = rgbToHsv(c.r,c.g,c.b); syncUIFromHSV(); });
-
-  function hsvToRgb(h,s,v){ const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c; let r1=0,g1=0,b1=0;
-    if(0<=h&&h<60){r1=c;g1=x;} else if(60<=h&&h<120){r1=x;g1=c;} else if(120<=h&&h<180){g1=c;b1=x;}
-    else if(180<=h&&h<240){g1=x;b1=c;} else if(240<=h&&h<300){r1=x;b1=c;} else {r1=c;b1=x;}
-    const r=Math.round((r1+m)*255), g=Math.round((g1+m)*255), b=Math.round((b1+m)*255); return {r,g,b}; }
-  function hsvToCss(h,s,v){ const {r,g,b}=hsvToRgb(h,s,v); return `rgb(${r}, ${g}, ${b})`; }
-  function rgbToHex(r,g,b){ return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
-  function hexToRgb(hex){ const s=String(hex).trim().replace('#',''); if(/^([0-9a-f]{6})$/i.test(s)){ const n=parseInt(s,16); return {r:(n>>16)&255,g:(n>>8)&255,b:(n)&255}; } if(/^([0-9a-f]{3})$/i.test(s)){ const [r,g,b]=s.split('').map(ch=>parseInt(ch+ch,16)); return {r,g,b}; } return null; }
-  function parseCSSColor(str){ if(!str) return null; const t=str.trim(); const h=hexToRgb(t); if(h) return h; const m=t.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*[\d.]+)?\s*\)$/i); if(m) return {r:Math.round(+m[1]), g:Math.round(+m[2]), b:Math.round(+m[3])}; return null; }
-  function rgbToHsv(r,g,b){ r/=255; g/=255; b/=255; const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min; let h=0; if(d!==0){ switch(max){case r:h=60*(((g-b)/d)%6);break;case g:h=60*(((b-r)/d)+2);break;case b:h=60*(((r-g)/d)+4);break;} } if(h<0) h+=360; const s=max===0?0:d/max; const v=max; return {h,s,v}; }
-
-  /* ===== Boot ===== */
-  addEventListener('DOMContentLoaded', ()=>{
-    layout(); setWeek(0); buildWeek();
-  });
-
-})();
+}
+init();
 </script>
+
+<!-- Service worker registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('SW registered', reg.scope))
+      .catch(err => console.error('SW registration failed', err));
+  });
+}
+</script>
+
 </body>
 </html>
